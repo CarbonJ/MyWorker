@@ -2,25 +2,26 @@
  * Database layer — wa-sqlite
  *
  * Architecture:
- * - SQLite runs in the main thread using wa-sqlite (sync WASM build)
- * - OPFS (browser private storage) is used for the live working database
- * - On every write, the database file is also copied to the user-chosen
- *   FileSystemDirectoryHandle (OneDrive folder) for persistence and sync
+ * - SQLite runs on the main thread using the wa-sqlite ASYNC WASM build
+ * - IDBBatchAtomicVFS stores the working database in IndexedDB
+ *   (works on the main thread, unlike AccessHandlePoolVFS which requires a Worker)
+ * - On every write the database is also exported and written to the user-chosen
+ *   FileSystemDirectoryHandle (OneDrive folder) for persistence/sync/versioning
  *
  * This gives us:
- *   - Fast synchronous SQLite access via OPFS AccessHandlePoolVFS
- *   - Automatic OneDrive backup/versioning via File System Access API
- *   - Portability: on a new machine, pick the OneDrive folder and the
- *     db file is loaded from there into OPFS
+ *   - Main-thread SQLite via async WASM (no Worker needed)
+ *   - Durable IndexedDB storage for the working copy
+ *   - Automatic OneDrive backup via File System Access API on every write
+ *   - Portability: pick the OneDrive folder on a new machine and import the JSON backup
  */
 
-import SQLiteESMFactory from 'wa-sqlite/dist/wa-sqlite.mjs'
+import SQLiteAsyncESMFactory from 'wa-sqlite/dist/wa-sqlite-async.mjs'
 import * as SQLite from 'wa-sqlite/src/sqlite-api.js'
-import { AccessHandlePoolVFS } from 'wa-sqlite/src/examples/AccessHandlePoolVFS.js'
+import { IDBBatchAtomicVFS } from 'wa-sqlite/src/examples/IDBBatchAtomicVFS.js'
 import { runMigrations } from './migrations'
 
 const DB_NAME = 'myworker.db'
-const OPFS_DIR = 'myworker'
+const IDB_NAME  = 'myworker-sqlite'
 
 export interface DbHandle {
   sqlite: SQLite.SQLiteAPI
@@ -30,9 +31,7 @@ export interface DbHandle {
 
 let instance: DbHandle | null = null
 
-/**
- * Returns the active database handle, throwing if not yet initialised.
- */
+/** Returns the active database handle, throwing if not yet initialised. */
 export function getDb(): DbHandle {
   if (!instance) throw new Error('Database not initialised. Call initDb() first.')
   return instance
@@ -40,109 +39,90 @@ export function getDb(): DbHandle {
 
 /**
  * Initialise the database.
- * - Sets up wa-sqlite with AccessHandlePoolVFS in OPFS
- * - If a user dirHandle is provided, loads the db file from it first
+ * - Sets up wa-sqlite async build with IDBBatchAtomicVFS (main-thread safe)
  * - Runs schema migrations
- * - Saves dirHandle for future persistence writes
+ * - Saves dirHandle for OneDrive persistence writes
  */
 export async function initDb(dirHandle: FileSystemDirectoryHandle | null = null): Promise<DbHandle> {
-  // If reinitialising, close existing connection
+  // Close any existing connection
   if (instance) {
     await instance.sqlite.close(instance.db)
     instance = null
   }
 
-  // Get OPFS root and create our working subdirectory
-  const opfsRoot = await navigator.storage.getDirectory()
-  const opfsDir = await opfsRoot.getDirectoryHandle(OPFS_DIR, { create: true })
-
-  // If user provided a folder, copy their db file into OPFS first
-  if (dirHandle) {
-    await importFromUserFolder(dirHandle, opfsDir)
-  }
-
-  // Initialise wa-sqlite with the synchronous WASM build + AccessHandlePoolVFS
-  // locateFile tells Emscripten where to find the .wasm binary.
-  // We serve it from /public so it's always at the root regardless of bundling.
-  const module = await SQLiteESMFactory({
+  // Async WASM build — works on the main thread
+  const module = await SQLiteAsyncESMFactory({
     locateFile: (file: string) => `/${file}`,
   })
   const sqlite = SQLite.Factory(module)
-  const vfs = new AccessHandlePoolVFS(`/${OPFS_DIR}`)
+
+  // IDBBatchAtomicVFS — stores database pages in IndexedDB, main-thread compatible
+  const vfs = new IDBBatchAtomicVFS(IDB_NAME)
   await vfs.isReady
-  // registerVFS is a method on the sqlite instance (not a module export)
   ;(sqlite as unknown as { registerVFS: (vfs: object, makeDefault?: boolean) => void })
-    .registerVFS(vfs, false)
+    .registerVFS(vfs, true)
 
   // Open (or create) the database
   const db = await sqlite.open_v2(
     DB_NAME,
     SQLite.SQLITE_OPEN_READWRITE | SQLite.SQLITE_OPEN_CREATE,
-    vfs.name,
+    IDB_NAME,
   )
 
-  // Enable foreign keys and WAL mode for performance
+  // Enable foreign keys
   await exec(sqlite, db, 'PRAGMA foreign_keys = ON;')
-  await exec(sqlite, db, 'PRAGMA journal_mode = WAL;')
 
   instance = { sqlite, db, dirHandle }
 
-  // Run migrations (creates tables, FTS index, etc.)
+  // Run migrations (creates tables, FTS index, triggers, etc.)
   await runMigrations(instance)
 
   return instance
 }
 
 /**
- * Copy the db file from the user's OneDrive folder into OPFS.
- * Called on first open when the user re-selects their folder.
- */
-async function importFromUserFolder(
-  dirHandle: FileSystemDirectoryHandle,
-  opfsDir: FileSystemDirectoryHandle,
-): Promise<void> {
-  try {
-    const sourceHandle = await dirHandle.getFileHandle(DB_NAME)
-    const file = await sourceHandle.getFile()
-    const buffer = await file.arrayBuffer()
-    const destHandle = await opfsDir.getFileHandle(DB_NAME, { create: true })
-    const writable = await destHandle.createWritable()
-    await writable.write(buffer)
-    await writable.close()
-  } catch (e) {
-    // File doesn't exist in user folder yet — that's fine, we'll create it
-  }
-}
-
-/**
- * Persist the live OPFS database file back to the user's OneDrive folder.
- * Call this after every write operation.
+ * Persist current data to the user's OneDrive folder as a JSON export.
+ * Called after every write so OneDrive always has the latest copy.
+ * Uses the JSON export format (same as manual backup) for portability.
  */
 export async function persistToUserFolder(): Promise<void> {
   if (!instance?.dirHandle) return
 
-  const opfsRoot = await navigator.storage.getDirectory()
-  const opfsDir = await opfsRoot.getDirectoryHandle(OPFS_DIR)
-  const sourceHandle = await opfsDir.getFileHandle(DB_NAME)
-  const file = await sourceHandle.getFile()
-  const buffer = await file.arrayBuffer()
+  try {
+    // Snapshot all tables
+    const [projects, workLogEntries, tasks, dropdownOptions] = await Promise.all([
+      query('SELECT * FROM projects ORDER BY id ASC'),
+      query('SELECT * FROM work_log_entries ORDER BY id ASC'),
+      query('SELECT * FROM tasks ORDER BY id ASC'),
+      query('SELECT * FROM dropdown_options ORDER BY id ASC'),
+    ])
 
-  const destHandle = await instance.dirHandle.getFileHandle(DB_NAME, { create: true })
-  const writable = await destHandle.createWritable()
-  await writable.write(buffer)
-  await writable.close()
+    const data = {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      projects,
+      workLogEntries,
+      tasks,
+      dropdownOptions,
+    }
+
+    const json = JSON.stringify(data, null, 2)
+    const fileHandle = await instance.dirHandle.getFileHandle('myworker-data.json', { create: true })
+    const writable = await fileHandle.createWritable()
+    await writable.write(json)
+    await writable.close()
+  } catch {
+    // Non-fatal — data is still safe in IndexedDB
+    console.warn('[db] Failed to persist to OneDrive folder')
+  }
 }
 
-/**
- * Update the user folder handle (e.g. after user picks a new folder in Settings).
- */
+/** Update the user folder handle (e.g. after Settings "change folder"). */
 export function setUserFolderHandle(dirHandle: FileSystemDirectoryHandle): void {
   if (instance) instance.dirHandle = dirHandle
 }
 
-/**
- * Helper: execute one or more SQL statements, returning all result rows.
- */
+/** Helper: execute SQL, returning all result rows. */
 export async function exec(
   sqlite: SQLite.SQLiteAPI,
   db: number,
@@ -152,7 +132,6 @@ export async function exec(
   const rows: Record<string, SQLiteCompatibleType>[] = []
 
   for await (const stmt of sqlite.statements(db, sql)) {
-    // Bind parameters if provided (only on first statement)
     if (params.length > 0) {
       for (let i = 0; i < params.length; i++) {
         sqlite.bind(stmt, i + 1, params[i])
@@ -171,9 +150,7 @@ export async function exec(
   return rows
 }
 
-/**
- * Convenience: run a query using the active db instance.
- */
+/** Convenience: run a query using the active db instance. */
 export async function query(
   sql: string,
   params: SQLiteCompatibleType[] = [],
@@ -182,9 +159,7 @@ export async function query(
   return exec(sqlite, db, sql, params)
 }
 
-/**
- * Convenience: run a write statement and persist to user folder.
- */
+/** Convenience: run a write statement and persist to OneDrive. */
 export async function run(
   sql: string,
   params: SQLiteCompatibleType[] = [],
@@ -194,13 +169,10 @@ export async function run(
   await persistToUserFolder()
 }
 
-/**
- * Get the last inserted row ID.
- */
+/** Get the last inserted row ID. */
 export function lastInsertId(): number {
   const { sqlite, db } = getDb()
   return sqlite.last_insert_rowid(db)
 }
 
-// Re-export for convenience
 export type SQLiteCompatibleType = number | string | Uint8Array | null

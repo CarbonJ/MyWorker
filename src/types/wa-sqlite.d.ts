@@ -1,13 +1,19 @@
 // Type stubs for wa-sqlite — the package ships no .d.ts files
 
+interface EmscriptenOptions {
+  locateFile?: (file: string, prefix: string) => string
+  wasmBinary?: ArrayBuffer
+  [key: string]: unknown
+}
+
 declare module 'wa-sqlite/dist/wa-sqlite.mjs' {
-  interface EmscriptenOptions {
-    locateFile?: (file: string, prefix: string) => string
-    wasmBinary?: ArrayBuffer
-    [key: string]: unknown
-  }
   const SQLiteESMFactory: (opts?: EmscriptenOptions) => Promise<object>
   export default SQLiteESMFactory
+}
+
+declare module 'wa-sqlite/dist/wa-sqlite-async.mjs' {
+  const SQLiteAsyncESMFactory: (opts?: EmscriptenOptions) => Promise<object>
+  export default SQLiteAsyncESMFactory
 }
 
 declare module 'wa-sqlite/src/sqlite-api.js' {
@@ -36,6 +42,15 @@ declare module 'wa-sqlite/src/sqlite-api.js' {
 declare module 'wa-sqlite/src/examples/AccessHandlePoolVFS.js' {
   export class AccessHandlePoolVFS {
     constructor(directoryPath: string)
+    isReady: Promise<void>
+    name: string
+    close(): Promise<void>
+  }
+}
+
+declare module 'wa-sqlite/src/examples/IDBBatchAtomicVFS.js' {
+  export class IDBBatchAtomicVFS {
+    constructor(idbName: string, options?: object)
     isReady: Promise<void>
     name: string
     close(): Promise<void>
