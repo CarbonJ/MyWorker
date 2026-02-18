@@ -13,9 +13,15 @@ export default defineConfig({
       registerType: 'autoUpdate',
       strategies: 'generateSW',
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm}'],
-        // Cache-first for all assets — app is fully local/offline
-        runtimeCaching: [],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        // WASM files are large — cache them at runtime on first fetch
+        runtimeCaching: [
+          {
+            urlPattern: /\.wasm$/,
+            handler: 'CacheFirst',
+            options: { cacheName: 'wasm-cache' },
+          },
+        ],
       },
       manifest: {
         name: 'MyWorker',

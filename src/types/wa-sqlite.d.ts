@@ -1,7 +1,12 @@
 // Type stubs for wa-sqlite — the package ships no .d.ts files
 
 declare module 'wa-sqlite/dist/wa-sqlite.mjs' {
-  const SQLiteESMFactory: () => Promise<object>
+  interface EmscriptenOptions {
+    locateFile?: (file: string, prefix: string) => string
+    wasmBinary?: ArrayBuffer
+    [key: string]: unknown
+  }
+  const SQLiteESMFactory: (opts?: EmscriptenOptions) => Promise<object>
   export default SQLiteESMFactory
 }
 

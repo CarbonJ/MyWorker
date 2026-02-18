@@ -62,7 +62,11 @@ export async function initDb(dirHandle: FileSystemDirectoryHandle | null = null)
   }
 
   // Initialise wa-sqlite with the synchronous WASM build + AccessHandlePoolVFS
-  const module = await SQLiteESMFactory()
+  // locateFile tells Emscripten where to find the .wasm binary.
+  // We serve it from /public so it's always at the root regardless of bundling.
+  const module = await SQLiteESMFactory({
+    locateFile: (file: string) => `/${file}`,
+  })
   const sqlite = SQLite.Factory(module)
   const vfs = new AccessHandlePoolVFS(`/${OPFS_DIR}`)
   await vfs.isReady
