@@ -161,6 +161,10 @@ export default function Settings() {
   }
 
   const handleChangeFolder = async () => {
+    if (!('showDirectoryPicker' in window)) {
+      toast.error('Your browser does not support folder selection. Use Chrome or Edge.')
+      return
+    }
     try {
       const handle = await window.showDirectoryPicker({ mode: 'readwrite' })
       setUserFolderHandle(handle)
@@ -196,12 +200,21 @@ export default function Settings() {
       {/* Storage */}
       <section className={section}>
         <h2 className={sectionTitle}>Storage</h2>
-        <p className="text-sm text-muted-foreground">
-          MyWorker saves your database to your chosen folder (e.g. OneDrive) automatically on every change.
-        </p>
-        <Button variant="outline" onClick={handleChangeFolder}>
-          Change storage folder…
-        </Button>
+        {'showDirectoryPicker' in window ? (
+          <>
+            <p className="text-sm text-muted-foreground">
+              MyWorker saves your database to your chosen folder (e.g. OneDrive) automatically on every change.
+            </p>
+            <Button variant="outline" onClick={handleChangeFolder}>
+              Change storage folder…
+            </Button>
+          </>
+        ) : (
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 space-y-1">
+            <p className="font-medium">Folder sync not available in this browser</p>
+            <p>Your data is stored in browser storage (OPFS). To enable OneDrive sync, open MyWorker in <strong>Chrome</strong> or <strong>Edge</strong>.</p>
+          </div>
+        )}
       </section>
 
       <Separator />

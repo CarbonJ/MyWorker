@@ -1,9 +1,12 @@
 /**
  * Database context + provider
  *
- * On first load: prompts the user to pick their OneDrive folder.
- * Stores the folder handle in IndexedDB (via the handle persistence trick)
- * so the user only needs to pick once per browser session.
+ * On first load: prompts the user to pick their OneDrive folder (if the
+ * File System Access API is available). Falls back to OPFS-only mode in
+ * unsupported browsers so the app still works.
+ *
+ * Stores the folder handle in IndexedDB so it only needs to be picked once
+ * per browser session.
  */
 
 import {
@@ -16,7 +19,7 @@ import {
 } from 'react'
 import { initDb, setUserFolderHandle } from '@/db'
 
-type DbStatus = 'loading' | 'needs-folder' | 'ready' | 'error'
+type DbStatus = 'loading' | 'needs-folder' | 'ready' | 'error' | 'unsupported'
 
 interface DbContextValue {
   status: DbStatus
@@ -29,6 +32,9 @@ const DbContext = createContext<DbContextValue | null>(null)
 const IDB_DB_NAME = 'myworker-meta'
 const IDB_STORE = 'handles'
 const IDB_KEY = 'folderHandle'
+
+/** True if the File System Access API is available (Chromium only) */
+const hasFSA = typeof window !== 'undefined' && 'showDirectoryPicker' in window
 
 /** Persist a FileSystemDirectoryHandle in IndexedDB so we can restore it next session */
 async function saveHandle(handle: FileSystemDirectoryHandle): Promise<void> {
@@ -72,11 +78,11 @@ export function DbProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<DbStatus>('loading')
   const [error, setError] = useState<string | null>(null)
 
-  const initialise = useCallback(async (handle: FileSystemDirectoryHandle) => {
+  const initialise = useCallback(async (handle: FileSystemDirectoryHandle | null) => {
     try {
       setStatus('loading')
       await initDb(handle)
-      await saveHandle(handle)
+      if (handle) await saveHandle(handle)
       setStatus('ready')
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -84,15 +90,22 @@ export function DbProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // On mount: try to restore the saved folder handle
+  // On mount: restore saved handle or decide what state to show
   useEffect(() => {
     async function restore() {
       try {
-        const handle = await loadHandle()
-        if (handle && (await verifyPermission(handle))) {
-          await initialise(handle)
+        if (hasFSA) {
+          // Try to restore a saved folder handle
+          const handle = await loadHandle()
+          if (handle && (await verifyPermission(handle))) {
+            await initialise(handle)
+          } else {
+            setStatus('needs-folder')
+          }
         } else {
-          setStatus('needs-folder')
+          // File System Access API not available — run in OPFS-only mode
+          // Data lives in browser storage only (no OneDrive sync)
+          await initialise(null)
         }
       } catch {
         setStatus('needs-folder')
@@ -102,6 +115,7 @@ export function DbProvider({ children }: { children: ReactNode }) {
   }, [initialise])
 
   const pickFolder = useCallback(async () => {
+    if (!hasFSA) return
     try {
       const handle = await window.showDirectoryPicker({ mode: 'readwrite' })
       await initialise(handle)
@@ -191,5 +205,5 @@ function ErrorScreen({ error, onRetry }: { error: string | null; onRetry: () => 
   )
 }
 
-// Export changeFolder for Settings screen use
+// Export for Settings screen use
 export { setUserFolderHandle }
