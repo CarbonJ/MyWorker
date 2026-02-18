@@ -57,16 +57,16 @@ export async function initDb(dirHandle: FileSystemDirectoryHandle | null = null)
   const sqlite = SQLite.Factory(module)
 
   // IDBBatchAtomicVFS — stores database pages in IndexedDB, main-thread compatible
+  // Works in Chrome, Edge, and Firefox. No isReady on this VFS.
   const vfs = new IDBBatchAtomicVFS(IDB_NAME)
-  await vfs.isReady
-  ;(sqlite as unknown as { registerVFS: (vfs: object, makeDefault?: boolean) => void })
-    .registerVFS(vfs, true)
+  sqlite.vfs_register(vfs, true)
 
   // Open (or create) the database
+  // Pass the VFS name so SQLite uses our IDB-backed VFS
   const db = await sqlite.open_v2(
     DB_NAME,
     SQLite.SQLITE_OPEN_READWRITE | SQLite.SQLITE_OPEN_CREATE,
-    IDB_NAME,
+    vfs.name,
   )
 
   // Enable foreign keys

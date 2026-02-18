@@ -34,6 +34,7 @@ declare module 'wa-sqlite/src/sqlite-api.js' {
     column_names(stmt: number): string[]
     last_insert_rowid(db: number): number
     finalize(stmt: number): Promise<void>
+    vfs_register(vfs: object, makeDefault?: boolean): number
   }
 
   export function Factory(module: object): SQLiteAPI
@@ -51,7 +52,7 @@ declare module 'wa-sqlite/src/examples/AccessHandlePoolVFS.js' {
 declare module 'wa-sqlite/src/examples/IDBBatchAtomicVFS.js' {
   export class IDBBatchAtomicVFS {
     constructor(idbName: string, options?: object)
-    isReady: Promise<void>
+    // Note: no `isReady` — that only exists on AccessHandlePoolVFS
     name: string
     close(): Promise<void>
   }
