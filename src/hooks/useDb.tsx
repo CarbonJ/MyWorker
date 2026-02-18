@@ -33,7 +33,11 @@ const IDB_DB_NAME = 'myworker-meta'
 const IDB_STORE = 'handles'
 const IDB_KEY = 'folderHandle'
 
-/** True if the File System Access API is available (Chromium only) */
+/**
+ * True if the File System Access API (showDirectoryPicker) is available.
+ * Supported: Chrome 86+, Edge 86+
+ * Not supported: Firefox (no plans), Safari (no support)
+ */
 const hasFSA = typeof window !== 'undefined' && 'showDirectoryPicker' in window
 
 /** Persist a FileSystemDirectoryHandle in IndexedDB so we can restore it next session */
@@ -171,6 +175,10 @@ function FolderPickerScreen({ onPick }: { onPick: () => void }) {
         </button>
         <p className="text-xs text-muted-foreground">
           You'll only need to do this once per browser session.
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Folder sync requires <strong>Chrome</strong> or <strong>Edge</strong>.
+          Firefox and Safari are not supported for this feature.
         </p>
       </div>
     </div>

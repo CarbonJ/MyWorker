@@ -166,7 +166,7 @@ export default function Settings() {
 
   const handleChangeFolder = async () => {
     if (!('showDirectoryPicker' in window)) {
-      toast.error('Your browser does not support folder selection. Use Chrome or Edge.')
+      toast.error('Folder sync requires Chrome or Edge. Firefox and Safari are not supported.')
       return
     }
     try {
@@ -216,7 +216,14 @@ export default function Settings() {
         ) : (
           <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 space-y-1">
             <p className="font-medium">Folder sync not available in this browser</p>
-            <p>Your data is stored in browser storage (OPFS). To enable OneDrive sync, open MyWorker in <strong>Chrome</strong> or <strong>Edge</strong>.</p>
+            <p>
+              Your data is safely stored in browser storage (IndexedDB).
+              To enable automatic OneDrive sync, open MyWorker in <strong>Chrome</strong> or <strong>Edge</strong>.
+            </p>
+            <p className="text-xs opacity-75">
+              Firefox and Safari do not support the File System Access API required for folder sync.
+              Use <strong>Export backup (JSON)</strong> below to manually back up your data in any browser.
+            </p>
           </div>
         )}
       </section>
