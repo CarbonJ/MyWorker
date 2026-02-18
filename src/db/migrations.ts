@@ -165,15 +165,25 @@ export async function runMigrations(handle: DbHandle): Promise<void> {
   // Get current schema version
   const versionRows = await exec(sqlite, db, 'PRAGMA user_version;')
   const currentVersion = Number(versionRows[0]?.user_version ?? 0)
+  console.log(`[db] Current schema version: ${currentVersion}`)
 
   // Apply any migrations newer than current version
   const pending = migrations.filter(m => m.version > currentVersion)
-  if (pending.length === 0) return
+  if (pending.length === 0) {
+    console.log('[db] Schema up to date, no migrations needed')
+    return
+  }
 
   for (const migration of pending) {
-    console.log(`[db] Applying migration v${migration.version}`)
-    await exec(sqlite, db, migration.up)
-    await exec(sqlite, db, `PRAGMA user_version = ${migration.version};`)
+    console.log(`[db] Applying migration v${migration.version}…`)
+    try {
+      await exec(sqlite, db, migration.up)
+      await exec(sqlite, db, `PRAGMA user_version = ${migration.version};`)
+      console.log(`[db] Migration v${migration.version} applied OK`)
+    } catch (err) {
+      console.error(`[db] Migration v${migration.version} FAILED`, err)
+      throw err
+    }
   }
 
   console.log(`[db] Migrations complete. Schema at v${pending[pending.length - 1].version}`)

@@ -40,6 +40,7 @@ export async function createDropdownOption(
     order = ((rows[0]?.max_order as number | null) ?? -1) + 1
   }
 
+  console.log('[db] createDropdownOption inserting', { type, label, order })
   await run(
     `INSERT INTO dropdown_options (type, label, sort_order) VALUES (?, ?, ?)`,
     [type, label, order],

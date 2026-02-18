@@ -21,7 +21,20 @@ import { IDBBatchAtomicVFS } from '@/vendor/wa-sqlite/examples/IDBBatchAtomicVFS
 import { runMigrations } from './migrations'
 
 const DB_NAME = 'myworker.db'
-const IDB_NAME  = 'myworker-sqlite'
+const IDB_NAME = 'myworker-sqlite'
+
+/** Wipe the IDBBatchAtomicVFS IndexedDB so we can start with a clean database. */
+async function deleteIdb(): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const req = indexedDB.deleteDatabase(IDB_NAME)
+    req.onsuccess = () => resolve()
+    req.onerror = () => reject(req.error)
+    req.onblocked = () => {
+      console.warn('[db] IDB delete blocked — closing other tabs may help')
+      resolve() // proceed anyway
+    }
+  })
+}
 
 export interface DbHandle {
   sqlite: SQLite.SQLiteAPI
@@ -43,7 +56,10 @@ export function getDb(): DbHandle {
  * - Runs schema migrations
  * - Saves dirHandle for OneDrive persistence writes
  */
-export async function initDb(dirHandle: FileSystemDirectoryHandle | null = null): Promise<DbHandle> {
+export async function initDb(
+  dirHandle: FileSystemDirectoryHandle | null = null,
+  _isRetry = false,
+): Promise<DbHandle> {
   // Close any existing connection
   if (instance) {
     await instance.sqlite.close(instance.db)
@@ -71,11 +87,26 @@ export async function initDb(dirHandle: FileSystemDirectoryHandle | null = null)
 
   // Enable foreign keys
   await exec(sqlite, db, 'PRAGMA foreign_keys = ON;')
+  console.log(`[db] Opened database "${DB_NAME}" via VFS "${vfs.name}"`)
 
   instance = { sqlite, db, dirHandle }
 
   // Run migrations (creates tables, FTS index, triggers, etc.)
   await runMigrations(instance)
+
+  // Sanity-check: run a quick query to confirm the schema is readable.
+  // If this fails (e.g. pages written by a previous incompatible WASM build),
+  // wipe the IDB and reinitialise once with a clean database.
+  try {
+    await exec(sqlite, db, 'SELECT COUNT(*) FROM projects;')
+  } catch (err) {
+    if (_isRetry) throw err // don't loop
+    console.warn('[db] Integrity check failed — wiping IDB and reinitialising', err)
+    await sqlite.close(db)
+    instance = null
+    await deleteIdb()
+    return initDb(dirHandle, true)
+  }
 
   return instance
 }
