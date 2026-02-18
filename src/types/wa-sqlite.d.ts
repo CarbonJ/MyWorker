@@ -1,4 +1,5 @@
-// Type stubs for wa-sqlite — the package ships no .d.ts files
+// Type stubs for vendored wa-sqlite (src/vendor/wa-sqlite/)
+// Matches the Nov 2023 sqwab FTS5-enabled build (SQLite 3.44.0)
 
 interface EmscriptenOptions {
   locateFile?: (file: string, prefix: string) => string
@@ -6,17 +7,13 @@ interface EmscriptenOptions {
   [key: string]: unknown
 }
 
-declare module 'wa-sqlite/dist/wa-sqlite.mjs' {
-  const SQLiteESMFactory: (opts?: EmscriptenOptions) => Promise<object>
-  export default SQLiteESMFactory
-}
-
-declare module 'wa-sqlite/dist/wa-sqlite-async.mjs' {
+// Vendor paths — these are the actual files we ship in src/vendor/wa-sqlite/
+declare module '@/vendor/wa-sqlite/wa-sqlite-async.mjs' {
   const SQLiteAsyncESMFactory: (opts?: EmscriptenOptions) => Promise<object>
   export default SQLiteAsyncESMFactory
 }
 
-declare module 'wa-sqlite/src/sqlite-api.js' {
+declare module '@/vendor/wa-sqlite/sqlite-api.js' {
   export const SQLITE_ROW: number
   export const SQLITE_DONE: number
   export const SQLITE_OK: number
@@ -40,16 +37,7 @@ declare module 'wa-sqlite/src/sqlite-api.js' {
   export function Factory(module: object): SQLiteAPI
 }
 
-declare module 'wa-sqlite/src/examples/AccessHandlePoolVFS.js' {
-  export class AccessHandlePoolVFS {
-    constructor(directoryPath: string)
-    isReady: Promise<void>
-    name: string
-    close(): Promise<void>
-  }
-}
-
-declare module 'wa-sqlite/src/examples/IDBBatchAtomicVFS.js' {
+declare module '@/vendor/wa-sqlite/examples/IDBBatchAtomicVFS.js' {
   export class IDBBatchAtomicVFS {
     constructor(idbName: string, options?: object)
     // Note: no `isReady` — that only exists on AccessHandlePoolVFS

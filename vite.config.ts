@@ -50,4 +50,18 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  // Suppress the "new URL(...) doesn't exist at build time" warning from the
+  // vendored wa-sqlite-async.mjs Emscripten glue. At runtime, our locateFile
+  // hook intercepts the WASM path so this branch is never reached.
+  build: {
+    rollupOptions: {
+      onwarn(warning, warn) {
+        if (warning.code === 'INVALID_ANNOTATION' ||
+            (warning.message?.includes('wa-sqlite-async.wasm') && warning.message?.includes("doesn't exist"))) {
+          return
+        }
+        warn(warning)
+      },
+    },
+  },
 })

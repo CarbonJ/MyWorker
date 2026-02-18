@@ -15,9 +15,9 @@
  *   - Portability: pick the OneDrive folder on a new machine and import the JSON backup
  */
 
-import SQLiteAsyncESMFactory from 'wa-sqlite/dist/wa-sqlite-async.mjs'
-import * as SQLite from 'wa-sqlite/src/sqlite-api.js'
-import { IDBBatchAtomicVFS } from 'wa-sqlite/src/examples/IDBBatchAtomicVFS.js'
+import SQLiteAsyncESMFactory from '@/vendor/wa-sqlite/wa-sqlite-async.mjs'
+import * as SQLite from '@/vendor/wa-sqlite/sqlite-api.js'
+import { IDBBatchAtomicVFS } from '@/vendor/wa-sqlite/examples/IDBBatchAtomicVFS.js'
 import { runMigrations } from './migrations'
 
 const DB_NAME = 'myworker.db'
