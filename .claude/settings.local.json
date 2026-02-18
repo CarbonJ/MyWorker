@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm create:*)",
+      "Bash(node --version:*)",
+      "Bash(source:*)",
+      "Bash(npm install:*)",
+      "Bash(git init:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(npm run build:*)",
+      "Bash(git -C /Users/justin/Documents/DevProjects/MyWorker add src/db/ src/types/wa-sqlite.d.ts)",
+      "Bash(git -C /Users/justin/Documents/DevProjects/MyWorker commit -m \"$\\(cat <<''EOF''\nAdd database layer: wa-sqlite, schema, migrations, query helpers\n\n- db/index.ts: wa-sqlite init with AccessHandlePoolVFS \\(OPFS\\) + File System\n  Access API persistence to user-chosen OneDrive folder; exec/query/run helpers\n- db/migrations.ts: versioned migrations via PRAGMA user_version; v1 creates\n  all tables, FTS5 virtual table, updated_at triggers, and FTS sync triggers\n- db/projects.ts: CRUD helpers for projects\n- db/tasks.ts: CRUD helpers for tasks; getDueSoonTasks for due-date reminders\n- db/workLog.ts: append-only work log entry helpers\n- db/dropdownOptions.ts: CRUD + reorder for user-managed dropdown lists\n- db/search.ts: FTS5 full-text search with prefix matching and relevance ranking\n- db/importExport.ts: JSON export \\(browser download\\) and import with FTS rebuild\n- types/wa-sqlite.d.ts: TypeScript declaration stubs for wa-sqlite modules\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(npx shadcn@latest add:*)",
+      "Bash(git -C /Users/justin/Documents/DevProjects/MyWorker add -A)",
+      "Bash(git -C /Users/justin/Documents/DevProjects/MyWorker commit -m \"$\\(cat <<''EOF''\nBuild complete UI layer: all screens, components, routing\n\n- hooks/useDb.tsx: DbProvider with folder picker, OPFS init, loading/error states\n- components/RagBadge.tsx: RAG status badge \\(Red/Amber/Green\\)\n- components/TaskModal.tsx: create/edit/delete task dialog\n- components/WorkLogEntry.tsx: inline work log entry form \\(Ctrl+Enter to submit\\)\n- components/QuickWorkLog.tsx: global floating quick-add button + modal\n- pages/ProjectList.tsx: sortable/filterable table, FTS search, RAG filter pills\n- pages/ProjectForm.tsx: unified create/edit form for projects\n- pages/ProjectDetail.tsx: three-pane layout \\(summary / tasks / work log\\)\n- pages/ReportingView.tsx: read-only dense table for in-person meetings\n- pages/Settings.tsx: dropdown option management, folder picker, import/export\n- App.tsx: routing, due-date banner, global quick log button, toast provider\n- tsconfig: added wicg-file-system-access types for File System Access API\n- Fixed wa-sqlite registerVFS call \\(instance method, not module export\\)\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")"
+    ]
+  }
+}

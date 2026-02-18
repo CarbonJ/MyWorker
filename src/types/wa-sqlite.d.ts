@@ -26,7 +26,6 @@ declare module 'wa-sqlite/src/sqlite-api.js' {
   }
 
   export function Factory(module: object): SQLiteAPI
-  export function registerVFS(sqlite: SQLiteAPI, vfs: object, makeDefault?: boolean): void
 }
 
 declare module 'wa-sqlite/src/examples/AccessHandlePoolVFS.js' {

@@ -1,5 +1,8 @@
 # MyWorker — Claude Context
 
+## Generic note
+- npm run dev
+
 ## Project Overview
 
 **MyWorker** is a Progressive Web App (PWA) for project and task management, built for a Risk Manager's personal workflow.

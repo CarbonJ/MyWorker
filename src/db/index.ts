@@ -66,7 +66,9 @@ export async function initDb(dirHandle: FileSystemDirectoryHandle | null = null)
   const sqlite = SQLite.Factory(module)
   const vfs = new AccessHandlePoolVFS(`/${OPFS_DIR}`)
   await vfs.isReady
-  SQLite.registerVFS(sqlite, vfs)
+  // registerVFS is a method on the sqlite instance (not a module export)
+  ;(sqlite as unknown as { registerVFS: (vfs: object, makeDefault?: boolean) => void })
+    .registerVFS(vfs, false)
 
   // Open (or create) the database
   const db = await sqlite.open_v2(

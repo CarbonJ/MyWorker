@@ -1,8 +1,31 @@
+import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
+import { Toaster } from '@/components/ui/sonner'
+import { DbProvider } from '@/hooks/useDb'
+import { QuickWorkLogButton } from '@/components/QuickWorkLog'
+import { getDueSoonTasks } from '@/db/tasks'
 import ProjectList from '@/pages/ProjectList'
 import ProjectDetail from '@/pages/ProjectDetail'
+import ProjectForm from '@/pages/ProjectForm'
 import ReportingView from '@/pages/ReportingView'
 import Settings from '@/pages/Settings'
+
+function DueDateBanner() {
+  const [count, setCount] = useState(0)
+
+  useEffect(() => {
+    getDueSoonTasks().then(tasks => setCount(tasks.length)).catch(() => {})
+  }, [])
+
+  if (count === 0) return null
+
+  return (
+    <div className="bg-amber-50 border-b border-amber-200 px-6 py-1.5 text-xs text-amber-800 flex items-center gap-2">
+      <span>⚠</span>
+      <span>{count} task{count !== 1 ? 's' : ''} overdue or due today</span>
+    </div>
+  )
+}
 
 function NavBar() {
   const linkClass = ({ isActive }: { isActive: boolean }) =>
@@ -24,18 +47,25 @@ function NavBar() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <div className="min-h-screen bg-background flex flex-col">
-        <NavBar />
-        <main className="flex-1">
-          <Routes>
-            <Route path="/" element={<ProjectList />} />
-            <Route path="/projects/:id" element={<ProjectDetail />} />
-            <Route path="/reporting" element={<ReportingView />} />
-            <Route path="/settings" element={<Settings />} />
-          </Routes>
-        </main>
-      </div>
-    </BrowserRouter>
+    <DbProvider>
+      <BrowserRouter>
+        <div className="min-h-screen bg-background flex flex-col">
+          <NavBar />
+          <DueDateBanner />
+          <main className="flex-1 overflow-hidden">
+            <Routes>
+              <Route path="/" element={<ProjectList />} />
+              <Route path="/projects/new" element={<ProjectForm />} />
+              <Route path="/projects/:id" element={<ProjectDetail />} />
+              <Route path="/projects/:id/edit" element={<ProjectForm />} />
+              <Route path="/reporting" element={<ReportingView />} />
+              <Route path="/settings" element={<Settings />} />
+            </Routes>
+          </main>
+        </div>
+        <QuickWorkLogButton />
+        <Toaster richColors position="bottom-right" />
+      </BrowserRouter>
+    </DbProvider>
   )
 }
