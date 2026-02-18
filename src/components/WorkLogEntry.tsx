@@ -21,8 +21,9 @@ export function WorkLogEntryForm({ projectId, onSaved }: Props) {
       await addWorkLogEntry(projectId, note.trim())
       setNote('')
       onSaved()
-    } catch {
-      toast.error('Failed to add work log entry')
+    } catch (err) {
+      console.error('Failed to add work log entry', err)
+      toast.error(`Failed to add work log entry: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setSaving(false)
     }

@@ -67,8 +67,9 @@ export function TaskModal({ projectId, task, open, onClose, onSaved }: Props) {
       }
       onSaved()
       onClose()
-    } catch {
-      toast.error('Failed to save task')
+    } catch (err) {
+      console.error('Failed to save task', err)
+      toast.error(`Failed to save task: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setSaving(false)
     }
@@ -81,8 +82,9 @@ export function TaskModal({ projectId, task, open, onClose, onSaved }: Props) {
       toast.success('Task deleted')
       onSaved()
       onClose()
-    } catch {
-      toast.error('Failed to delete task')
+    } catch (err) {
+      console.error('Failed to delete task', err)
+      toast.error(`Failed to delete task: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 

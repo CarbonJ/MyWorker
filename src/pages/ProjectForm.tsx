@@ -81,8 +81,9 @@ export default function ProjectForm() {
         toast.success('Project created')
         navigate(`/projects/${newId}`)
       }
-    } catch {
-      toast.error('Failed to save project')
+    } catch (err) {
+      console.error('Failed to save project', err)
+      toast.error(`Failed to save project: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setSaving(false)
     }
@@ -94,8 +95,9 @@ export default function ProjectForm() {
       await deleteProject(project.id)
       toast.success('Project deleted')
       navigate('/')
-    } catch {
-      toast.error('Failed to delete project')
+    } catch (err) {
+      console.error('Failed to delete project', err)
+      toast.error(`Failed to delete project: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 

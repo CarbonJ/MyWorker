@@ -52,8 +52,9 @@ export default function ProjectDetail() {
       setWorkLog(wl)
       setPriorities(pris)
       setProductAreas(areas)
-    } catch {
-      toast.error('Failed to load project')
+    } catch (err) {
+      console.error('Failed to load project', err)
+      toast.error(`Failed to load project: ${err instanceof Error ? err.message : String(err)}`)
     }
   }, [projectId, navigate])
 

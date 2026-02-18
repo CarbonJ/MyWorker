@@ -27,8 +27,9 @@ export default function ReportingView() {
       setProjects(ps)
       setPriorities(pris)
       setProductAreas(areas)
-    } catch {
-      toast.error('Failed to load projects')
+    } catch (err) {
+      console.error('Failed to load projects', err)
+      toast.error(`Failed to load projects: ${err instanceof Error ? err.message : String(err)}`)
     }
   }, [])
 

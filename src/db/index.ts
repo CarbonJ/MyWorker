@@ -131,20 +131,25 @@ export async function exec(
 ): Promise<Record<string, SQLiteCompatibleType>[]> {
   const rows: Record<string, SQLiteCompatibleType>[] = []
 
-  for await (const stmt of sqlite.statements(db, sql)) {
-    if (params.length > 0) {
-      for (let i = 0; i < params.length; i++) {
-        sqlite.bind(stmt, i + 1, params[i])
+  try {
+    for await (const stmt of sqlite.statements(db, sql)) {
+      if (params.length > 0) {
+        for (let i = 0; i < params.length; i++) {
+          sqlite.bind(stmt, i + 1, params[i])
+        }
+      }
+      const columns = sqlite.column_names(stmt)
+      while (await sqlite.step(stmt) === SQLite.SQLITE_ROW) {
+        const row: Record<string, SQLiteCompatibleType> = {}
+        for (let i = 0; i < columns.length; i++) {
+          row[columns[i]] = sqlite.column(stmt, i)
+        }
+        rows.push(row)
       }
     }
-    const columns = sqlite.column_names(stmt)
-    while (await sqlite.step(stmt) === SQLite.SQLITE_ROW) {
-      const row: Record<string, SQLiteCompatibleType> = {}
-      for (let i = 0; i < columns.length; i++) {
-        row[columns[i]] = sqlite.column(stmt, i)
-      }
-      rows.push(row)
-    }
+  } catch (err) {
+    console.error('[db] exec error', { sql: sql.slice(0, 120), params, err })
+    throw err
   }
 
   return rows

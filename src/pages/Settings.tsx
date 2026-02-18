@@ -35,8 +35,9 @@ function OptionList({ type, title }: { type: DropdownType; title: string }) {
       await createDropdownOption(type, newLabel.trim())
       setNewLabel('')
       load()
-    } catch {
-      toast.error('Failed to add option')
+    } catch (err) {
+      console.error('Failed to add option', err)
+      toast.error(`Failed to add option: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
@@ -46,8 +47,9 @@ function OptionList({ type, title }: { type: DropdownType; title: string }) {
       await updateDropdownOption(id, editLabel.trim(), sortOrder)
       setEditingId(null)
       load()
-    } catch {
-      toast.error('Failed to update option')
+    } catch (err) {
+      console.error('Failed to update option', err)
+      toast.error(`Failed to update option: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
@@ -56,8 +58,9 @@ function OptionList({ type, title }: { type: DropdownType; title: string }) {
     try {
       await deleteDropdownOption(id)
       load()
-    } catch {
-      toast.error('Failed to delete option')
+    } catch (err) {
+      console.error('Failed to delete option', err)
+      toast.error(`Failed to delete option: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
@@ -136,8 +139,9 @@ export default function Settings() {
     try {
       await exportToJson()
       toast.success('Backup downloaded')
-    } catch {
-      toast.error('Export failed')
+    } catch (err) {
+      console.error('Export failed', err)
+      toast.error(`Export failed: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
