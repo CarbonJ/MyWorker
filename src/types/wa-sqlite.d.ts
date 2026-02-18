@@ -1,0 +1,39 @@
+// Type stubs for wa-sqlite — the package ships no .d.ts files
+
+declare module 'wa-sqlite/dist/wa-sqlite.mjs' {
+  const SQLiteESMFactory: () => Promise<object>
+  export default SQLiteESMFactory
+}
+
+declare module 'wa-sqlite/src/sqlite-api.js' {
+  export const SQLITE_ROW: number
+  export const SQLITE_DONE: number
+  export const SQLITE_OK: number
+  export const SQLITE_OPEN_READWRITE: number
+  export const SQLITE_OPEN_CREATE: number
+
+  export interface SQLiteAPI {
+    open_v2(filename: string, flags?: number, vfs?: string): Promise<number>
+    close(db: number): Promise<void>
+    exec(db: number, sql: string): Promise<void>
+    statements(db: number, sql: string): AsyncIterable<number>
+    bind(stmt: number, i: number, value: number | string | Uint8Array | null): void
+    step(stmt: number): Promise<number>
+    column(stmt: number, i: number): number | string | Uint8Array | null
+    column_names(stmt: number): string[]
+    last_insert_rowid(db: number): number
+    finalize(stmt: number): Promise<void>
+  }
+
+  export function Factory(module: object): SQLiteAPI
+  export function registerVFS(sqlite: SQLiteAPI, vfs: object, makeDefault?: boolean): void
+}
+
+declare module 'wa-sqlite/src/examples/AccessHandlePoolVFS.js' {
+  export class AccessHandlePoolVFS {
+    constructor(directoryPath: string)
+    isReady: Promise<void>
+    name: string
+    close(): Promise<void>
+  }
+}
