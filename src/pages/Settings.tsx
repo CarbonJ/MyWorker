@@ -18,10 +18,12 @@ import { Separator } from '@/components/ui/separator'
 
 const COLORS = [
   { value: 'red',    bg: 'bg-red-500',    label: 'Red' },
+  { value: 'orange', bg: 'bg-orange-500', label: 'Orange' },
   { value: 'amber',  bg: 'bg-amber-400',  label: 'Amber' },
   { value: 'green',  bg: 'bg-green-500',  label: 'Green' },
   { value: 'blue',   bg: 'bg-blue-500',   label: 'Blue' },
   { value: 'purple', bg: 'bg-purple-500', label: 'Purple' },
+  { value: 'grey',   bg: 'bg-slate-400',  label: 'Grey' },
 ]
 
 function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
