@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { getAllProjects } from '@/db/projects'
 import { addWorkLogEntry } from '@/db/workLog'
 import type { Project } from '@/types'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -78,6 +78,9 @@ function QuickWorkLogModal({ open, onClose, defaultProjectId }: ModalProps) {
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Quick Work Log Entry</DialogTitle>
+          <DialogDescription className="sr-only">
+            Add a timestamped note to a project's work log
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
