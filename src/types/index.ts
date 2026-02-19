@@ -30,6 +30,7 @@ export interface Task {
   description: string
   notes: string
   status: TaskStatus
+  priorityId: number | null
   owner: string
   startDate: string | null
   dueDate: string | null
