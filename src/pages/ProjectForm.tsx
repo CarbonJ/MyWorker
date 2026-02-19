@@ -18,6 +18,7 @@ export default function ProjectForm() {
   const [project, setProject] = useState<Project | null>(null)
   const [priorities, setPriorities] = useState<DropdownOption[]>([])
   const [productAreas, setProductAreas] = useState<DropdownOption[]>([])
+  const [projectStatuses, setProjectStatuses] = useState<DropdownOption[]>([])
   const [saving, setSaving] = useState(false)
 
   // Form state
@@ -27,17 +28,20 @@ export default function ProjectForm() {
   const [priorityId, setPriorityId] = useState<string>('')
   const [latestStatus, setLatestStatus] = useState('')
   const [productAreaId, setProductAreaId] = useState<string>('')
+  const [statusId, setStatusId] = useState<string>('')
   const [stakeholders, setStakeholders] = useState('')
   const [linkedJiras, setLinkedJiras] = useState<JiraLink[]>([])
 
   const load = useCallback(async () => {
     try {
-      const [pris, areas] = await Promise.all([
+      const [pris, areas, statuses] = await Promise.all([
         getDropdownOptions('priority'),
         getDropdownOptions('product_area'),
+        getDropdownOptions('project_status'),
       ])
       setPriorities(pris)
       setProductAreas(areas)
+      setProjectStatuses(statuses)
 
       if (isEdit && id) {
         const p = await getProjectById(Number(id))
@@ -49,6 +53,7 @@ export default function ProjectForm() {
         setPriorityId(p.priorityId?.toString() ?? '')
         setLatestStatus(p.latestStatus)
         setProductAreaId(p.productAreaId?.toString() ?? '')
+        setStatusId(p.statusId?.toString() ?? '')
         setStakeholders(p.stakeholders)
         setLinkedJiras(p.linkedJiras)
       }
@@ -73,6 +78,7 @@ export default function ProjectForm() {
         priorityId: priorityId ? Number(priorityId) : null,
         latestStatus,
         productAreaId: productAreaId ? Number(productAreaId) : null,
+        statusId: statusId ? Number(statusId) : null,
         stakeholders,
         linkedJiras,
       }
@@ -186,20 +192,37 @@ export default function ProjectForm() {
           </div>
         </div>
 
-        {/* Product Area */}
-        <div className={fieldClass}>
-          <Label>Product Area</Label>
-          <Select value={productAreaId || 'none'} onValueChange={v => setProductAreaId(v === 'none' ? '' : v)}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select product area" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">—</SelectItem>
-              {productAreas.map(a => (
-                <SelectItem key={a.id} value={a.id.toString()}>{a.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        {/* Product Area + Project Status */}
+        <div className={sectionClass}>
+          <div className={fieldClass}>
+            <Label>Product Area</Label>
+            <Select value={productAreaId || 'none'} onValueChange={v => setProductAreaId(v === 'none' ? '' : v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select product area" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">—</SelectItem>
+                {productAreas.map(a => (
+                  <SelectItem key={a.id} value={a.id.toString()}>{a.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className={fieldClass}>
+            <Label>Project Status</Label>
+            <Select value={statusId || 'none'} onValueChange={v => setStatusId(v === 'none' ? '' : v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">—</SelectItem>
+                {projectStatuses.map(s => (
+                  <SelectItem key={s.id} value={s.id.toString()}>{s.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {/* Latest Status */}

@@ -9,6 +9,7 @@ import ProjectDetail from '@/pages/ProjectDetail'
 import ProjectForm from '@/pages/ProjectForm'
 import ReportingView from '@/pages/ReportingView'
 import TasksView from '@/pages/TasksView'
+import ArchiveView from '@/pages/ArchiveView'
 import Settings from '@/pages/Settings'
 
 function DueDateBanner() {
@@ -48,6 +49,7 @@ function NavBar() {
       <NavLink to="/" end className={linkClass}>Projects</NavLink>
       <NavLink to="/tasks" className={linkClass}>Tasks</NavLink>
       <NavLink to="/reporting" className={linkClass}>Reporting</NavLink>
+      <NavLink to="/archive" className={linkClass}>Archive</NavLink>
       <NavLink to="/settings" className={linkClass}>Settings</NavLink>
     </nav>
   )
@@ -68,6 +70,7 @@ export default function App() {
               <Route path="/projects/:id/edit" element={<ProjectForm />} />
               <Route path="/tasks" element={<TasksView />} />
               <Route path="/reporting" element={<ReportingView />} />
+              <Route path="/archive" element={<ArchiveView />} />
               <Route path="/settings" element={<Settings />} />
             </Routes>
           </main>

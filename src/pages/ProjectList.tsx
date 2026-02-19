@@ -44,6 +44,7 @@ export default function ProjectList() {
   const [projects, setProjects] = useState<Project[]>([])
   const [priorities, setPriorities] = useState<DropdownOption[]>([])
   const [productAreas, setProductAreas] = useState<DropdownOption[]>([])
+  const [projectStatuses, setProjectStatuses] = useState<DropdownOption[]>([])
   const [search, setSearch] = useState('')
   const [searchIds, setSearchIds] = useState<number[] | null>(null)
   const [sortKey, setSortKey] = useState<SortKey>('updatedAt')
@@ -51,17 +52,20 @@ export default function ProjectList() {
   const [ragFilter, setRagFilter] = useState<RagStatus | 'All'>('All')
   const [priorityFilter, setPriorityFilter] = useState<string>('All')  // 'All' | priority id as string
   const [areaFilter, setAreaFilter] = useState<string>('All')          // 'All' | product_area id as string
+  const [statusFilter, setStatusFilter] = useState<string>('All')      // 'All' | project_status id as string
 
   const load = useCallback(async () => {
     try {
-      const [ps, pris, areas] = await Promise.all([
+      const [ps, pris, areas, statuses] = await Promise.all([
         getAllProjects(),
         getDropdownOptions('priority'),
         getDropdownOptions('product_area'),
+        getDropdownOptions('project_status'),
       ])
       setProjects(ps)
       setPriorities(pris)
       setProductAreas(areas)
+      setProjectStatuses(statuses)
     } catch (err) {
       console.error('Failed to load projects', err)
       toast.error(`Failed to load projects: ${err instanceof Error ? err.message : String(err)}`)
@@ -101,6 +105,7 @@ export default function ProjectList() {
     if (ragFilter !== 'All') list = list.filter(p => p.ragStatus === ragFilter)
     if (priorityFilter !== 'All') list = list.filter(p => String(p.priorityId ?? '') === priorityFilter)
     if (areaFilter !== 'All') list = list.filter(p => String(p.productAreaId ?? '') === areaFilter)
+    if (statusFilter !== 'All') list = list.filter(p => String(p.statusId ?? '') === statusFilter)
 
     list.sort((a, b) => {
       let av: string | number = ''
@@ -119,7 +124,7 @@ export default function ProjectList() {
     })
 
     return list
-  }, [projects, searchIds, sortKey, sortDir, ragFilter, priorityFilter, areaFilter, priorities, productAreas])
+  }, [projects, searchIds, sortKey, sortDir, ragFilter, priorityFilter, areaFilter, statusFilter, priorities, productAreas, projectStatuses])
 
   const SortIcon = ({ col }: { col: SortKey }) =>
     <span className="ml-1 opacity-50">{sortKey === col ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span>
@@ -177,6 +182,18 @@ export default function ProjectList() {
             ))}
           </SelectContent>
         </Select>
+        {/* Project Status filter */}
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="h-8 text-xs w-36">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="All">All Statuses</SelectItem>
+            {projectStatuses.map(s => (
+              <SelectItem key={s.id} value={String(s.id)}>{s.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Button className="ml-auto" onClick={() => navigate('/projects/new')}>
           + New Project
         </Button>
@@ -191,6 +208,7 @@ export default function ProjectList() {
               <th className={thClass} onClick={() => handleSort('productArea')}>Product Area<SortIcon col="productArea" /></th>
               <th className={thClass} onClick={() => handleSort('priority')}>Priority<SortIcon col="priority" /></th>
               <th className={thClass} onClick={() => handleSort('ragStatus')}>RAG<SortIcon col="ragStatus" /></th>
+              <th className={thClass}>Status</th>
               <th className={thClass} onClick={() => handleSort('latestStatus')}>Latest Status<SortIcon col="latestStatus" /></th>
               <th className={thClass} onClick={() => handleSort('updatedAt')}>Updated<SortIcon col="updatedAt" /></th>
             </tr>
@@ -198,7 +216,7 @@ export default function ProjectList() {
           <tbody className="divide-y divide-border">
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-16 text-center text-muted-foreground">
+                <td colSpan={7} className="px-4 py-16 text-center text-muted-foreground">
                   {search ? 'No results found.' : 'No projects yet — create one to get started.'}
                 </td>
               </tr>
@@ -224,6 +242,19 @@ export default function ProjectList() {
                   })() : <span className="text-muted-foreground">—</span>}
                 </td>
                 <td className="px-4 py-3"><RagBadge status={p.ragStatus} /></td>
+                <td className="px-4 py-3">
+                  {p.statusId ? (() => {
+                    const opt = projectStatuses.find(s => s.id === p.statusId)
+                    if (!opt) return <span className="text-muted-foreground">—</span>
+                    const color = opt.color
+                    return (
+                      <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${priorityClass(color)}`}>
+                        {color && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${priorityDot(color)}`} />}
+                        {opt.label}
+                      </span>
+                    )
+                  })() : <span className="text-muted-foreground">—</span>}
+                </td>
                 <td className="px-4 py-3 max-w-xs truncate text-muted-foreground">{p.latestStatus || '—'}</td>
                 <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
                   {new Date(p.updatedAt + 'Z').toLocaleDateString()}

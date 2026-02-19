@@ -5,7 +5,7 @@ export interface JiraLink {
   label: string
 }
 export type TaskStatus = 'open' | 'in_progress' | 'done'
-export type DropdownType = 'priority' | 'product_area'
+export type DropdownType = 'priority' | 'product_area' | 'project_status'
 
 export interface Project {
   id: number
@@ -15,6 +15,7 @@ export interface Project {
   priorityId: number | null
   latestStatus: string
   productAreaId: number | null
+  statusId: number | null
   stakeholders: string
   linkedJiras: JiraLink[]
   createdAt: string

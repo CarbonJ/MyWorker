@@ -226,6 +226,33 @@ const migrations: Migration[] = [
         END;
     `,
   },
+  {
+    version: 5,
+    up: `
+      -- Recreate dropdown_options without the type CHECK constraint so 'project_status' is valid
+      CREATE TABLE IF NOT EXISTS dropdown_options_new (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        type       TEXT NOT NULL,
+        label      TEXT NOT NULL,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        color      TEXT NOT NULL DEFAULT ''
+      );
+      INSERT INTO dropdown_options_new (id, type, label, sort_order, color)
+        SELECT id, type, label, sort_order, color FROM dropdown_options;
+      DROP TABLE dropdown_options;
+      ALTER TABLE dropdown_options_new RENAME TO dropdown_options;
+
+      -- Add lifecycle status column to projects
+      ALTER TABLE projects ADD COLUMN status_id INTEGER REFERENCES dropdown_options(id) ON DELETE SET NULL;
+
+      -- Seed default project status options
+      INSERT INTO dropdown_options (type, label, sort_order, color) VALUES
+        ('project_status', 'To Do',       0, ''),
+        ('project_status', 'In Progress', 1, 'blue'),
+        ('project_status', 'Backlog',     2, 'amber'),
+        ('project_status', 'Done',        3, 'green');
+    `,
+  },
 ]
 
 export async function runMigrations(handle: DbHandle): Promise<void> {

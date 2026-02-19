@@ -240,6 +240,8 @@ export default function Settings() {
         <OptionList type="priority" title="Priority" />
         <Separator />
         <OptionList type="product_area" title="Product Area" />
+        <Separator />
+        <OptionList type="project_status" title="Project Status" />
       </section>
 
       <Separator />

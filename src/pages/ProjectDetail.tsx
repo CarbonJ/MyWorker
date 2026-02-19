@@ -81,6 +81,7 @@ export default function ProjectDetail() {
   const [workLog, setWorkLog] = useState<WorkLogEntry[]>([])
   const [priorities, setPriorities] = useState<DropdownOption[]>([])
   const [productAreas, setProductAreas] = useState<DropdownOption[]>([])
+  const [projectStatuses, setProjectStatuses] = useState<DropdownOption[]>([])
   const [descExpanded, setDescExpanded] = useState(false)
 
   const [taskModalOpen, setTaskModalOpen] = useState(false)
@@ -118,12 +119,13 @@ export default function ProjectDetail() {
 
   const load = useCallback(async () => {
     try {
-      const [p, ts, wl, pris, areas] = await Promise.all([
+      const [p, ts, wl, pris, areas, statuses] = await Promise.all([
         getProjectById(projectId),
         getTasksByProject(projectId),
         getWorkLogByProject(projectId),
         getDropdownOptions('priority'),
         getDropdownOptions('product_area'),
+        getDropdownOptions('project_status'),
       ])
       if (!p) { toast.error('Project not found'); navigate('/'); return }
       setProject(p)
@@ -131,6 +133,7 @@ export default function ProjectDetail() {
       setWorkLog(wl)
       setPriorities(pris)
       setProductAreas(areas)
+      setProjectStatuses(statuses)
     } catch (err) {
       console.error('Failed to load project', err)
       toast.error(`Failed to load project: ${err instanceof Error ? err.message : String(err)}`)
@@ -160,6 +163,31 @@ export default function ProjectDetail() {
     setEditingStatus(false)
     if (project && statusDraft !== project.latestStatus) {
       saveField({ latestStatus: statusDraft })
+    }
+  }
+
+  const doneOpt = projectStatuses.find(s => s.label.toLowerCase() === 'done')
+  const isArchived = !!(project && doneOpt && project.statusId === doneOpt.id)
+
+  const markComplete = async () => {
+    if (!project || !doneOpt) { toast.error('No "Done" status configured in Settings'); return }
+    try {
+      await updateProject({ id: project.id, statusId: doneOpt.id })
+      toast.success('Project archived')
+      navigate('/')
+    } catch (err) {
+      toast.error(`Failed to archive: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
+  const reopenProject = async () => {
+    if (!project) return
+    try {
+      await updateProject({ id: project.id, statusId: null })
+      toast.success('Project reopened')
+      await load()
+    } catch (err) {
+      toast.error(`Failed to reopen: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
@@ -246,6 +274,15 @@ export default function ProjectDetail() {
               <Button variant="outline" size="sm" onClick={() => navigate(`/projects/${projectId}/edit`)} className="shrink-0">
                 Edit
               </Button>
+              {isArchived ? (
+                <Button size="sm" variant="outline" onClick={reopenProject} className="shrink-0 text-green-700 border-green-300 hover:bg-green-50">
+                  ↩ Reopen
+                </Button>
+              ) : (
+                <Button size="sm" variant="outline" onClick={markComplete} className="shrink-0 text-slate-600 hover:text-green-700 hover:border-green-300">
+                  ✓ Mark Complete
+                </Button>
+              )}
             </div>
             {project.workDescription && (
               <div>
@@ -285,7 +322,7 @@ export default function ProjectDetail() {
                 <span className="text-muted-foreground">{project.latestStatus || <span className="italic text-muted-foreground/60">click to add…</span>}</span>
               )}
             </div>
-            {/* RAG + Priority + Area */}
+            {/* RAG + Priority + Area + Project Status */}
             <div className="flex items-center gap-2 flex-wrap">
               <RagBadge status={project.ragStatus} />
               {project.priorityId && (
@@ -293,6 +330,16 @@ export default function ProjectDetail() {
                   {labelFor(priorities, project.priorityId)}
                 </span>
               )}
+              {project.statusId && (() => {
+                const opt = projectStatuses.find(s => s.id === project.statusId)
+                if (!opt) return null
+                return (
+                  <span className={`text-xs px-2 py-0.5 rounded-full border inline-flex items-center gap-1 ${priorityClass(opt.color)}`}>
+                    {opt.color && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${priorityDot(opt.color)}`} />}
+                    {opt.label}
+                  </span>
+                )
+              })()}
               {project.productAreaId && (
                 <span className="text-muted-foreground">
                   <span className="font-medium text-foreground">Area:</span> {labelFor(productAreas, project.productAreaId)}
