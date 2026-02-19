@@ -82,18 +82,22 @@ export default function ProjectDetail() {
 
       {/* ── TOP PANE: Project Summary ──────────────────────────────────── */}
       <div className="shrink-0 px-6 py-4 border-b bg-background">
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-1 min-w-0">
-            <div className="flex items-center gap-3">
-              <button onClick={() => navigate('/')} className="text-sm text-muted-foreground hover:text-foreground shrink-0">← Projects</button>
-              <RagBadge status={project.ragStatus} />
-              {project.priorityId && (
-                <span className="text-xs text-muted-foreground border rounded-full px-2 py-0.5">
-                  {labelFor(priorities, project.priorityId)}
-                </span>
-              )}
+        {/* Back link — full width above both columns */}
+        <button onClick={() => navigate('/')} className="text-sm text-muted-foreground hover:text-foreground mb-3 block">
+          ← Projects
+        </button>
+
+        {/* Two-column grid */}
+        <div className="grid grid-cols-2 gap-6">
+
+          {/* LEFT: Work Item + Description */}
+          <div className="min-w-0 space-y-2">
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-semibold truncate">{project.workItem}</h1>
+              <Button variant="outline" size="sm" onClick={() => navigate(`/projects/${projectId}/edit`)} className="shrink-0">
+                Edit
+              </Button>
             </div>
-            <h1 className="text-xl font-semibold truncate">{project.workItem}</h1>
             {project.workDescription && (
               <div>
                 <div className={descExpanded ? undefined : 'line-clamp-3'}>
@@ -110,36 +114,42 @@ export default function ProjectDetail() {
               </div>
             )}
           </div>
-          <Button variant="outline" size="sm" onClick={() => navigate(`/projects/${projectId}/edit`)} className="shrink-0">
-            Edit
-          </Button>
-        </div>
 
-        {/* Meta row */}
-        <div className="flex flex-wrap gap-x-6 gap-y-1 mt-3 text-sm">
-          {project.productAreaId && (
-            <span className="text-muted-foreground">
-              <span className="font-medium text-foreground">Area:</span> {labelFor(productAreas, project.productAreaId)}
-            </span>
-          )}
-          {project.stakeholders && (
-            <span className="text-muted-foreground">
-              <span className="font-medium text-foreground">Stakeholders:</span> {project.stakeholders}
-            </span>
-          )}
-          {project.linkedJiras && (
-            <span className="text-muted-foreground">
-              <span className="font-medium text-foreground">JIRAs:</span> {project.linkedJiras}
-            </span>
-          )}
-        </div>
-
-        {/* Latest Status */}
-        {project.latestStatus && (
-          <div className="mt-2 px-3 py-2 bg-muted rounded-md text-sm">
-            <span className="font-medium">Status: </span>{project.latestStatus}
+          {/* RIGHT: Metadata */}
+          <div className="space-y-3 text-sm">
+            {/* Latest Status — most important, shown first */}
+            {project.latestStatus && (
+              <div className="px-3 py-2 bg-muted rounded-md">
+                <span className="font-medium">Status: </span>{project.latestStatus}
+              </div>
+            )}
+            {/* RAG + Priority + Area inline */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <RagBadge status={project.ragStatus} />
+              {project.priorityId && (
+                <span className="text-xs text-muted-foreground border rounded-full px-2 py-0.5">
+                  {labelFor(priorities, project.priorityId)}
+                </span>
+              )}
+              {project.productAreaId && (
+                <span className="text-muted-foreground">
+                  <span className="font-medium text-foreground">Area:</span> {labelFor(productAreas, project.productAreaId)}
+                </span>
+              )}
+            </div>
+            {project.stakeholders && (
+              <p className="text-muted-foreground">
+                <span className="font-medium text-foreground">Stakeholders:</span> {project.stakeholders}
+              </p>
+            )}
+            {project.linkedJiras && (
+              <p className="text-muted-foreground">
+                <span className="font-medium text-foreground">JIRAs:</span> {project.linkedJiras}
+              </p>
+            )}
           </div>
-        )}
+
+        </div>
       </div>
 
       {/* ── BOTTOM: Two-column (tasks left, work log right) ───────────── */}
