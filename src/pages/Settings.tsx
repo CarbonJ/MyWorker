@@ -13,6 +13,7 @@ import type { DropdownOption, DropdownType } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 
 // ── Colour picker swatches ────────────────────────────────────────────────────
 
@@ -241,76 +242,88 @@ export default function Settings() {
   const sectionTitle = 'text-base font-semibold'
 
   return (
-    <div className="max-w-2xl mx-auto px-6 py-8 space-y-8">
-      <h1 className="text-2xl font-semibold">Settings</h1>
+    <div className="max-w-2xl mx-auto px-6 py-8">
+      <h1 className="text-2xl font-semibold mb-6">Settings</h1>
 
-      {/* Dropdown options */}
-      <section className={section}>
-        <h2 className={sectionTitle}>Dropdown Options</h2>
-        <OptionList type="priority" title="Priority" />
-        <Separator />
-        <OptionList type="product_area" title="Product Area" />
-        <Separator />
-        <OptionList type="project_status" title="Project Status" />
-      </section>
+      <Tabs defaultValue="customization">
+        <TabsList>
+          <TabsTrigger value="customization">Customization</TabsTrigger>
+          <TabsTrigger value="data">Data</TabsTrigger>
+        </TabsList>
 
-      <Separator />
+        {/* ── Customization tab ───────────────────────────────────────── */}
+        <TabsContent value="customization" className="space-y-8">
+          <section className={section}>
+            <h2 className={sectionTitle}>Dropdown Options</h2>
+            <OptionList type="priority" title="Priority" />
+            <Separator />
+            <OptionList type="product_area" title="Product Area" />
+            <Separator />
+            <OptionList type="project_status" title="Project Status" />
+          </section>
+        </TabsContent>
 
-      {/* Storage */}
-      <section className={section}>
-        <h2 className={sectionTitle}>Storage</h2>
-        {'showDirectoryPicker' in window ? (
-          <>
-            <p className="text-sm text-muted-foreground">
-              MyWorker saves your database to your chosen folder (e.g. OneDrive) automatically on every change.
+        {/* ── Data tab ────────────────────────────────────────────────── */}
+        <TabsContent value="data" className="space-y-8">
+
+          {/* Storage */}
+          <section className={section}>
+            <h2 className={sectionTitle}>Storage</h2>
+            {'showDirectoryPicker' in window ? (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  MyWorker saves your database to your chosen folder (e.g. OneDrive) automatically on every change.
+                </p>
+                <Button variant="outline" onClick={handleChangeFolder}>
+                  Change storage folder…
+                </Button>
+              </>
+            ) : (
+              <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 space-y-1">
+                <p className="font-medium">Folder sync not available in this browser</p>
+                <p>
+                  Your data is safely stored in browser storage (IndexedDB).
+                  To enable automatic OneDrive sync, open MyWorker in <strong>Chrome</strong> or <strong>Edge</strong>.
+                </p>
+                <p className="text-xs opacity-75">
+                  Firefox and Safari do not support the File System Access API required for folder sync.
+                  Use <strong>Export backup (JSON)</strong> below to manually back up your data in any browser.
+                </p>
+              </div>
+            )}
+          </section>
+
+          <Separator />
+
+          {/* Import / Export */}
+          <section className={section}>
+            <h2 className={sectionTitle}>Backup &amp; Restore</h2>
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={handleExport}>
+                Export backup (JSON)
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => importRef.current?.click()}
+                disabled={importing}
+              >
+                {importing ? 'Importing…' : 'Import backup (JSON)'}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Import will replace all existing data. Make sure to export a backup first.
             </p>
-            <Button variant="outline" onClick={handleChangeFolder}>
-              Change storage folder…
-            </Button>
-          </>
-        ) : (
-          <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 space-y-1">
-            <p className="font-medium">Folder sync not available in this browser</p>
-            <p>
-              Your data is safely stored in browser storage (IndexedDB).
-              To enable automatic OneDrive sync, open MyWorker in <strong>Chrome</strong> or <strong>Edge</strong>.
-            </p>
-            <p className="text-xs opacity-75">
-              Firefox and Safari do not support the File System Access API required for folder sync.
-              Use <strong>Export backup (JSON)</strong> below to manually back up your data in any browser.
-            </p>
-          </div>
-        )}
-      </section>
+            <input
+              ref={importRef}
+              type="file"
+              accept=".json"
+              className="hidden"
+              onChange={handleImport}
+            />
+          </section>
 
-      <Separator />
-
-      {/* Import / Export */}
-      <section className={section}>
-        <h2 className={sectionTitle}>Backup &amp; Restore</h2>
-        <div className="flex gap-3">
-          <Button variant="outline" onClick={handleExport}>
-            Export backup (JSON)
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => importRef.current?.click()}
-            disabled={importing}
-          >
-            {importing ? 'Importing…' : 'Import backup (JSON)'}
-          </Button>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Import will replace all existing data. Make sure to export a backup first.
-        </p>
-        <input
-          ref={importRef}
-          type="file"
-          accept=".json"
-          className="hidden"
-          onChange={handleImport}
-        />
-      </section>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
