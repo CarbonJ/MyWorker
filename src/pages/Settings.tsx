@@ -186,6 +186,7 @@ interface DataStats {
   tasks: number
   workLogEntries: number
   dropdownOptions: number
+  dbSizeMb: string
 }
 
 export default function Settings() {
@@ -199,12 +200,17 @@ export default function Settings() {
       query('SELECT COUNT(*) as n FROM tasks'),
       query('SELECT COUNT(*) as n FROM work_log_entries'),
       query('SELECT COUNT(*) as n FROM dropdown_options'),
-    ]).then(([ps, ts, wl, opts]) => {
+      query('PRAGMA page_count'),
+      query('PRAGMA page_size'),
+    ]).then(([ps, ts, wl, opts, pageCount, pageSize]) => {
+      const bytes = Number((pageCount[0] as Record<string, unknown>).page_count)
+                  * Number((pageSize[0]  as Record<string, unknown>).page_size)
       setDataStats({
-        projects:       Number((ps[0] as Record<string, unknown>).n),
-        tasks:          Number((ts[0] as Record<string, unknown>).n),
-        workLogEntries: Number((wl[0] as Record<string, unknown>).n),
+        projects:        Number((ps[0]   as Record<string, unknown>).n),
+        tasks:           Number((ts[0]   as Record<string, unknown>).n),
+        workLogEntries:  Number((wl[0]   as Record<string, unknown>).n),
         dropdownOptions: Number((opts[0] as Record<string, unknown>).n),
+        dbSizeMb: (bytes / 1024 / 1024).toFixed(2),
       })
     }).catch(() => { /* non-critical */ })
   }, [])
@@ -323,7 +329,7 @@ export default function Settings() {
           <section className={section}>
             <h2 className={sectionTitle}>Data Usage</h2>
             {dataStats ? (
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
                 {[
                   { label: 'Projects',       value: dataStats.projects },
                   { label: 'Tasks',          value: dataStats.tasks },
@@ -335,6 +341,10 @@ export default function Settings() {
                     <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
                   </div>
                 ))}
+                <div className="rounded-md border px-4 py-3 text-center">
+                  <p className="text-2xl font-semibold tabular-nums">{dataStats.dbSizeMb}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">DB Size (MB)</p>
+                </div>
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">Loading…</p>
