@@ -183,7 +183,8 @@ function OptionList({ type, title }: { type: DropdownType; title: string }) {
 
 interface DataStats {
   projects: number
-  tasks: number
+  tasksActive: number
+  tasksDone: number
   workLogEntries: number
   dropdownOptions: number
   dbSizeMb: string
@@ -197,19 +198,21 @@ export default function Settings() {
   useEffect(() => {
     Promise.all([
       query('SELECT COUNT(*) as n FROM projects'),
-      query('SELECT COUNT(*) as n FROM tasks'),
+      query("SELECT COUNT(*) as n FROM tasks WHERE status != 'done'"),
+      query("SELECT COUNT(*) as n FROM tasks WHERE status = 'done'"),
       query('SELECT COUNT(*) as n FROM work_log_entries'),
       query('SELECT COUNT(*) as n FROM dropdown_options'),
       query('PRAGMA page_count'),
       query('PRAGMA page_size'),
-    ]).then(([ps, ts, wl, opts, pageCount, pageSize]) => {
+    ]).then(([ps, tsActive, tsDone, wl, opts, pageCount, pageSize]) => {
       const bytes = Number((pageCount[0] as Record<string, unknown>).page_count)
                   * Number((pageSize[0]  as Record<string, unknown>).page_size)
       setDataStats({
-        projects:        Number((ps[0]   as Record<string, unknown>).n),
-        tasks:           Number((ts[0]   as Record<string, unknown>).n),
-        workLogEntries:  Number((wl[0]   as Record<string, unknown>).n),
-        dropdownOptions: Number((opts[0] as Record<string, unknown>).n),
+        projects:        Number((ps[0]       as Record<string, unknown>).n),
+        tasksActive:     Number((tsActive[0] as Record<string, unknown>).n),
+        tasksDone:       Number((tsDone[0]   as Record<string, unknown>).n),
+        workLogEntries:  Number((wl[0]       as Record<string, unknown>).n),
+        dropdownOptions: Number((opts[0]     as Record<string, unknown>).n),
         dbSizeMb: (bytes / 1024 / 1024).toFixed(2),
       })
     }).catch(() => { /* non-critical */ })
@@ -332,7 +335,6 @@ export default function Settings() {
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
                 {[
                   { label: 'Projects',       value: dataStats.projects },
-                  { label: 'Tasks',          value: dataStats.tasks },
                   { label: 'Work Log Notes', value: dataStats.workLogEntries },
                   { label: 'List Options',   value: dataStats.dropdownOptions },
                 ].map(({ label, value }) => (
@@ -341,6 +343,14 @@ export default function Settings() {
                     <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
                   </div>
                 ))}
+                <div className="rounded-md border px-4 py-3 text-center">
+                  <p className="text-2xl font-semibold tabular-nums">
+                    {dataStats.tasksActive}
+                    <span className="text-base font-normal text-muted-foreground mx-1">|</span>
+                    {dataStats.tasksDone}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Tasks Open | Done</p>
+                </div>
                 <div className="rounded-md border px-4 py-3 text-center">
                   <p className="text-2xl font-semibold tabular-nums">{dataStats.dbSizeMb}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">DB Size (MB)</p>
