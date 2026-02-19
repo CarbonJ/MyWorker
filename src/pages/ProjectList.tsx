@@ -4,13 +4,15 @@ import { toast } from 'sonner'
 import { getAllProjects } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
 import { searchProjectIds } from '@/db/search'
-import type { Project, DropdownOption, RagStatus } from '@/types'
+import { getAllTasks } from '@/db/tasks'
+import { getAllWorkLogEntries } from '@/db/workLog'
+import type { Project, DropdownOption, RagStatus, Task, WorkLogEntry } from '@/types'
 import { RagBadge } from '@/components/RagBadge'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
-type SortKey = 'workItem' | 'productArea' | 'priority' | 'ragStatus' | 'latestStatus' | 'updatedAt'
+type SortKey = 'workItem' | 'productArea' | 'priority' | 'ragStatus' | 'latestStatus' | 'updatedAt' | 'openTasks'
 type SortDir = 'asc' | 'desc'
 
 const RAG_ORDER: Record<RagStatus, number> = { Red: 0, Amber: 1, Green: 2 }
@@ -43,12 +45,19 @@ function priorityDot(color: string): string {
   return DOT_CLASS[color] ?? 'bg-slate-400'
 }
 
+function fmtDate(iso: string): string {
+  const [y, m, d] = iso.split('-')
+  return `${m}/${d}/${y.slice(2)}`
+}
+
 export default function ProjectList() {
   const navigate = useNavigate()
   const [projects, setProjects] = useState<Project[]>([])
   const [priorities, setPriorities] = useState<DropdownOption[]>([])
   const [productAreas, setProductAreas] = useState<DropdownOption[]>([])
   const [projectStatuses, setProjectStatuses] = useState<DropdownOption[]>([])
+  const [allTasks,        setAllTasks]        = useState<Task[]>([])
+  const [allWorkLog,      setAllWorkLog]      = useState<WorkLogEntry[]>([])
   const [search, setSearch] = useState('')
   const [searchIds, setSearchIds] = useState<number[] | null>(null)
   const [sortKey, setSortKey] = useState<SortKey>('updatedAt')
@@ -60,16 +69,20 @@ export default function ProjectList() {
 
   const load = useCallback(async () => {
     try {
-      const [ps, pris, areas, statuses] = await Promise.all([
+      const [ps, pris, areas, statuses, tasks, log] = await Promise.all([
         getAllProjects(),
         getDropdownOptions('priority'),
         getDropdownOptions('product_area'),
         getDropdownOptions('project_status'),
+        getAllTasks(),
+        getAllWorkLogEntries(),
       ])
       setProjects(ps)
       setPriorities(pris)
       setProductAreas(areas)
       setProjectStatuses(statuses)
+      setAllTasks(tasks)
+      setAllWorkLog(log)
     } catch (err) {
       console.error('Failed to load projects', err)
       toast.error(`Failed to load projects: ${err instanceof Error ? err.message : String(err)}`)
@@ -96,6 +109,28 @@ export default function ProjectList() {
     else { setSortKey(key); setSortDir('asc') }
   }
 
+  /** Latest work log entry per project */
+  const latestLogByProject = useMemo(() => {
+    const map = new Map<number, WorkLogEntry>()
+    for (const entry of allWorkLog) {
+      if (!map.has(entry.projectId)) map.set(entry.projectId, entry)
+    }
+    return map
+  }, [allWorkLog])
+
+  /** Open/in-progress task counts per project */
+  const taskCountsByProject = useMemo(() => {
+    const map = new Map<number, { open: number; inProgress: number }>()
+    for (const t of allTasks) {
+      if (t.projectId === null || t.status === 'done') continue
+      const cur = map.get(t.projectId) ?? { open: 0, inProgress: 0 }
+      if (t.status === 'open') cur.open++
+      else if (t.status === 'in_progress') cur.inProgress++
+      map.set(t.projectId, cur)
+    }
+    return map
+  }, [allTasks])
+
   const sorted = useMemo(() => {
     let list = [...projects]
 
@@ -121,6 +156,11 @@ export default function ProjectList() {
         case 'ragStatus': av = RAG_ORDER[a.ragStatus]; bv = RAG_ORDER[b.ragStatus]; break
         case 'latestStatus': av = a.latestStatus.toLowerCase(); bv = b.latestStatus.toLowerCase(); break
         case 'updatedAt': av = a.updatedAt; bv = b.updatedAt; break
+        case 'openTasks': {
+          const ac = taskCountsByProject.get(a.id); av = ac ? ac.open + ac.inProgress : 0
+          const bc = taskCountsByProject.get(b.id); bv = bc ? bc.open + bc.inProgress : 0
+          break
+        }
       }
       if (av < bv) return sortDir === 'asc' ? -1 : 1
       if (av > bv) return sortDir === 'asc' ? 1 : -1
@@ -128,7 +168,7 @@ export default function ProjectList() {
     })
 
     return list
-  }, [projects, searchIds, sortKey, sortDir, ragFilter, priorityFilter, areaFilter, statusFilter, priorities, productAreas, projectStatuses])
+  }, [projects, searchIds, sortKey, sortDir, ragFilter, priorityFilter, areaFilter, statusFilter, priorities, productAreas, projectStatuses, taskCountsByProject])
 
   const SortIcon = ({ col }: { col: SortKey }) =>
     <span className="ml-1 opacity-50">{sortKey === col ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span>
@@ -223,14 +263,15 @@ export default function ProjectList() {
               <th className={thClass} onClick={() => handleSort('priority')}>Priority<SortIcon col="priority" /></th>
               <th className={thClass} onClick={() => handleSort('ragStatus')}>RAG<SortIcon col="ragStatus" /></th>
               <th className={thClass}>Status</th>
+              <th className={thClass} onClick={() => handleSort('openTasks')}>Tasks<SortIcon col="openTasks" /></th>
               <th className={thClass} onClick={() => handleSort('latestStatus')}>Latest Status<SortIcon col="latestStatus" /></th>
-              <th className={thClass} onClick={() => handleSort('updatedAt')}>Updated<SortIcon col="updatedAt" /></th>
+              <th className={thClass}>Latest Update</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-16 text-center text-muted-foreground">
+                <td colSpan={9} className="px-4 py-16 text-center text-muted-foreground">
                   {search ? 'No results found.' : 'No projects yet — create one to get started.'}
                 </td>
               </tr>
@@ -269,9 +310,36 @@ export default function ProjectList() {
                     )
                   })() : <span className="text-muted-foreground">—</span>}
                 </td>
-                <td className="px-4 py-3 max-w-xs truncate text-muted-foreground">{p.latestStatus || '—'}</td>
-                <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                  {new Date(p.updatedAt + 'Z').toLocaleDateString()}
+                {/* Open Tasks */}
+                <td className="px-4 py-3 whitespace-nowrap">
+                  {(() => {
+                    const counts = taskCountsByProject.get(p.id)
+                    return counts && (counts.open > 0 || counts.inProgress > 0) ? (
+                      <span className="text-xs text-muted-foreground">
+                        {counts.open > 0 && <span className="text-slate-700 font-medium">{counts.open} open</span>}
+                        {counts.open > 0 && counts.inProgress > 0 && <span> · </span>}
+                        {counts.inProgress > 0 && <span className="text-blue-600 font-medium">{counts.inProgress} active</span>}
+                      </span>
+                    ) : <span className="text-xs text-muted-foreground">—</span>
+                  })()}
+                </td>
+                {/* Latest Status */}
+                <td className="px-4 py-3 max-w-[16rem]">
+                  <span className="text-xs text-muted-foreground">{p.latestStatus || '—'}</span>
+                </td>
+                {/* Latest Update */}
+                <td className="px-4 py-3 max-w-[20rem]">
+                  {(() => {
+                    const latestLog = latestLogByProject.get(p.id)
+                    return latestLog ? (
+                      <span className="text-xs text-muted-foreground">
+                        <span className="text-foreground/60 font-medium mr-1.5 shrink-0">
+                          {fmtDate(latestLog.createdAt.slice(0, 10))}
+                        </span>
+                        <span>{latestLog.note}</span>
+                      </span>
+                    ) : <span className="text-xs text-muted-foreground">—</span>
+                  })()}
                 </td>
               </tr>
             ))}
