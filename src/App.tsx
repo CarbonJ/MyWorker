@@ -28,10 +28,13 @@ function DueDateBanner() {
   if (count === 0) return null
 
   return (
-    <div className="bg-amber-50 border-b border-amber-200 px-6 py-1.5 text-xs text-amber-800 flex items-center gap-2">
+    <a
+      href="/tasks?filter=due"
+      className="bg-amber-50 border-b border-amber-200 px-6 py-1.5 text-xs text-amber-800 flex items-center gap-2 hover:bg-amber-100 transition-colors cursor-pointer"
+    >
       <span>⚠</span>
-      <span>{count} task{count !== 1 ? 's' : ''} overdue or due today</span>
-    </div>
+      <span>{count} task{count !== 1 ? 's' : ''} overdue or due today — click to view</span>
+    </a>
   )
 }
 

@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { getAllTasks, createTask, updateTask } from '@/db/tasks'
 import { getAllProjectsIncludingArchived } from '@/db/projects'
@@ -103,8 +104,12 @@ export default function TasksView() {
   // Inbox quick-add
   const [inboxDraft, setInboxDraft] = useState('')
 
+  // Read initial filter from URL (?filter=due)
+  const [searchParams] = useSearchParams()
+  const initialFilter = searchParams.get('filter') === 'due' ? 'due' : 'active'
+
   // Filters & sort
-  const [filterStatus,   setFilterStatus]   = useState<string>('active')
+  const [filterStatus,   setFilterStatus]   = useState<string>(initialFilter)
   const [filterPriority, setFilterPriority] = useState<string>('all')
   const [filterProject,  setFilterProject]  = useState<string>('all')
   const [filterArea,     setFilterArea]     = useState<string>('all')
@@ -164,8 +169,14 @@ export default function TasksView() {
     let list = [...tasks]
 
     // Status filter
-    if (filterStatus === 'active') list = list.filter(t => t.status !== 'done')
-    else if (filterStatus !== 'all') list = list.filter(t => t.status === filterStatus)
+    if (filterStatus === 'active') {
+      list = list.filter(t => t.status !== 'done')
+    } else if (filterStatus === 'due') {
+      const today = new Date().toISOString().slice(0, 10)
+      list = list.filter(t => t.status !== 'done' && t.dueDate !== null && t.dueDate <= today)
+    } else if (filterStatus !== 'all') {
+      list = list.filter(t => t.status === filterStatus)
+    }
 
     // Priority filter
     if (filterPriority !== 'all') {
@@ -252,6 +263,7 @@ export default function TasksView() {
           <SelectTrigger className="h-7 text-xs w-32"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="due">Due / Overdue</SelectItem>
             <SelectItem value="open">Open</SelectItem>
             <SelectItem value="in_progress">In Progress</SelectItem>
             <SelectItem value="done">Done</SelectItem>
