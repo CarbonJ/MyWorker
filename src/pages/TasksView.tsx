@@ -348,12 +348,15 @@ export default function TasksView() {
                 {projectName ?? <span className="italic">Inbox</span>}
               </span>
 
-              {/* Product Area */}
-              <span className="text-xs text-muted-foreground truncate">
+              {/* Product Area — "Inbox" for unassigned tasks, label for project tasks, "—" if project has no area */}
+              <span className="text-xs truncate">
                 {(() => {
-                  const proj = task.projectId ? projects.find(p => p.id === task.projectId) : null
-                  if (!proj?.productAreaId) return '—'
-                  return productAreas.find(a => a.id === proj.productAreaId)?.label ?? '—'
+                  if (!task.projectId) return <span className="italic text-muted-foreground/60">Inbox</span>
+                  const proj = projects.find(p => p.id === task.projectId)
+                  const areaLabel = proj?.productAreaId
+                    ? productAreas.find(a => a.id === proj.productAreaId)?.label
+                    : undefined
+                  return <span className="text-muted-foreground">{areaLabel ?? '—'}</span>
                 })()}
               </span>
 
