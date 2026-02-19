@@ -291,8 +291,8 @@ export default function ReportingView() {
                   </td>
 
                   {/* Latest Status */}
-                  <td className="px-3 py-2 text-muted-foreground max-w-[16rem]">
-                    {p.latestStatus || '—'}
+                  <td className="px-3 py-2 max-w-[16rem]">
+                    <span className="text-xs text-muted-foreground">{p.latestStatus || '—'}</span>
                   </td>
 
                   {/* Latest Work Log */}
