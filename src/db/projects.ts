@@ -46,6 +46,12 @@ export async function getAllProjects(): Promise<Project[]> {
   return rows.map(rowToProject)
 }
 
+/** Returns every project regardless of status — used for lookups that need the full set */
+export async function getAllProjectsIncludingArchived(): Promise<Project[]> {
+  const rows = await query(`SELECT * FROM projects ORDER BY updated_at DESC`)
+  return rows.map(rowToProject)
+}
+
 /** Returns all archived (Done) projects, newest first */
 export async function getArchivedProjects(): Promise<Project[]> {
   const rows = await query(`

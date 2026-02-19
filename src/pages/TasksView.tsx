@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 import { getAllTasks, createTask, updateTask } from '@/db/tasks'
-import { getAllProjects } from '@/db/projects'
+import { getAllProjectsIncludingArchived } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
 import type { Task, TaskStatus, Project, DropdownOption } from '@/types'
 import { TaskModal } from '@/components/TaskModal'
@@ -111,7 +111,7 @@ export default function TasksView() {
     try {
       const [ts, ps, pris, areas] = await Promise.all([
         getAllTasks(),
-        getAllProjects(),
+        getAllProjectsIncludingArchived(),
         getDropdownOptions('priority'),
         getDropdownOptions('product_area'),
       ])
