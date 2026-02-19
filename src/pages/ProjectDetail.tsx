@@ -142,10 +142,23 @@ export default function ProjectDetail() {
                 <span className="font-medium text-foreground">Stakeholders:</span> {project.stakeholders}
               </p>
             )}
-            {project.linkedJiras && (
-              <p className="text-muted-foreground">
-                <span className="font-medium text-foreground">JIRAs:</span> {project.linkedJiras}
-              </p>
+            {project.linkedJiras.length > 0 && (
+              <div className="text-muted-foreground">
+                <span className="font-medium text-foreground">JIRAs: </span>
+                <span className="inline-flex flex-wrap gap-x-2 gap-y-0.5">
+                  {project.linkedJiras.map((jira, i) => (
+                    <a
+                      key={i}
+                      href={jira.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary underline-offset-2 hover:underline"
+                    >
+                      {jira.label || jira.url}
+                    </a>
+                  ))}
+                </span>
+              </div>
             )}
           </div>
 

@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { getProjectById, createProject, updateProject, deleteProject } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
-import type { Project, DropdownOption, RagStatus } from '@/types'
+import type { Project, DropdownOption, RagStatus, JiraLink } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -28,7 +28,7 @@ export default function ProjectForm() {
   const [latestStatus, setLatestStatus] = useState('')
   const [productAreaId, setProductAreaId] = useState<string>('')
   const [stakeholders, setStakeholders] = useState('')
-  const [linkedJiras, setLinkedJiras] = useState('')
+  const [linkedJiras, setLinkedJiras] = useState<JiraLink[]>([])
 
   const load = useCallback(async () => {
     try {
@@ -105,6 +105,17 @@ export default function ProjectForm() {
       toast.error(`Failed to delete project: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
+
+  const addJiraLink = () =>
+    setLinkedJiras(prev => [...prev, { url: '', label: '' }])
+
+  const removeJiraLink = (index: number) =>
+    setLinkedJiras(prev => prev.filter((_, i) => i !== index))
+
+  const updateJiraLink = (index: number, field: 'url' | 'label', value: string) =>
+    setLinkedJiras(prev =>
+      prev.map((entry, i) => i === index ? { ...entry, [field]: value } : entry)
+    )
 
   const fieldClass = 'space-y-1.5'
   const sectionClass = 'grid grid-cols-2 gap-4'
@@ -215,13 +226,45 @@ export default function ProjectForm() {
 
         {/* Linked JIRAs */}
         <div className={fieldClass}>
-          <Label htmlFor="linkedJiras">Linked JIRAs</Label>
-          <Input
-            id="linkedJiras"
-            value={linkedJiras}
-            onChange={e => setLinkedJiras(e.target.value)}
-            placeholder="e.g. PROJ-123, PROJ-456 or URLs"
-          />
+          <Label>Linked JIRAs</Label>
+          {linkedJiras.length > 0 && (
+            <div className="space-y-2">
+              {linkedJiras.map((entry, i) => (
+                <div key={i} className="flex gap-2 items-center">
+                  <Input
+                    value={entry.label}
+                    onChange={e => updateJiraLink(i, 'label', e.target.value)}
+                    placeholder="Label (e.g. PROJ-123)"
+                    className="w-36 shrink-0"
+                  />
+                  <Input
+                    value={entry.url}
+                    onChange={e => updateJiraLink(i, 'url', e.target.value)}
+                    placeholder="https://..."
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeJiraLink(i)}
+                    className="shrink-0 text-muted-foreground hover:text-destructive"
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={addJiraLink}
+            className="mt-1"
+          >
+            + Add JIRA link
+          </Button>
         </div>
 
         {/* Actions */}

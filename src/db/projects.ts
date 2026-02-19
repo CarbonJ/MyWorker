@@ -1,5 +1,20 @@
 import { query, run, lastInsertId } from './index'
-import type { Project, RagStatus } from '@/types'
+import type { Project, RagStatus, JiraLink } from '@/types'
+
+function parseLinkedJiras(raw: string): JiraLink[] {
+  if (!raw || raw.trim() === '') return []
+  try {
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) return parsed as JiraLink[]
+    return []
+  } catch {
+    return []
+  }
+}
+
+function stringifyLinkedJiras(jiras: JiraLink[]): string {
+  return jiras.length === 0 ? '' : JSON.stringify(jiras)
+}
 
 function rowToProject(row: Record<string, unknown>): Project {
   return {
@@ -11,7 +26,7 @@ function rowToProject(row: Record<string, unknown>): Project {
     latestStatus: row.latest_status as string,
     productAreaId: row.product_area_id as number | null,
     stakeholders: row.stakeholders as string,
-    linkedJiras: row.linked_jiras as string,
+    linkedJiras: parseLinkedJiras(row.linked_jiras as string),
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   }
@@ -37,7 +52,7 @@ export interface CreateProjectInput {
   latestStatus?: string
   productAreaId?: number | null
   stakeholders?: string
-  linkedJiras?: string
+  linkedJiras?: JiraLink[]
 }
 
 export async function createProject(input: CreateProjectInput): Promise<number> {
@@ -53,7 +68,7 @@ export async function createProject(input: CreateProjectInput): Promise<number> 
       input.latestStatus ?? '',
       input.productAreaId ?? null,
       input.stakeholders ?? '',
-      input.linkedJiras ?? '',
+      stringifyLinkedJiras(input.linkedJiras ?? []),
     ],
   )
   return await lastInsertId()
@@ -86,7 +101,9 @@ export async function updateProject(input: UpdateProjectInput): Promise<void> {
       input.latestStatus ?? current.latestStatus,
       input.productAreaId !== undefined ? input.productAreaId : current.productAreaId,
       input.stakeholders ?? current.stakeholders,
-      input.linkedJiras ?? current.linkedJiras,
+      input.linkedJiras !== undefined
+        ? stringifyLinkedJiras(input.linkedJiras)
+        : stringifyLinkedJiras(current.linkedJiras),
       input.id,
     ],
   )
