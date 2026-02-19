@@ -4,7 +4,7 @@ import type { Task, TaskStatus } from '@/types'
 function rowToTask(row: Record<string, unknown>): Task {
   return {
     id: row.id as number,
-    projectId: row.project_id as number,
+    projectId: row.project_id as number | null,
     title: row.title as string,
     description: row.description as string,
     notes: row.notes as string,
@@ -89,7 +89,7 @@ export async function createTask(input: CreateTaskInput): Promise<number> {
   return await lastInsertId()
 }
 
-export interface UpdateTaskInput extends Partial<Omit<CreateTaskInput, 'projectId'>> {
+export interface UpdateTaskInput extends Partial<CreateTaskInput> {
   id: number
 }
 
@@ -100,6 +100,7 @@ export async function updateTask(input: UpdateTaskInput): Promise<void> {
 
   await run(
     `UPDATE tasks SET
+      project_id  = ?,
       title       = ?,
       description = ?,
       notes       = ?,
@@ -109,6 +110,7 @@ export async function updateTask(input: UpdateTaskInput): Promise<void> {
       due_date    = ?
      WHERE id = ?`,
     [
+      input.projectId !== undefined ? input.projectId : current.projectId,
       input.title ?? current.title,
       input.description ?? current.description,
       input.notes ?? current.notes,

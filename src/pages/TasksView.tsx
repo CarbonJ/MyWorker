@@ -1,5 +1,4 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { getAllTasks, createTask, updateTask } from '@/db/tasks'
 import { getAllProjects } from '@/db/projects'
@@ -89,8 +88,6 @@ type SortDir = 'asc' | 'desc'
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function TasksView() {
-  const navigate = useNavigate()
-
   const [tasks,        setTasks]        = useState<Task[]>([])
   const [projects,     setProjects]     = useState<Project[]>([])
   const [priorities,   setPriorities]   = useState<DropdownOption[]>([])
@@ -436,11 +433,11 @@ export default function TasksView() {
 
       {/* Task modal */}
       <TaskModal
-        projectId={editingTask?.projectId ?? 0}
         task={editingTask}
         open={taskModalOpen}
         onClose={() => { setTaskModalOpen(false); setEditingTask(null) }}
-        onSaved={() => { load(); navigate('/tasks') }}
+        onSaved={() => { load() }}
+        projects={projects}
       />
     </div>
   )

@@ -139,7 +139,7 @@ export default function ProjectDetail() {
 
   useEffect(() => { load() }, [load])
 
-  const saveField = useCallback(async (patch: Parameters<typeof updateProject>[0]) => {
+  const saveField = useCallback(async (patch: Omit<Parameters<typeof updateProject>[0], 'id'>) => {
     if (!project) return
     try {
       await updateProject({ id: project.id, ...patch })
