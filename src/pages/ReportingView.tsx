@@ -291,7 +291,7 @@ export default function ReportingView() {
                   </td>
 
                   {/* Latest Status */}
-                  <td className="px-3 py-2 text-muted-foreground max-w-[16rem] truncate">
+                  <td className="px-3 py-2 text-muted-foreground max-w-[16rem]">
                     {p.latestStatus || '—'}
                   </td>
 
@@ -302,7 +302,7 @@ export default function ReportingView() {
                         <span className="text-foreground/60 font-medium mr-1.5 shrink-0">
                           {fmtDate(latestLog.createdAt.slice(0, 10))}
                         </span>
-                        <span className="truncate">{latestLog.note.replace(/\n/g, ' ')}</span>
+                        <span>{latestLog.note}</span>
                       </span>
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>
