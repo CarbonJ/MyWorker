@@ -307,6 +307,16 @@ export default function TasksView() {
             ))}
           </SelectContent>
         </Select>
+        {(filterStatus !== 'active' || filterPriority !== 'all' || filterProject !== 'all' || filterArea !== 'all') && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => { setFilterStatus('active'); setFilterPriority('all'); setFilterProject('all'); setFilterArea('all') }}
+          >
+            ✕ Reset filters
+          </Button>
+        )}
         <span className="ml-auto text-xs text-muted-foreground">{visibleTasks.length} task{visibleTasks.length !== 1 ? 's' : ''}</span>
       </div>
 

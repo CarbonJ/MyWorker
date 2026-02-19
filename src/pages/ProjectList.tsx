@@ -198,6 +198,16 @@ export default function ProjectList() {
             ))}
           </SelectContent>
         </Select>
+        {(search || ragFilter !== 'All' || priorityFilter !== 'All' || areaFilter !== 'All' || statusFilter !== 'All') && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => { setSearch(''); setRagFilter('All'); setPriorityFilter('All'); setAreaFilter('All'); setStatusFilter('All') }}
+          >
+            ✕ Reset filters
+          </Button>
+        )}
         <Button className="ml-auto" onClick={() => navigate('/projects/new')}>
           + New Project
         </Button>
