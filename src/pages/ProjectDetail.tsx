@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { getProjectById, updateProject } from '@/db/projects'
-import { getTasksByProject, updateTask } from '@/db/tasks'
+import { getTasksByProject, updateTask, archiveTasksByProject, restoreTasksByProject } from '@/db/tasks'
 import { getWorkLogByProject } from '@/db/workLog'
 import { getDropdownOptions } from '@/db/dropdownOptions'
 import type { Project, Task, TaskStatus, WorkLogEntry, DropdownOption } from '@/types'
@@ -172,6 +172,7 @@ export default function ProjectDetail() {
   const markComplete = async () => {
     if (!project || !doneOpt) { toast.error('No "Done" status configured in Settings'); return }
     try {
+      await archiveTasksByProject(project.id)
       await updateProject({ id: project.id, statusId: doneOpt.id })
       toast.success('Project archived')
       navigate('/')
@@ -183,6 +184,7 @@ export default function ProjectDetail() {
   const reopenProject = async () => {
     if (!project) return
     try {
+      await restoreTasksByProject(project.id)
       await updateProject({ id: project.id, statusId: null })
       toast.success('Project reopened')
       await load()

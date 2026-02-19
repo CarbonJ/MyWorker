@@ -42,6 +42,7 @@ export interface Task {
   dueDate: string | null
   createdAt: string
   updatedAt: string
+  preArchiveStatus: TaskStatus | null
 }
 
 export interface DropdownOption {

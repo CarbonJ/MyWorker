@@ -15,6 +15,7 @@ function rowToTask(row: Record<string, unknown>): Task {
     dueDate: row.due_date as string | null,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
+    preArchiveStatus: (row.pre_archive_status as TaskStatus | null) ?? null,
   }
 }
 
@@ -125,4 +126,30 @@ export async function updateTask(input: UpdateTaskInput): Promise<void> {
 
 export async function deleteTask(id: number): Promise<void> {
   await run(`DELETE FROM tasks WHERE id = ?`, [id])
+}
+
+/** When archiving a project: bulk-mark all open/in_progress tasks as done,
+ *  saving their current status so they can be restored on reopen. */
+export async function archiveTasksByProject(projectId: number): Promise<void> {
+  await run(
+    `UPDATE tasks
+     SET pre_archive_status = status,
+         status = 'done'
+     WHERE project_id = ?
+       AND status IN ('open', 'in_progress')`,
+    [projectId],
+  )
+}
+
+/** When reopening a project: restore tasks that were auto-closed by archiving
+ *  back to their pre-archive status, then clear the snapshot. */
+export async function restoreTasksByProject(projectId: number): Promise<void> {
+  await run(
+    `UPDATE tasks
+     SET status = pre_archive_status,
+         pre_archive_status = NULL
+     WHERE project_id = ?
+       AND pre_archive_status IS NOT NULL`,
+    [projectId],
+  )
 }

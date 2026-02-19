@@ -253,6 +253,10 @@ const migrations: Migration[] = [
         ('project_status', 'Done',        3, 'green');
     `,
   },
+  {
+    version: 6,
+    up: `ALTER TABLE tasks ADD COLUMN pre_archive_status TEXT;`,
+  },
 ]
 
 export async function runMigrations(handle: DbHandle): Promise<void> {
