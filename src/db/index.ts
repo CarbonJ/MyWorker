@@ -39,10 +39,30 @@ async function deleteIdb(): Promise<void> {
 export interface DbHandle {
   sqlite: SQLite.SQLiteAPI
   db: number
+  vfs: IDBBatchAtomicVFS
   dirHandle: FileSystemDirectoryHandle | null
 }
 
 let instance: DbHandle | null = null
+
+/**
+ * In-flight initDb promise. If initDb() is called concurrently (e.g. React
+ * Strict Mode double-invoking useEffect), the second call returns the same
+ * promise instead of starting a second WASM+VFS+IDB stack in parallel.
+ * Parallel initialisations cause WASM memory corruption and IDB race errors.
+ */
+let initDbPromise: Promise<DbHandle> | null = null
+
+/**
+ * Query serialisation mutex.
+ *
+ * wa-sqlite uses a single SQLite connection. SQLite does not support concurrent
+ * operations on one connection — interleaving prepare/step/finalize calls from
+ * two concurrent async queries causes SQLITE_MISUSE ("bad parameter or other
+ * API misuse"). This mutex ensures all exec() calls are serialised: each one
+ * waits for the previous to fully complete before starting.
+ */
+let execMutex: Promise<void> = Promise.resolve()
 
 /** Returns the active database handle, throwing if not yet initialised. */
 export function getDb(): DbHandle {
@@ -55,14 +75,27 @@ export function getDb(): DbHandle {
  * - Sets up wa-sqlite async build with IDBBatchAtomicVFS (main-thread safe)
  * - Runs schema migrations
  * - Saves dirHandle for OneDrive persistence writes
+ *
+ * Concurrent calls are deduplicated: the second caller awaits the same promise.
  */
-export async function initDb(
+export function initDb(
   dirHandle: FileSystemDirectoryHandle | null = null,
+): Promise<DbHandle> {
+  // Deduplicate concurrent calls (React Strict Mode fires useEffect twice)
+  if (initDbPromise) return initDbPromise
+  initDbPromise = _initDb(dirHandle).finally(() => { initDbPromise = null })
+  return initDbPromise
+}
+
+/** Internal implementation — call via initDb() only. */
+async function _initDb(
+  dirHandle: FileSystemDirectoryHandle | null,
   _isRetry = false,
 ): Promise<DbHandle> {
-  // Close any existing connection
+  // Close any existing connection (DB + VFS) before proceeding
   if (instance) {
     await instance.sqlite.close(instance.db)
+    await instance.vfs.close()
     instance = null
   }
 
@@ -87,25 +120,30 @@ export async function initDb(
 
   // Enable foreign keys
   await exec(sqlite, db, 'PRAGMA foreign_keys = ON;')
-  console.log(`[db] Opened database "${DB_NAME}" via VFS "${vfs.name}"`)
 
-  instance = { sqlite, db, dirHandle }
+  instance = { sqlite, db, vfs, dirHandle }
 
   // Run migrations (creates tables, FTS index, triggers, etc.)
   await runMigrations(instance)
 
-  // Sanity-check: run a quick query to confirm the schema is readable.
-  // If this fails (e.g. pages written by a previous incompatible WASM build),
-  // wipe the IDB and reinitialise once with a clean database.
+  // Sanity-check: run SQLite's own integrity_check pragma, which reads every
+  // database page and detects corruption that query-level checks can miss.
+  // Returns 'ok' on a clean database; returns an error message otherwise.
   try {
-    await exec(sqlite, db, 'SELECT COUNT(*) FROM projects;')
+    const icRows = await exec(sqlite, db, 'PRAGMA integrity_check(1)')
+    if ((icRows[0]?.integrity_check as string) !== 'ok') {
+      throw new Error(`integrity_check: ${icRows[0]?.integrity_check}`)
+    }
   } catch (err) {
     if (_isRetry) throw err // don't loop
     console.warn('[db] Integrity check failed — wiping IDB and reinitialising', err)
+    // Close DB and VFS before deleting the IDB — otherwise deleteDatabase is
+    // blocked by the open VFS connection and the old corrupt pages survive.
     await sqlite.close(db)
+    await vfs.close()
     instance = null
     await deleteIdb()
-    return initDb(dirHandle, true)
+    return _initDb(dirHandle, true)
   }
 
   return instance
@@ -153,12 +191,26 @@ export function setUserFolderHandle(dirHandle: FileSystemDirectoryHandle): void 
   if (instance) instance.dirHandle = dirHandle
 }
 
-/** Helper: execute SQL, returning all result rows. */
-export async function exec(
+/** Helper: execute SQL, returning all result rows.
+ *  Serialised through execMutex — SQLite does not support concurrent ops. */
+export function exec(
   sqlite: SQLite.SQLiteAPI,
   db: number,
   sql: string,
   params: SQLiteCompatibleType[] = [],
+): Promise<Record<string, SQLiteCompatibleType>[]> {
+  // Chain onto the mutex so this call waits for any in-flight exec to finish
+  const result = execMutex.then(() => _execInner(sqlite, db, sql, params))
+  // Advance the mutex to this call's completion (swallow errors so the chain continues)
+  execMutex = result.then(() => {}, () => {})
+  return result
+}
+
+async function _execInner(
+  sqlite: SQLite.SQLiteAPI,
+  db: number,
+  sql: string,
+  params: SQLiteCompatibleType[],
 ): Promise<Record<string, SQLiteCompatibleType>[]> {
   const rows: Record<string, SQLiteCompatibleType>[] = []
 
@@ -205,10 +257,10 @@ export async function run(
   await persistToUserFolder()
 }
 
-/** Get the last inserted row ID. */
-export function lastInsertId(): number {
-  const { sqlite, db } = getDb()
-  return sqlite.last_insert_rowid(db)
+/** Get the last inserted row ID via SQL (last_insert_rowid not in vendored API). */
+export async function lastInsertId(): Promise<number> {
+  const rows = await query('SELECT last_insert_rowid() AS id')
+  return rows[0]?.id as number
 }
 
 export type SQLiteCompatibleType = number | string | Uint8Array | null

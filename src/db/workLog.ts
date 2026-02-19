@@ -25,7 +25,7 @@ export async function addWorkLogEntry(projectId: number, note: string): Promise<
     `INSERT INTO work_log_entries (project_id, note) VALUES (?, ?)`,
     [projectId, note],
   )
-  return lastInsertId()
+  return await lastInsertId()
 }
 
 export async function deleteWorkLogEntry(id: number): Promise<void> {

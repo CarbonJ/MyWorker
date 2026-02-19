@@ -179,8 +179,12 @@ export default function Settings() {
         tx.objectStore('handles').put(handle, 'folderHandle')
       }
       toast.success('Storage folder updated')
-    } catch {
-      // User cancelled
+    } catch (err) {
+      if (err instanceof Error && err.name !== 'AbortError') {
+        console.error('Failed to change folder', err)
+        toast.error(`Failed to change folder: ${err.message}`)
+      }
+      // AbortError = user cancelled the picker, nothing to do
     }
   }
 

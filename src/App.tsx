@@ -14,7 +14,9 @@ function DueDateBanner() {
   const [count, setCount] = useState(0)
 
   useEffect(() => {
-    getDueSoonTasks().then(tasks => setCount(tasks.length)).catch(() => {})
+    getDueSoonTasks().then(tasks => setCount(tasks.length)).catch(err => {
+      console.warn('[app] Failed to load due-soon tasks', err)
+    })
   }, [])
 
   if (count === 0) return null

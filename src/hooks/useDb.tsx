@@ -111,7 +111,8 @@ export function DbProvider({ children }: { children: ReactNode }) {
           // Data lives in browser storage only (no OneDrive sync)
           await initialise(null)
         }
-      } catch {
+      } catch (err) {
+        console.error('[db] Failed to restore saved folder handle', err)
         setStatus('needs-folder')
       }
     }

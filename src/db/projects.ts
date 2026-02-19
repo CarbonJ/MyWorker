@@ -56,7 +56,7 @@ export async function createProject(input: CreateProjectInput): Promise<number> 
       input.linkedJiras ?? '',
     ],
   )
-  return lastInsertId()
+  return await lastInsertId()
 }
 
 export interface UpdateProjectInput extends Partial<CreateProjectInput> {

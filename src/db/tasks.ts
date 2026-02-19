@@ -74,7 +74,7 @@ export async function createTask(input: CreateTaskInput): Promise<number> {
       input.dueDate ?? null,
     ],
   )
-  return lastInsertId()
+  return await lastInsertId()
 }
 
 export interface UpdateTaskInput extends Partial<Omit<CreateTaskInput, 'projectId'>> {

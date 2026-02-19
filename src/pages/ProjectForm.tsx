@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 export default function ProjectForm() {
   const navigate = useNavigate()
   const { id } = useParams()
-  const isEdit = id !== 'new'
+  const isEdit = id !== undefined
 
   const [project, setProject] = useState<Project | null>(null)
   const [priorities, setPriorities] = useState<DropdownOption[]>([])
@@ -31,25 +31,30 @@ export default function ProjectForm() {
   const [linkedJiras, setLinkedJiras] = useState('')
 
   const load = useCallback(async () => {
-    const [pris, areas] = await Promise.all([
-      getDropdownOptions('priority'),
-      getDropdownOptions('product_area'),
-    ])
-    setPriorities(pris)
-    setProductAreas(areas)
+    try {
+      const [pris, areas] = await Promise.all([
+        getDropdownOptions('priority'),
+        getDropdownOptions('product_area'),
+      ])
+      setPriorities(pris)
+      setProductAreas(areas)
 
-    if (isEdit && id) {
-      const p = await getProjectById(Number(id))
-      if (!p) { toast.error('Project not found'); navigate('/'); return }
-      setProject(p)
-      setWorkItem(p.workItem)
-      setWorkDescription(p.workDescription)
-      setRagStatus(p.ragStatus)
-      setPriorityId(p.priorityId?.toString() ?? '')
-      setLatestStatus(p.latestStatus)
-      setProductAreaId(p.productAreaId?.toString() ?? '')
-      setStakeholders(p.stakeholders)
-      setLinkedJiras(p.linkedJiras)
+      if (isEdit && id) {
+        const p = await getProjectById(Number(id))
+        if (!p) { toast.error('Project not found'); navigate('/'); return }
+        setProject(p)
+        setWorkItem(p.workItem)
+        setWorkDescription(p.workDescription)
+        setRagStatus(p.ragStatus)
+        setPriorityId(p.priorityId?.toString() ?? '')
+        setLatestStatus(p.latestStatus)
+        setProductAreaId(p.productAreaId?.toString() ?? '')
+        setStakeholders(p.stakeholders)
+        setLinkedJiras(p.linkedJiras)
+      }
+    } catch (err) {
+      console.error('Failed to load project form', err)
+      toast.error(`Failed to load: ${err instanceof Error ? err.message : String(err)}`)
     }
   }, [id, isEdit, navigate])
 
@@ -156,12 +161,12 @@ export default function ProjectForm() {
 
           <div className={fieldClass}>
             <Label>Priority</Label>
-            <Select value={priorityId} onValueChange={setPriorityId}>
+            <Select value={priorityId || 'none'} onValueChange={v => setPriorityId(v === 'none' ? '' : v)}>
               <SelectTrigger>
                 <SelectValue placeholder="Select priority" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">—</SelectItem>
+                <SelectItem value="none">—</SelectItem>
                 {priorities.map(p => (
                   <SelectItem key={p.id} value={p.id.toString()}>{p.label}</SelectItem>
                 ))}
@@ -173,12 +178,12 @@ export default function ProjectForm() {
         {/* Product Area */}
         <div className={fieldClass}>
           <Label>Product Area</Label>
-          <Select value={productAreaId} onValueChange={setProductAreaId}>
+          <Select value={productAreaId || 'none'} onValueChange={v => setProductAreaId(v === 'none' ? '' : v)}>
             <SelectTrigger>
               <SelectValue placeholder="Select product area" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">—</SelectItem>
+              <SelectItem value="none">—</SelectItem>
               {productAreas.map(a => (
                 <SelectItem key={a.id} value={a.id.toString()}>{a.label}</SelectItem>
               ))}

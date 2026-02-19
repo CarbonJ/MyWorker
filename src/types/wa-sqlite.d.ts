@@ -29,7 +29,7 @@ declare module '@/vendor/wa-sqlite/sqlite-api.js' {
     step(stmt: number): Promise<number>
     column(stmt: number, i: number): number | string | Uint8Array | null
     column_names(stmt: number): string[]
-    last_insert_rowid(db: number): number
+
     finalize(stmt: number): Promise<void>
     vfs_register(vfs: object, makeDefault?: boolean): number
   }
