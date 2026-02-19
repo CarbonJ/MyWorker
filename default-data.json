@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "exportedAt": "2026-01-01T00:00:00.000Z",
+  "projects": [],
+  "workLogEntries": [],
+  "tasks": [],
+  "dropdownOptions": [
+    { "id": 1, "type": "priority", "label": "High",   "sort_order": 0, "color": "red"   },
+    { "id": 2, "type": "priority", "label": "Medium", "sort_order": 1, "color": "amber" },
+    { "id": 3, "type": "priority", "label": "Low",    "sort_order": 2, "color": "green" }
+  ]
+}

@@ -59,8 +59,8 @@ export async function importFromJson(file: File): Promise<void> {
   // Restore dropdown options first (projects reference them)
   for (const opt of data.dropdownOptions) {
     await run(
-      `INSERT INTO dropdown_options (id, type, label, sort_order) VALUES (?, ?, ?, ?)`,
-      [opt.id as number, opt.type as string, opt.label as string, opt.sort_order as number],
+      `INSERT INTO dropdown_options (id, type, label, sort_order, color) VALUES (?, ?, ?, ?, ?)`,
+      [opt.id as number, opt.type as string, opt.label as string, opt.sort_order as number, (opt.color as string) ?? ''],
     )
   }
 
@@ -69,12 +69,13 @@ export async function importFromJson(file: File): Promise<void> {
     await run(
       `INSERT INTO projects
          (id, work_item, work_desc, rag_status, priority_id, latest_status,
-          product_area_id, stakeholders, linked_jiras, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          product_area_id, status_id, stakeholders, linked_jiras, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         p.id as number, p.work_item as string, p.work_desc as string,
         p.rag_status as string, p.priority_id as number | null,
         p.latest_status as string, p.product_area_id as number | null,
+        (p.status_id as number | null) ?? null,
         p.stakeholders as string, p.linked_jiras as string,
         p.created_at as string, p.updated_at as string,
       ],

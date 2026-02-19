@@ -46,8 +46,8 @@ function priorityDot(color: string): string {
 }
 
 function fmtDate(iso: string): string {
-  const [y, m, d] = iso.split('-')
-  return `${m}/${d}/${y.slice(2)}`
+  const [, m, d] = iso.split('-')
+  return `${m}/${d}`
 }
 
 export default function ProjectList() {

@@ -8,7 +8,7 @@ import {
   reorderDropdownOptions,
 } from '@/db/dropdownOptions'
 import { exportToJson, importFromJson } from '@/db/importExport'
-import { setUserFolderHandle } from '@/db'
+import { setUserFolderHandle, query } from '@/db'
 import type { DropdownOption, DropdownType } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -181,9 +181,33 @@ function OptionList({ type, title }: { type: DropdownType; title: string }) {
 
 // ── Settings Page ─────────────────────────────────────────────────────────────
 
+interface DataStats {
+  projects: number
+  tasks: number
+  workLogEntries: number
+  dropdownOptions: number
+}
+
 export default function Settings() {
   const importRef = useRef<HTMLInputElement>(null)
   const [importing, setImporting] = useState(false)
+  const [dataStats, setDataStats] = useState<DataStats | null>(null)
+
+  useEffect(() => {
+    Promise.all([
+      query('SELECT COUNT(*) as n FROM projects'),
+      query('SELECT COUNT(*) as n FROM tasks'),
+      query('SELECT COUNT(*) as n FROM work_log_entries'),
+      query('SELECT COUNT(*) as n FROM dropdown_options'),
+    ]).then(([ps, ts, wl, opts]) => {
+      setDataStats({
+        projects:       Number((ps[0] as Record<string, unknown>).n),
+        tasks:          Number((ts[0] as Record<string, unknown>).n),
+        workLogEntries: Number((wl[0] as Record<string, unknown>).n),
+        dropdownOptions: Number((opts[0] as Record<string, unknown>).n),
+      })
+    }).catch(() => { /* non-critical */ })
+  }, [])
 
   const handleExport = async () => {
     try {
@@ -290,6 +314,30 @@ export default function Settings() {
                   Use <strong>Export backup (JSON)</strong> below to manually back up your data in any browser.
                 </p>
               </div>
+            )}
+          </section>
+
+          <Separator />
+
+          {/* Data Usage */}
+          <section className={section}>
+            <h2 className={sectionTitle}>Data Usage</h2>
+            {dataStats ? (
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {[
+                  { label: 'Projects',       value: dataStats.projects },
+                  { label: 'Tasks',          value: dataStats.tasks },
+                  { label: 'Work Log Notes', value: dataStats.workLogEntries },
+                  { label: 'List Options',   value: dataStats.dropdownOptions },
+                ].map(({ label, value }) => (
+                  <div key={label} className="rounded-md border px-4 py-3 text-center">
+                    <p className="text-2xl font-semibold tabular-nums">{value}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Loading…</p>
             )}
           </section>
 
