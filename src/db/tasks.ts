@@ -9,6 +9,7 @@ function rowToTask(row: Record<string, unknown>): Task {
     description: row.description as string,
     notes: row.notes as string,
     status: row.status as TaskStatus,
+    priorityId: row.priority_id as number | null,
     owner: row.owner as string,
     startDate: row.start_date as string | null,
     dueDate: row.due_date as string | null,
@@ -53,7 +54,7 @@ export interface CreateTaskInput {
   description?: string
   notes?: string
   status?: TaskStatus
-  owner?: string
+  priorityId?: number | null
   startDate?: string | null
   dueDate?: string | null
 }
@@ -61,7 +62,7 @@ export interface CreateTaskInput {
 export async function createTask(input: CreateTaskInput): Promise<number> {
   await run(
     `INSERT INTO tasks
-      (project_id, title, description, notes, status, owner, start_date, due_date)
+      (project_id, title, description, notes, status, priority_id, start_date, due_date)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.projectId,
@@ -69,7 +70,7 @@ export async function createTask(input: CreateTaskInput): Promise<number> {
       input.description ?? '',
       input.notes ?? '',
       input.status ?? 'open',
-      input.owner ?? '',
+      input.priorityId ?? null,
       input.startDate ?? null,
       input.dueDate ?? null,
     ],
@@ -92,7 +93,7 @@ export async function updateTask(input: UpdateTaskInput): Promise<void> {
       description = ?,
       notes       = ?,
       status      = ?,
-      owner       = ?,
+      priority_id = ?,
       start_date  = ?,
       due_date    = ?
      WHERE id = ?`,
@@ -101,7 +102,7 @@ export async function updateTask(input: UpdateTaskInput): Promise<void> {
       input.description ?? current.description,
       input.notes ?? current.notes,
       input.status ?? current.status,
-      input.owner ?? current.owner,
+      input.priorityId !== undefined ? input.priorityId : current.priorityId,
       input.startDate !== undefined ? input.startDate : current.startDate,
       input.dueDate !== undefined ? input.dueDate : current.dueDate,
       input.id,

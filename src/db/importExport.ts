@@ -94,13 +94,14 @@ export async function importFromJson(file: File): Promise<void> {
     await run(
       `INSERT INTO tasks
          (id, project_id, title, description, notes, status, owner,
-          start_date, due_date, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          start_date, due_date, priority_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         t.id as number, t.project_id as number, t.title as string,
         t.description as string, t.notes as string, t.status as string,
         t.owner as string, t.start_date as string | null,
-        t.due_date as string | null, t.created_at as string, t.updated_at as string,
+        t.due_date as string | null, t.priority_id as number | null,
+        t.created_at as string, t.updated_at as string,
       ],
     )
   }

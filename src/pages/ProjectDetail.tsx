@@ -9,6 +9,7 @@ import type { Project, Task, WorkLogEntry, DropdownOption } from '@/types'
 import { RagBadge } from '@/components/RagBadge'
 import { TaskModal } from '@/components/TaskModal'
 import { WorkLogEntryForm } from '@/components/WorkLogEntry'
+import { MarkdownContent } from '@/components/MarkdownContent'
 import { Button } from '@/components/ui/button'
 
 const STATUS_LABEL: Record<string, string> = {
@@ -93,7 +94,7 @@ export default function ProjectDetail() {
             </div>
             <h1 className="text-xl font-semibold truncate">{project.workItem}</h1>
             {project.workDescription && (
-              <p className="text-sm text-muted-foreground">{project.workDescription}</p>
+              <MarkdownContent className="text-sm text-muted-foreground">{project.workDescription}</MarkdownContent>
             )}
           </div>
           <Button variant="outline" size="sm" onClick={() => navigate(`/projects/${projectId}/edit`)} className="shrink-0">
@@ -156,13 +157,17 @@ export default function ProjectDetail() {
               >
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-sm font-medium leading-tight">{task.title}</p>
-                  <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${STATUS_CLASS[task.status]}`}>
-                    {STATUS_LABEL[task.status]}
-                  </span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {task.priorityId && (
+                      <span className="text-xs text-muted-foreground border rounded-full px-2 py-0.5">
+                        {labelFor(priorities, task.priorityId)}
+                      </span>
+                    )}
+                    <span className={`text-xs px-1.5 py-0.5 rounded ${STATUS_CLASS[task.status]}`}>
+                      {STATUS_LABEL[task.status]}
+                    </span>
+                  </div>
                 </div>
-                {task.owner && (
-                  <p className="text-xs text-muted-foreground mt-0.5">{task.owner}</p>
-                )}
                 {task.dueDate && (
                   <p className={`text-xs mt-0.5 font-medium ${
                     isOverdue(task.dueDate) ? 'text-red-600' :
@@ -200,7 +205,7 @@ export default function ProjectDetail() {
                 <p className="text-xs text-muted-foreground mb-1">
                   {new Date(entry.createdAt).toLocaleString()}
                 </p>
-                <p className="text-sm whitespace-pre-wrap">{entry.note}</p>
+                <MarkdownContent>{entry.note}</MarkdownContent>
               </div>
             ))}
           </div>

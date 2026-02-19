@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { createTask, updateTask, deleteTask } from '@/db/tasks'
-import type { Task, TaskStatus } from '@/types'
+import { getDropdownOptions } from '@/db/dropdownOptions'
+import type { Task, TaskStatus, DropdownOption } from '@/types'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { MarkdownContent } from '@/components/MarkdownContent'
 
 interface Props {
   projectId: number
@@ -24,10 +26,18 @@ export function TaskModal({ projectId, task, open, onClose, onSaved }: Props) {
   const [description, setDescription] = useState('')
   const [notes, setNotes] = useState('')
   const [status, setStatus] = useState<TaskStatus>('open')
-  const [owner, setOwner] = useState('')
+  const [priorityId, setPriorityId] = useState<string>('')
   const [startDate, setStartDate] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [saving, setSaving] = useState(false)
+  const [priorities, setPriorities] = useState<DropdownOption[]>([])
+
+  // Load priority options whenever modal opens
+  useEffect(() => {
+    if (open) {
+      getDropdownOptions('priority').then(setPriorities)
+    }
+  }, [open])
 
   // Populate fields when editing
   useEffect(() => {
@@ -36,12 +46,12 @@ export function TaskModal({ projectId, task, open, onClose, onSaved }: Props) {
       setDescription(task.description)
       setNotes(task.notes)
       setStatus(task.status)
-      setOwner(task.owner)
+      setPriorityId(task.priorityId?.toString() ?? '')
       setStartDate(task.startDate ?? '')
       setDueDate(task.dueDate ?? '')
     } else {
       setTitle(''); setDescription(''); setNotes('')
-      setStatus('open'); setOwner(''); setStartDate(''); setDueDate('')
+      setStatus('open'); setPriorityId(''); setStartDate(''); setDueDate('')
     }
   }, [task, open])
 
@@ -54,7 +64,7 @@ export function TaskModal({ projectId, task, open, onClose, onSaved }: Props) {
         description,
         notes,
         status,
-        owner,
+        priorityId: priorityId ? Number(priorityId) : null,
         startDate: startDate || null,
         dueDate: dueDate || null,
       }
@@ -88,11 +98,27 @@ export function TaskModal({ projectId, task, open, onClose, onSaved }: Props) {
     }
   }
 
+  /** Insert 2 spaces at cursor on Tab instead of moving focus */
+  const handleTabKey = (e: React.KeyboardEvent<HTMLTextAreaElement>, value: string, setter: (v: string) => void) => {
+    if (e.key !== 'Tab') return
+    e.preventDefault()
+    const el = e.currentTarget
+    const start = el.selectionStart
+    const end = el.selectionEnd
+    setter(value.substring(0, start) + '  ' + value.substring(end))
+    requestAnimationFrame(() => el.setSelectionRange(start + 2, start + 2))
+  }
+
   const fieldClass = 'space-y-1.5'
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent
+        className="max-w-lg"
+        onKeyDown={e => {
+          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') handleSave()
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Edit Task' : 'New Task'}</DialogTitle>
         </DialogHeader>
@@ -111,22 +137,36 @@ export function TaskModal({ projectId, task, open, onClose, onSaved }: Props) {
 
           <div className={fieldClass}>
             <Label htmlFor="task-desc">Description</Label>
+            {isEdit && description && (
+              <div className="border rounded-md px-3 py-2 bg-muted/30 mb-1">
+                <p className="text-xs text-muted-foreground mb-1">Preview</p>
+                <MarkdownContent>{description}</MarkdownContent>
+              </div>
+            )}
             <Textarea
               id="task-desc"
               value={description}
               onChange={e => setDescription(e.target.value)}
-              placeholder="What needs to be done?"
+              onKeyDown={e => handleTabKey(e, description, setDescription)}
+              placeholder="What needs to be done? (supports Markdown)"
               rows={2}
             />
           </div>
 
           <div className={fieldClass}>
             <Label htmlFor="task-notes">Notes</Label>
+            {isEdit && notes && (
+              <div className="border rounded-md px-3 py-2 bg-muted/30 mb-1">
+                <p className="text-xs text-muted-foreground mb-1">Preview</p>
+                <MarkdownContent>{notes}</MarkdownContent>
+              </div>
+            )}
             <Textarea
               id="task-notes"
               value={notes}
               onChange={e => setNotes(e.target.value)}
-              placeholder="Additional notes, links, context…"
+              onKeyDown={e => handleTabKey(e, notes, setNotes)}
+              placeholder="Additional notes, links, context… (supports Markdown)"
               rows={2}
             />
           </div>
@@ -147,13 +187,18 @@ export function TaskModal({ projectId, task, open, onClose, onSaved }: Props) {
             </div>
 
             <div className={fieldClass}>
-              <Label htmlFor="task-owner">Owner</Label>
-              <Input
-                id="task-owner"
-                value={owner}
-                onChange={e => setOwner(e.target.value)}
-                placeholder="Owner name"
-              />
+              <Label>Priority</Label>
+              <Select value={priorityId || 'none'} onValueChange={v => setPriorityId(v === 'none' ? '' : v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select priority" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">—</SelectItem>
+                  {priorities.map(p => (
+                    <SelectItem key={p.id} value={p.id.toString()}>{p.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -185,6 +230,7 @@ export function TaskModal({ projectId, task, open, onClose, onSaved }: Props) {
               Delete
             </Button>
           )}
+          <p className="text-xs text-muted-foreground mr-auto">⌘↵ to save</p>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Task'}

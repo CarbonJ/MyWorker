@@ -39,6 +39,17 @@ export function WorkLogEntryForm({ projectId, onSaved }: Props) {
         onKeyDown={e => {
           // Ctrl/Cmd+Enter to submit
           if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') handleSubmit(e as unknown as React.FormEvent)
+          // Tab to indent (insert 2 spaces at cursor instead of moving focus)
+          if (e.key === 'Tab') {
+            e.preventDefault()
+            const el = e.currentTarget
+            const start = el.selectionStart
+            const end = el.selectionEnd
+            const indented = note.substring(0, start) + '  ' + note.substring(end)
+            setNote(indented)
+            // Restore cursor position after the inserted spaces
+            requestAnimationFrame(() => el.setSelectionRange(start + 2, start + 2))
+          }
         }}
       />
       <div className="flex items-center justify-between">
