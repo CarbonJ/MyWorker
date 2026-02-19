@@ -34,6 +34,7 @@ export default function ProjectDetail() {
   const [workLog, setWorkLog] = useState<WorkLogEntry[]>([])
   const [priorities, setPriorities] = useState<DropdownOption[]>([])
   const [productAreas, setProductAreas] = useState<DropdownOption[]>([])
+  const [descExpanded, setDescExpanded] = useState(false)
 
   const [taskModalOpen, setTaskModalOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
@@ -94,7 +95,19 @@ export default function ProjectDetail() {
             </div>
             <h1 className="text-xl font-semibold truncate">{project.workItem}</h1>
             {project.workDescription && (
-              <MarkdownContent className="text-sm text-muted-foreground">{project.workDescription}</MarkdownContent>
+              <div>
+                <div className={descExpanded ? undefined : 'line-clamp-3'}>
+                  <MarkdownContent className="text-sm text-muted-foreground">{project.workDescription}</MarkdownContent>
+                </div>
+                {(project.workDescription.length > 200 || project.workDescription.split('\n').length > 3) && (
+                  <button
+                    onClick={() => setDescExpanded(v => !v)}
+                    className="text-xs text-muted-foreground hover:text-foreground mt-0.5"
+                  >
+                    {descExpanded ? 'Show less ↑' : 'Show more ↓'}
+                  </button>
+                )}
+              </div>
             )}
           </div>
           <Button variant="outline" size="sm" onClick={() => navigate(`/projects/${projectId}/edit`)} className="shrink-0">
@@ -203,7 +216,7 @@ export default function ProjectDetail() {
             {workLog.map(entry => (
               <div key={entry.id} className="px-4 py-3">
                 <p className="text-xs text-muted-foreground mb-1">
-                  {new Date(entry.createdAt).toLocaleString()}
+                  {new Date(entry.createdAt + 'Z').toLocaleString()}
                 </p>
                 <MarkdownContent>{entry.note}</MarkdownContent>
               </div>

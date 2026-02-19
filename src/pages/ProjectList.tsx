@@ -160,7 +160,7 @@ export default function ProjectList() {
                 <td className="px-4 py-3"><RagBadge status={p.ragStatus} /></td>
                 <td className="px-4 py-3 max-w-xs truncate text-muted-foreground">{p.latestStatus || '—'}</td>
                 <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                  {new Date(p.updatedAt).toLocaleDateString()}
+                  {new Date(p.updatedAt + 'Z').toLocaleDateString()}
                 </td>
               </tr>
             ))}
