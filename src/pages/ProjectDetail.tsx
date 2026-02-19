@@ -111,6 +111,7 @@ export default function ProjectDetail() {
   const [filterPriority, setFilterPriority] = useState<string>('all')
   const [sortField, setSortField] = useState<TaskSortField>('dueDate')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
+  const initialFilterSet = useRef(false)
 
   // Inline edit state
   const [editingStatus, setEditingStatus] = useState(false)
@@ -134,6 +135,15 @@ export default function ProjectDetail() {
       setPriorities(pris)
       setProductAreas(areas)
       setProjectStatuses(statuses)
+      // On first load, default task filter to 'done' for archived projects
+      // so all auto-completed tasks are visible rather than hidden.
+      if (!initialFilterSet.current) {
+        initialFilterSet.current = true
+        const doneStatusOpt = statuses.find(s => s.label.toLowerCase() === 'done')
+        if (doneStatusOpt && p.statusId === doneStatusOpt.id) {
+          setFilterStatus('done')
+        }
+      }
     } catch (err) {
       console.error('Failed to load project', err)
       toast.error(`Failed to load project: ${err instanceof Error ? err.message : String(err)}`)
