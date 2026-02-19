@@ -10,6 +10,30 @@ type SortDir = 'asc' | 'desc'
 
 const RAG_ORDER: Record<RagStatus, number> = { Red: 0, Amber: 1, Green: 2 }
 
+const COLOR_CLASS: Record<string, string> = {
+  red:    'bg-red-100 text-red-700 border-red-200',
+  amber:  'bg-amber-100 text-amber-700 border-amber-200',
+  green:  'bg-green-100 text-green-700 border-green-200',
+  blue:   'bg-blue-100 text-blue-700 border-blue-200',
+  purple: 'bg-purple-100 text-purple-700 border-purple-200',
+}
+
+const DOT_CLASS: Record<string, string> = {
+  red:    'bg-red-500',
+  amber:  'bg-amber-500',
+  green:  'bg-green-500',
+  blue:   'bg-blue-500',
+  purple: 'bg-purple-500',
+}
+
+function priorityClass(color: string): string {
+  return COLOR_CLASS[color] ?? 'bg-slate-100 text-slate-600 border-slate-200'
+}
+
+function priorityDot(color: string): string {
+  return DOT_CLASS[color] ?? 'bg-slate-400'
+}
+
 export default function ReportingView() {
   const [projects, setProjects] = useState<Project[]>([])
   const [priorities, setPriorities] = useState<DropdownOption[]>([])
@@ -104,7 +128,18 @@ export default function ReportingView() {
                 <td className="px-3 py-2"><RagBadge status={p.ragStatus} /></td>
                 <td className="px-3 py-2 font-medium">{p.workItem}</td>
                 <td className="px-3 py-2 text-muted-foreground">{labelFor(productAreas, p.productAreaId)}</td>
-                <td className="px-3 py-2 text-muted-foreground">{labelFor(priorities, p.priorityId)}</td>
+                <td className="px-3 py-2">
+                  {p.priorityId ? (() => {
+                    const opt = priorities.find(o => o.id === p.priorityId)
+                    const color = opt?.color ?? ''
+                    return (
+                      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${priorityClass(color)}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${priorityDot(color)}`} />
+                        {opt?.label ?? '—'}
+                      </span>
+                    )
+                  })() : <span className="text-muted-foreground">—</span>}
+                </td>
                 <td className="px-3 py-2 text-muted-foreground">{p.latestStatus || '—'}</td>
               </tr>
             ))}

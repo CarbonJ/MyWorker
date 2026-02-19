@@ -1,16 +1,21 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { getProjectById } from '@/db/projects'
-import { getOpenTasksByProject } from '@/db/tasks'
+import { getProjectById, updateProject } from '@/db/projects'
+import { getTasksByProject, updateTask } from '@/db/tasks'
 import { getWorkLogByProject } from '@/db/workLog'
 import { getDropdownOptions } from '@/db/dropdownOptions'
-import type { Project, Task, WorkLogEntry, DropdownOption } from '@/types'
+import type { Project, Task, TaskStatus, WorkLogEntry, DropdownOption } from '@/types'
 import { RagBadge } from '@/components/RagBadge'
 import { TaskModal } from '@/components/TaskModal'
 import { WorkLogEntryForm } from '@/components/WorkLogEntry'
 import { MarkdownContent } from '@/components/MarkdownContent'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Calendar } from '@/components/ui/calendar'
+
 
 const STATUS_LABEL: Record<string, string> = {
   open: 'Open',
@@ -22,6 +27,48 @@ const STATUS_CLASS: Record<string, string> = {
   open: 'bg-slate-100 text-slate-700',
   in_progress: 'bg-blue-100 text-blue-700',
   done: 'bg-green-100 text-green-700',
+}
+
+const COLOR_CLASS: Record<string, string> = {
+  red:    'bg-red-100 text-red-700 border-red-200',
+  amber:  'bg-amber-100 text-amber-700 border-amber-200',
+  green:  'bg-green-100 text-green-700 border-green-200',
+  blue:   'bg-blue-100 text-blue-700 border-blue-200',
+  purple: 'bg-purple-100 text-purple-700 border-purple-200',
+}
+
+const DOT_CLASS: Record<string, string> = {
+  red:    'bg-red-500',
+  amber:  'bg-amber-500',
+  green:  'bg-green-500',
+  blue:   'bg-blue-500',
+  purple: 'bg-purple-500',
+}
+
+function priorityClass(color: string): string {
+  return COLOR_CLASS[color] ?? 'bg-slate-100 text-slate-600 border-slate-200'
+}
+
+function priorityDot(color: string): string {
+  return DOT_CLASS[color] ?? 'bg-slate-400'
+}
+
+function cycleStatus(current: TaskStatus): TaskStatus {
+  if (current === 'open')        return 'in_progress'
+  if (current === 'in_progress') return 'done'
+  return 'open'
+}
+
+function StatusCircle({ status }: { status: TaskStatus }) {
+  if (status === 'done') return (
+    <span className="w-5 h-5 rounded-full bg-green-500 border-2 border-green-500 flex items-center justify-center text-white text-[10px] font-bold leading-none">✓</span>
+  )
+  if (status === 'in_progress') return (
+    <span className="w-5 h-5 rounded-full border-2 border-blue-500 flex items-center justify-center">
+      <span className="w-2 h-2 rounded-full bg-blue-500" />
+    </span>
+  )
+  return <span className="w-5 h-5 rounded-full border-2 border-slate-300" />
 }
 
 export default function ProjectDetail() {
@@ -39,11 +86,41 @@ export default function ProjectDetail() {
   const [taskModalOpen, setTaskModalOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
 
+  // Resizable split
+  const [splitPct, setSplitPct] = useState(60)
+  const splitContainerRef = useRef<HTMLDivElement>(null)
+  const dragging = useRef(false)
+
+  const onDividerPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId)
+    dragging.current = true
+  }
+  const onDividerPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragging.current || !splitContainerRef.current) return
+    const { left, width } = splitContainerRef.current.getBoundingClientRect()
+    const pct = ((e.clientX - left) / width) * 100
+    setSplitPct(Math.min(80, Math.max(20, pct)))
+  }
+  const onDividerPointerUp = () => { dragging.current = false }
+
+  // Task sort/filter state
+  type TaskSortField = 'status' | 'priority' | 'dueDate'
+  type SortDir = 'asc' | 'desc'
+  const [filterStatus, setFilterStatus] = useState<string>('active')
+  const [filterPriority, setFilterPriority] = useState<string>('all')
+  const [sortField, setSortField] = useState<TaskSortField>('dueDate')
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
+
+  // Inline edit state
+  const [editingStatus, setEditingStatus] = useState(false)
+  const [statusDraft, setStatusDraft] = useState('')
+  const statusInputRef = useRef<HTMLInputElement>(null)
+
   const load = useCallback(async () => {
     try {
       const [p, ts, wl, pris, areas] = await Promise.all([
         getProjectById(projectId),
-        getOpenTasksByProject(projectId),
+        getTasksByProject(projectId),
         getWorkLogByProject(projectId),
         getDropdownOptions('priority'),
         getDropdownOptions('product_area'),
@@ -62,6 +139,40 @@ export default function ProjectDetail() {
 
   useEffect(() => { load() }, [load])
 
+  const saveField = useCallback(async (patch: Parameters<typeof updateProject>[0]) => {
+    if (!project) return
+    try {
+      await updateProject({ id: project.id, ...patch })
+      await load()
+    } catch (err) {
+      toast.error(`Failed to save: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }, [project, load])
+
+  const openStatusEdit = () => {
+    if (!project) return
+    setStatusDraft(project.latestStatus)
+    setEditingStatus(true)
+    setTimeout(() => statusInputRef.current?.focus(), 0)
+  }
+
+  const commitStatus = () => {
+    setEditingStatus(false)
+    if (project && statusDraft !== project.latestStatus) {
+      saveField({ latestStatus: statusDraft })
+    }
+  }
+
+  const cycleTaskStatus = async (e: React.MouseEvent, task: Task) => {
+    e.stopPropagation()
+    try {
+      await updateTask({ id: task.id, status: cycleStatus(task.status) })
+      await load()
+    } catch (err) {
+      toast.error(`Failed to update task: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
   const labelFor = (opts: DropdownOption[], optId: number | null) =>
     opts.find(o => o.id === optId)?.label ?? '—'
 
@@ -70,6 +181,44 @@ export default function ProjectDetail() {
 
   const isDueToday = (dueDate: string | null) =>
     dueDate && dueDate === new Date().toISOString().slice(0, 10)
+
+  // Format ISO date (YYYY-MM-DD) → MM/DD/YY for display; sorting still uses ISO
+  const fmtDate = (iso: string) => {
+    const [y, m, d] = iso.split('-')
+    return `${m}/${d}/${y.slice(2)}`
+  }
+
+  const toggleSort = (field: TaskSortField) => {
+    if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortField(field); setSortDir('asc') }
+  }
+
+  const visibleTasks = useMemo(() => {
+    let list = [...tasks]
+    if (filterStatus === 'active') list = list.filter(t => t.status !== 'done')
+    else if (filterStatus !== 'all') list = list.filter(t => t.status === filterStatus)
+    if (filterPriority !== 'all') {
+      const pid = filterPriority === 'none' ? null : Number(filterPriority)
+      list = list.filter(t => t.priorityId === pid)
+    }
+    list.sort((a, b) => {
+      let cmp = 0
+      if (sortField === 'status') {
+        const order: Record<string, number> = { open: 0, in_progress: 1, done: 2 }
+        cmp = order[a.status] - order[b.status]
+      } else if (sortField === 'priority') {
+        const ai = priorities.findIndex(p => p.id === a.priorityId)
+        const bi = priorities.findIndex(p => p.id === b.priorityId)
+        cmp = (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
+      } else {
+        const ad = a.dueDate ?? '9999-99-99'
+        const bd = b.dueDate ?? '9999-99-99'
+        cmp = ad < bd ? -1 : ad > bd ? 1 : 0
+      }
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+    return list
+  }, [tasks, filterStatus, filterPriority, sortField, sortDir, priorities])
 
   if (!project) return (
     <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -91,7 +240,7 @@ export default function ProjectDetail() {
         <div className="grid grid-cols-2 gap-6">
 
           {/* LEFT: Work Item + Description */}
-          <div className="min-w-0 space-y-2">
+          <div className="min-w-0 space-y-2 border rounded-lg p-3">
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-semibold truncate">{project.workItem}</h1>
               <Button variant="outline" size="sm" onClick={() => navigate(`/projects/${projectId}/edit`)} className="shrink-0">
@@ -116,14 +265,27 @@ export default function ProjectDetail() {
           </div>
 
           {/* RIGHT: Metadata */}
-          <div className="space-y-3 text-sm">
-            {/* Latest Status — most important, shown first */}
-            {project.latestStatus && (
-              <div className="px-3 py-2 bg-muted rounded-md">
-                <span className="font-medium">Status: </span>{project.latestStatus}
-              </div>
-            )}
-            {/* RAG + Priority + Area inline */}
+          <div className="space-y-3 text-sm border rounded-lg p-3">
+            {/* Latest Status — click to edit inline */}
+            <div
+              className="px-3 py-2 bg-muted rounded-md cursor-text"
+              onClick={() => !editingStatus && openStatusEdit()}
+            >
+              <span className="font-medium">Status: </span>
+              {editingStatus ? (
+                <Input
+                  ref={statusInputRef}
+                  value={statusDraft}
+                  onChange={e => setStatusDraft(e.target.value)}
+                  onBlur={commitStatus}
+                  onKeyDown={e => { if (e.key === 'Enter') commitStatus(); if (e.key === 'Escape') setEditingStatus(false) }}
+                  className="h-6 px-1 py-0 text-sm border-0 shadow-none bg-transparent focus-visible:ring-0 inline-block w-full"
+                />
+              ) : (
+                <span className="text-muted-foreground">{project.latestStatus || <span className="italic text-muted-foreground/60">click to add…</span>}</span>
+              )}
+            </div>
+            {/* RAG + Priority + Area */}
             <div className="flex items-center gap-2 flex-wrap">
               <RagBadge status={project.ragStatus} />
               {project.priorityId && (
@@ -166,58 +328,175 @@ export default function ProjectDetail() {
       </div>
 
       {/* ── BOTTOM: Two-column (tasks left, work log right) ───────────── */}
-      <div className="flex flex-1 overflow-hidden">
+      <div ref={splitContainerRef} className="flex flex-1 overflow-hidden">
 
         {/* ── BOTTOM-LEFT: Tasks ──────────────────────────────────────── */}
-        <div className="w-80 shrink-0 flex flex-col border-r overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
-            <h2 className="text-sm font-semibold">Tasks</h2>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => { setEditingTask(null); setTaskModalOpen(true) }}
-            >
-              + Add
-            </Button>
+        <div style={{ width: `${splitPct}%` }} className="flex flex-col overflow-hidden min-w-0">
+
+          {/* Header + filters + column labels */}
+          <div className="shrink-0 border-b">
+            <div className="flex items-center justify-between px-4 py-2">
+              <h2 className="text-sm font-semibold">Tasks</h2>
+              <Button size="sm" variant="ghost"
+                onClick={() => { setEditingTask(null); setTaskModalOpen(true) }}>
+                + Add
+              </Button>
+            </div>
+            {/* Filter bar */}
+            <div className="flex items-center gap-2 px-4 pb-2">
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger className="h-7 text-xs w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="open">Open</SelectItem>
+                  <SelectItem value="in_progress">In Progress</SelectItem>
+                  <SelectItem value="done">Done</SelectItem>
+                  <SelectItem value="all">All</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={filterPriority} onValueChange={setFilterPriority}>
+                <SelectTrigger className="h-7 text-xs w-32">
+                  <SelectValue placeholder="All priorities" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All priorities</SelectItem>
+                  <SelectItem value="none">No priority</SelectItem>
+                  {priorities.map(p => (
+                    <SelectItem key={p.id} value={p.id.toString()}>{p.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {/* Column headers */}
+            <div className="grid grid-cols-[1.5rem_1fr_4rem_5.5rem_4.5rem] gap-2 px-4 pb-1 text-xs text-muted-foreground">
+              <span />
+              <span>Title</span>
+              <button onClick={() => toggleSort('priority')} className="hover:text-foreground tabular-nums text-left">
+                Priority{sortField === 'priority' ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+              </button>
+              <button onClick={() => toggleSort('status')} className="hover:text-foreground tabular-nums text-left">
+                Status{sortField === 'status' ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+              </button>
+              <button onClick={() => toggleSort('dueDate')} className="hover:text-foreground tabular-nums text-right">
+                Due{sortField === 'dueDate' ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+              </button>
+            </div>
           </div>
 
+          {/* Task rows */}
           <div className="flex-1 overflow-y-auto divide-y divide-border">
-            {tasks.length === 0 && (
-              <p className="px-4 py-6 text-sm text-muted-foreground text-center">No open tasks.</p>
+            {visibleTasks.length === 0 && (
+              <p className="px-4 py-6 text-sm text-muted-foreground text-center">No tasks.</p>
             )}
-            {tasks.map(task => (
-              <div
-                key={task.id}
-                onClick={() => { setEditingTask(task); setTaskModalOpen(true) }}
-                className="px-4 py-3 cursor-pointer hover:bg-accent transition-colors"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm font-medium leading-tight">{task.title}</p>
-                  <div className="flex items-center gap-1 shrink-0">
-                    {task.priorityId && (
-                      <span className="text-xs text-muted-foreground border rounded-full px-2 py-0.5">
-                        {labelFor(priorities, task.priorityId)}
-                      </span>
+            {visibleTasks.map(task => {
+              const isDone = task.status === 'done'
+              return (
+                <div
+                  key={task.id}
+                  onClick={() => { setEditingTask(task); setTaskModalOpen(true) }}
+                  className={`grid grid-cols-[1.5rem_1fr_4rem_5.5rem_4.5rem] gap-2 px-4 py-2 cursor-pointer hover:bg-accent transition-colors items-center ${isDone ? 'opacity-50' : ''}`}
+                >
+                  {/* Quick status cycle */}
+                  <button
+                    onClick={e => cycleTaskStatus(e, task)}
+                    className="flex items-center justify-center hover:scale-110 transition-transform"
+                    title={`Mark as ${cycleStatus(task.status).replace('_', ' ')}`}
+                  >
+                    <StatusCircle status={task.status} />
+                  </button>
+                  {/* Title + notes */}
+                  <div className="min-w-0">
+                    <p className={`text-sm font-medium leading-tight truncate ${isDone ? 'line-through' : ''}`}>
+                      {task.title}
+                    </p>
+                    {task.notes && (
+                      <p className="text-xs text-muted-foreground truncate leading-tight mt-0.5">
+                        {task.notes}
+                      </p>
                     )}
-                    <span className={`text-xs px-1.5 py-0.5 rounded ${STATUS_CLASS[task.status]}`}>
-                      {STATUS_LABEL[task.status]}
-                    </span>
                   </div>
+                  {/* Priority */}
+                  {task.priorityId ? (() => {
+                    const opt = priorities.find(p => p.id === task.priorityId)
+                    const lbl = opt?.label ?? '—'
+                    const color = opt?.color ?? ''
+                    return (
+                      <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full border ${isDone ? 'bg-muted text-muted-foreground border-transparent' : priorityClass(color)}`}>
+                        {!isDone && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${priorityDot(color)}`} />}
+                        {lbl}
+                      </span>
+                    )
+                  })() : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
+                  {/* Status badge */}
+                  <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${isDone ? 'bg-muted text-muted-foreground' : STATUS_CLASS[task.status]}`}>
+                    {STATUS_LABEL[task.status]}
+                  </span>
+                  {/* Due date — click to open calendar */}
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        onClick={e => e.stopPropagation()}
+                        className={`text-xs text-right w-full hover:underline decoration-dashed underline-offset-2 ${
+                          isOverdue(task.dueDate) && !isDone ? 'text-red-600 font-medium' :
+                          isDueToday(task.dueDate) && !isDone ? 'text-amber-600 font-medium' :
+                          'text-muted-foreground'
+                        }`}
+                      >
+                        {task.dueDate ? fmtDate(task.dueDate) : '—'}
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="end" onClick={e => e.stopPropagation()}>
+                      <Calendar
+                        mode="single"
+                        selected={task.dueDate ? new Date(task.dueDate + 'T12:00:00') : undefined}
+                        onSelect={async (date) => {
+                          const iso = date ? date.toISOString().slice(0, 10) : null
+                          try {
+                            await updateTask({ id: task.id, dueDate: iso })
+                            await load()
+                          } catch (err) {
+                            toast.error(`Failed to update due date: ${err instanceof Error ? err.message : String(err)}`)
+                          }
+                        }}
+                        initialFocus
+                      />
+                      {task.dueDate && (
+                        <div className="border-t px-3 py-2">
+                          <button
+                            className="text-xs text-muted-foreground hover:text-foreground w-full text-center"
+                            onClick={async (e) => {
+                              e.stopPropagation()
+                              try {
+                                await updateTask({ id: task.id, dueDate: null })
+                                await load()
+                              } catch (err) {
+                                toast.error(`Failed to clear due date: ${err instanceof Error ? err.message : String(err)}`)
+                              }
+                            }}
+                          >
+                            Clear date
+                          </button>
+                        </div>
+                      )}
+                    </PopoverContent>
+                  </Popover>
                 </div>
-                {task.dueDate && (
-                  <p className={`text-xs mt-0.5 font-medium ${
-                    isOverdue(task.dueDate) ? 'text-red-600' :
-                    isDueToday(task.dueDate) ? 'text-amber-600' :
-                    'text-muted-foreground'
-                  }`}>
-                    {isOverdue(task.dueDate) ? '⚠ Overdue: ' : isDueToday(task.dueDate) ? '⏰ Due today: ' : 'Due: '}
-                    {task.dueDate}
-                  </p>
-                )}
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
+
+        {/* ── DRAG DIVIDER ────────────────────────────────────────────── */}
+        <div
+          className="w-1 shrink-0 cursor-col-resize bg-border hover:bg-primary/40 transition-colors"
+          onPointerDown={onDividerPointerDown}
+          onPointerMove={onDividerPointerMove}
+          onPointerUp={onDividerPointerUp}
+        />
 
         {/* ── RIGHT: Work Log ─────────────────────────────────────────── */}
         <div className="flex-1 flex flex-col overflow-hidden">

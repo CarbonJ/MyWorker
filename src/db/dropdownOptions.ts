@@ -7,6 +7,7 @@ function rowToOption(row: Record<string, unknown>): DropdownOption {
     type: row.type as DropdownType,
     label: row.label as string,
     sortOrder: row.sort_order as number,
+    color: (row.color as string) ?? '',
   }
 }
 
@@ -51,10 +52,11 @@ export async function updateDropdownOption(
   id: number,
   label: string,
   sortOrder: number,
+  color?: string,
 ): Promise<void> {
   await run(
-    `UPDATE dropdown_options SET label = ?, sort_order = ? WHERE id = ?`,
-    [label, sortOrder, id],
+    `UPDATE dropdown_options SET label = ?, sort_order = ?, color = ? WHERE id = ?`,
+    [label, sortOrder, color ?? '', id],
   )
 }
 

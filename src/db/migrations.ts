@@ -161,6 +161,10 @@ const migrations: Migration[] = [
     version: 2,
     up: `ALTER TABLE tasks ADD COLUMN priority_id INTEGER REFERENCES dropdown_options(id) ON DELETE SET NULL;`,
   },
+  {
+    version: 3,
+    up: `ALTER TABLE dropdown_options ADD COLUMN color TEXT NOT NULL DEFAULT '';`,
+  },
 ]
 
 export async function runMigrations(handle: DbHandle): Promise<void> {

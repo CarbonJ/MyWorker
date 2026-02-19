@@ -14,6 +14,33 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 
+// ── Colour picker swatches ────────────────────────────────────────────────────
+
+const COLORS = [
+  { value: 'red',    bg: 'bg-red-500',    label: 'Red' },
+  { value: 'amber',  bg: 'bg-amber-400',  label: 'Amber' },
+  { value: 'green',  bg: 'bg-green-500',  label: 'Green' },
+  { value: 'blue',   bg: 'bg-blue-500',   label: 'Blue' },
+  { value: 'purple', bg: 'bg-purple-500', label: 'Purple' },
+  { value: '',       bg: 'bg-slate-300',  label: 'None' },
+]
+
+function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
+  return (
+    <div className="flex items-center gap-1">
+      {COLORS.map(c => (
+        <button
+          key={c.value}
+          type="button"
+          title={c.label}
+          onClick={() => onChange(c.value)}
+          className={`w-4 h-4 rounded-full ${c.bg} ${value === c.value ? 'ring-2 ring-offset-1 ring-foreground' : 'opacity-60 hover:opacity-100'}`}
+        />
+      ))}
+    </div>
+  )
+}
+
 // ── Dropdown Option List Manager ─────────────────────────────────────────────
 
 function OptionList({ type, title }: { type: DropdownType; title: string }) {
@@ -21,6 +48,7 @@ function OptionList({ type, title }: { type: DropdownType; title: string }) {
   const [newLabel, setNewLabel] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editLabel, setEditLabel] = useState('')
+  const [editColor, setEditColor] = useState('')
 
   const load = useCallback(async () => {
     const opts = await getDropdownOptions(type)
@@ -44,12 +72,21 @@ function OptionList({ type, title }: { type: DropdownType; title: string }) {
   const handleSaveEdit = async (id: number, sortOrder: number) => {
     if (!editLabel.trim()) return
     try {
-      await updateDropdownOption(id, editLabel.trim(), sortOrder)
+      await updateDropdownOption(id, editLabel.trim(), sortOrder, editColor)
       setEditingId(null)
       load()
     } catch (err) {
       console.error('Failed to update option', err)
       toast.error(`Failed to update option: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
+  const handleColorChange = async (opt: DropdownOption, color: string) => {
+    try {
+      await updateDropdownOption(opt.id, opt.label, opt.sortOrder, color)
+      load()
+    } catch (err) {
+      toast.error(`Failed to update color: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
@@ -99,15 +136,17 @@ function OptionList({ type, title }: { type: DropdownType; title: string }) {
                   className="h-7 text-sm flex-1"
                   autoFocus
                 />
+                <ColorPicker value={editColor} onChange={setEditColor} />
                 <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => handleSaveEdit(opt.id, opt.sortOrder)}>Save</Button>
                 <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setEditingId(null)}>Cancel</Button>
               </>
             ) : (
               <>
                 <span className="flex-1 text-sm">{opt.label}</span>
+                <ColorPicker value={opt.color} onChange={color => handleColorChange(opt, color)} />
                 <button onClick={() => moveUp(i)} disabled={i === 0} className="text-muted-foreground hover:text-foreground disabled:opacity-30 text-xs px-1">↑</button>
                 <button onClick={() => moveDown(i)} disabled={i === options.length - 1} className="text-muted-foreground hover:text-foreground disabled:opacity-30 text-xs px-1">↓</button>
-                <button onClick={() => { setEditingId(opt.id); setEditLabel(opt.label) }} className="text-xs text-muted-foreground hover:text-foreground px-1">Edit</button>
+                <button onClick={() => { setEditingId(opt.id); setEditLabel(opt.label); setEditColor(opt.color) }} className="text-xs text-muted-foreground hover:text-foreground px-1">Edit</button>
                 <button onClick={() => handleDelete(opt.id)} className="text-xs text-destructive hover:text-destructive/80 px-1">Delete</button>
               </>
             )}

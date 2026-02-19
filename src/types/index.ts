@@ -48,4 +48,5 @@ export interface DropdownOption {
   type: DropdownType
   label: string
   sortOrder: number
+  color: string
 }
