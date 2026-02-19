@@ -30,7 +30,7 @@ export interface WorkLogEntry {
 
 export interface Task {
   id: number
-  projectId: number
+  projectId: number | null
   title: string
   description: string
   notes: string

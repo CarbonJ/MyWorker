@@ -9,7 +9,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { MarkdownContent } from '@/components/MarkdownContent'
 
 interface Props {
   projectId: number
@@ -137,12 +136,6 @@ export function TaskModal({ projectId, task, open, onClose, onSaved }: Props) {
 
           <div className={fieldClass}>
             <Label htmlFor="task-desc">Description</Label>
-            {isEdit && description && (
-              <div className="border rounded-md px-3 py-2 bg-muted/30 mb-1">
-                <p className="text-xs text-muted-foreground mb-1">Preview</p>
-                <MarkdownContent>{description}</MarkdownContent>
-              </div>
-            )}
             <Textarea
               id="task-desc"
               value={description}
@@ -155,12 +148,6 @@ export function TaskModal({ projectId, task, open, onClose, onSaved }: Props) {
 
           <div className={fieldClass}>
             <Label htmlFor="task-notes">Notes</Label>
-            {isEdit && notes && (
-              <div className="border rounded-md px-3 py-2 bg-muted/30 mb-1">
-                <p className="text-xs text-muted-foreground mb-1">Preview</p>
-                <MarkdownContent>{notes}</MarkdownContent>
-              </div>
-            )}
             <Textarea
               id="task-notes"
               value={notes}

@@ -49,7 +49,7 @@ export async function getDueSoonTasks(): Promise<Task[]> {
 }
 
 export interface CreateTaskInput {
-  projectId: number
+  projectId?: number | null
   title: string
   description?: string
   notes?: string
@@ -59,13 +59,24 @@ export interface CreateTaskInput {
   dueDate?: string | null
 }
 
+export async function getAllTasks(): Promise<Task[]> {
+  const rows = await query(
+    `SELECT * FROM tasks
+     ORDER BY
+       CASE WHEN due_date IS NULL THEN 1 ELSE 0 END,
+       due_date ASC,
+       created_at ASC`,
+  )
+  return rows.map(rowToTask)
+}
+
 export async function createTask(input: CreateTaskInput): Promise<number> {
   await run(
     `INSERT INTO tasks
       (project_id, title, description, notes, status, priority_id, start_date, due_date)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      input.projectId,
+      input.projectId ?? null,
       input.title,
       input.description ?? '',
       input.notes ?? '',
