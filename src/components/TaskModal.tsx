@@ -1,45 +1,65 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { createTask, updateTask, deleteTask } from '@/db/tasks'
+import { getAllProjects } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
-import type { Task, TaskStatus, DropdownOption } from '@/types'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import type { Task, TaskStatus, DropdownOption, Project } from '@/types'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { MarkdownContent } from '@/components/MarkdownContent'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
+import { ChevronsUpDown, Check } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 interface Props {
-  projectId: number
-  task?: Task | null       // undefined/null = create mode
+  projectId?: number | null   // initial project; undefined = no default
+  task?: Task | null          // undefined/null = create mode
   open: boolean
   onClose: () => void
   onSaved: () => void
+  projects?: Project[]        // optional pre-loaded list (avoids extra fetch)
 }
 
-export function TaskModal({ projectId, task, open, onClose, onSaved }: Props) {
+export function TaskModal({ projectId: initialProjectId, task, open, onClose, onSaved, projects: propProjects }: Props) {
   const isEdit = !!task
 
-  const [title, setTitle] = useState('')
+  const [title,       setTitle]       = useState('')
   const [description, setDescription] = useState('')
-  const [notes, setNotes] = useState('')
-  const [status, setStatus] = useState<TaskStatus>('open')
-  const [priorityId, setPriorityId] = useState<string>('')
-  const [startDate, setStartDate] = useState('')
-  const [dueDate, setDueDate] = useState('')
-  const [saving, setSaving] = useState(false)
+  const [notes,       setNotes]       = useState('')
+  const [status,      setStatus]      = useState<TaskStatus>('open')
+  const [priorityId,  setPriorityId]  = useState<string>('')
+  const [startDate,   setStartDate]   = useState('')
+  const [dueDate,     setDueDate]     = useState('')
+  const [saving,      setSaving]      = useState(false)
+
+  // Project combobox state
+  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null)
+  const [projects,           setProjects]           = useState<Project[]>(propProjects ?? [])
+  const [projectOpen,        setProjectOpen]        = useState(false)
+  const [projectSearch,      setProjectSearch]      = useState('')
+
   const [priorities, setPriorities] = useState<DropdownOption[]>([])
 
-  // Load priority options whenever modal opens
+  // Load options whenever modal opens
   useEffect(() => {
-    if (open) {
-      getDropdownOptions('priority').then(setPriorities)
+    if (!open) return
+    getDropdownOptions('priority').then(setPriorities)
+    // Only fetch projects if they weren't passed in as a prop
+    if (!propProjects) {
+      getAllProjects().then(setProjects)
     }
-  }, [open])
+  }, [open, propProjects])
 
-  // Populate fields when editing
+  // Sync propProjects if parent updates them
+  useEffect(() => {
+    if (propProjects) setProjects(propProjects)
+  }, [propProjects])
+
+  // Populate fields when task/open changes
   useEffect(() => {
     if (task) {
       setTitle(task.title)
@@ -49,17 +69,22 @@ export function TaskModal({ projectId, task, open, onClose, onSaved }: Props) {
       setPriorityId(task.priorityId?.toString() ?? '')
       setStartDate(task.startDate ?? '')
       setDueDate(task.dueDate ?? '')
+      setSelectedProjectId(task.projectId)
     } else {
       setTitle(''); setDescription(''); setNotes('')
       setStatus('open'); setPriorityId(''); setStartDate(''); setDueDate('')
+      setSelectedProjectId(initialProjectId ?? null)
     }
-  }, [task, open])
+    setProjectSearch('')
+    setProjectOpen(false)
+  }, [task, open, initialProjectId])
 
   const handleSave = async () => {
     if (!title.trim()) { toast.error('Title is required'); return }
     setSaving(true)
     try {
       const input = {
+        projectId: selectedProjectId,
         title: title.trim(),
         description,
         notes,
@@ -72,7 +97,7 @@ export function TaskModal({ projectId, task, open, onClose, onSaved }: Props) {
         await updateTask({ id: task.id, ...input })
         toast.success('Task updated')
       } else {
-        await createTask({ projectId, ...input })
+        await createTask(input)
         toast.success('Task created')
       }
       onSaved()
@@ -109,6 +134,12 @@ export function TaskModal({ projectId, task, open, onClose, onSaved }: Props) {
     requestAnimationFrame(() => el.setSelectionRange(start + 2, start + 2))
   }
 
+  const selectedProject = projects.find(p => p.id === selectedProjectId)
+
+  const filteredProjects = projectSearch.trim()
+    ? projects.filter(p => p.workItem.toLowerCase().includes(projectSearch.toLowerCase()))
+    : projects
+
   const fieldClass = 'space-y-1.5'
 
   return (
@@ -121,9 +152,13 @@ export function TaskModal({ projectId, task, open, onClose, onSaved }: Props) {
       >
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Edit Task' : 'New Task'}</DialogTitle>
+          <DialogDescription className="sr-only">
+            {isEdit ? 'Edit task details' : 'Create a new task'}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+          {/* Title */}
           <div className={fieldClass}>
             <Label htmlFor="task-title">Title <span className="text-destructive">*</span></Label>
             <Input
@@ -135,14 +170,69 @@ export function TaskModal({ projectId, task, open, onClose, onSaved }: Props) {
             />
           </div>
 
+          {/* Project picker */}
+          <div className={fieldClass}>
+            <Label>Project</Label>
+            <Popover open={projectOpen} onOpenChange={setProjectOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={projectOpen}
+                  className="w-full justify-between font-normal"
+                >
+                  <span className={cn('truncate', !selectedProject && 'text-muted-foreground')}>
+                    {selectedProject ? selectedProject.workItem : 'Inbox (no project)'}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                <Command shouldFilter={false}>
+                  <CommandInput
+                    placeholder="Search projects…"
+                    value={projectSearch}
+                    onValueChange={setProjectSearch}
+                  />
+                  <CommandList>
+                    <CommandEmpty>No projects found.</CommandEmpty>
+                    <CommandGroup>
+                      {/* Inbox option */}
+                      <CommandItem
+                        value="__inbox__"
+                        onSelect={() => {
+                          setSelectedProjectId(null)
+                          setProjectOpen(false)
+                          setProjectSearch('')
+                        }}
+                      >
+                        <Check className={cn('mr-2 h-4 w-4', selectedProjectId === null ? 'opacity-100' : 'opacity-0')} />
+                        <span className="italic text-muted-foreground">Inbox (no project)</span>
+                      </CommandItem>
+                      {filteredProjects.map(p => (
+                        <CommandItem
+                          key={p.id}
+                          value={String(p.id)}
+                          onSelect={() => {
+                            setSelectedProjectId(p.id)
+                            setProjectOpen(false)
+                            setProjectSearch('')
+                          }}
+                        >
+                          <Check className={cn('mr-2 h-4 w-4', selectedProjectId === p.id ? 'opacity-100' : 'opacity-0')} />
+                          {p.workItem}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* Description */}
           <div className={fieldClass}>
             <Label htmlFor="task-desc">Description</Label>
-            {isEdit && description && (
-              <div className="border rounded-md px-3 py-2 bg-muted/30 mb-1">
-                <p className="text-xs text-muted-foreground mb-1">Preview</p>
-                <MarkdownContent>{description}</MarkdownContent>
-              </div>
-            )}
             <Textarea
               id="task-desc"
               value={description}
@@ -153,14 +243,9 @@ export function TaskModal({ projectId, task, open, onClose, onSaved }: Props) {
             />
           </div>
 
+          {/* Notes */}
           <div className={fieldClass}>
             <Label htmlFor="task-notes">Notes</Label>
-            {isEdit && notes && (
-              <div className="border rounded-md px-3 py-2 bg-muted/30 mb-1">
-                <p className="text-xs text-muted-foreground mb-1">Preview</p>
-                <MarkdownContent>{notes}</MarkdownContent>
-              </div>
-            )}
             <Textarea
               id="task-notes"
               value={notes}
@@ -171,6 +256,7 @@ export function TaskModal({ projectId, task, open, onClose, onSaved }: Props) {
             />
           </div>
 
+          {/* Status + Priority */}
           <div className="grid grid-cols-2 gap-4">
             <div className={fieldClass}>
               <Label>Status</Label>
@@ -202,6 +288,7 @@ export function TaskModal({ projectId, task, open, onClose, onSaved }: Props) {
             </div>
           </div>
 
+          {/* Dates */}
           <div className="grid grid-cols-2 gap-4">
             <div className={fieldClass}>
               <Label htmlFor="task-start">Start Date</Label>

@@ -4,7 +4,7 @@ import type { Task, TaskStatus } from '@/types'
 function rowToTask(row: Record<string, unknown>): Task {
   return {
     id: row.id as number,
-    projectId: row.project_id as number,
+    projectId: row.project_id as number | null,
     title: row.title as string,
     description: row.description as string,
     notes: row.notes as string,
@@ -15,6 +15,7 @@ function rowToTask(row: Record<string, unknown>): Task {
     dueDate: row.due_date as string | null,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
+    preArchiveStatus: (row.pre_archive_status as TaskStatus | null) ?? null,
   }
 }
 
@@ -49,7 +50,7 @@ export async function getDueSoonTasks(): Promise<Task[]> {
 }
 
 export interface CreateTaskInput {
-  projectId: number
+  projectId?: number | null
   title: string
   description?: string
   notes?: string
@@ -59,13 +60,24 @@ export interface CreateTaskInput {
   dueDate?: string | null
 }
 
+export async function getAllTasks(): Promise<Task[]> {
+  const rows = await query(
+    `SELECT * FROM tasks
+     ORDER BY
+       CASE WHEN due_date IS NULL THEN 1 ELSE 0 END,
+       due_date ASC,
+       created_at ASC`,
+  )
+  return rows.map(rowToTask)
+}
+
 export async function createTask(input: CreateTaskInput): Promise<number> {
   await run(
     `INSERT INTO tasks
       (project_id, title, description, notes, status, priority_id, start_date, due_date)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      input.projectId,
+      input.projectId ?? null,
       input.title,
       input.description ?? '',
       input.notes ?? '',
@@ -78,7 +90,7 @@ export async function createTask(input: CreateTaskInput): Promise<number> {
   return await lastInsertId()
 }
 
-export interface UpdateTaskInput extends Partial<Omit<CreateTaskInput, 'projectId'>> {
+export interface UpdateTaskInput extends Partial<CreateTaskInput> {
   id: number
 }
 
@@ -89,6 +101,7 @@ export async function updateTask(input: UpdateTaskInput): Promise<void> {
 
   await run(
     `UPDATE tasks SET
+      project_id  = ?,
       title       = ?,
       description = ?,
       notes       = ?,
@@ -98,6 +111,7 @@ export async function updateTask(input: UpdateTaskInput): Promise<void> {
       due_date    = ?
      WHERE id = ?`,
     [
+      input.projectId !== undefined ? input.projectId : current.projectId,
       input.title ?? current.title,
       input.description ?? current.description,
       input.notes ?? current.notes,
@@ -112,4 +126,30 @@ export async function updateTask(input: UpdateTaskInput): Promise<void> {
 
 export async function deleteTask(id: number): Promise<void> {
   await run(`DELETE FROM tasks WHERE id = ?`, [id])
+}
+
+/** When archiving a project: bulk-mark all open/in_progress tasks as done,
+ *  saving their current status so they can be restored on reopen. */
+export async function archiveTasksByProject(projectId: number): Promise<void> {
+  await run(
+    `UPDATE tasks
+     SET pre_archive_status = status,
+         status = 'done'
+     WHERE project_id = ?
+       AND status IN ('open', 'in_progress')`,
+    [projectId],
+  )
+}
+
+/** When reopening a project: restore tasks that were auto-closed by archiving
+ *  back to their pre-archive status, then clear the snapshot. */
+export async function restoreTasksByProject(projectId: number): Promise<void> {
+  await run(
+    `UPDATE tasks
+     SET status = pre_archive_status,
+         pre_archive_status = NULL
+     WHERE project_id = ?
+       AND pre_archive_status IS NOT NULL`,
+    [projectId],
+  )
 }

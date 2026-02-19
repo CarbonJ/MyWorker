@@ -8,6 +8,8 @@ import ProjectList from '@/pages/ProjectList'
 import ProjectDetail from '@/pages/ProjectDetail'
 import ProjectForm from '@/pages/ProjectForm'
 import ReportingView from '@/pages/ReportingView'
+import TasksView from '@/pages/TasksView'
+import ArchiveView from '@/pages/ArchiveView'
 import Settings from '@/pages/Settings'
 
 function DueDateBanner() {
@@ -26,10 +28,13 @@ function DueDateBanner() {
   if (count === 0) return null
 
   return (
-    <div className="bg-amber-50 border-b border-amber-200 px-6 py-1.5 text-xs text-amber-800 flex items-center gap-2">
+    <a
+      href="/tasks?filter=due"
+      className="bg-amber-50 border-b border-amber-200 px-6 py-1.5 text-xs text-amber-800 flex items-center gap-2 hover:bg-amber-100 transition-colors cursor-pointer"
+    >
       <span>⚠</span>
-      <span>{count} task{count !== 1 ? 's' : ''} overdue or due today</span>
-    </div>
+      <span>{count} task{count !== 1 ? 's' : ''} overdue or due today — click to view</span>
+    </a>
   )
 }
 
@@ -45,7 +50,9 @@ function NavBar() {
     <nav className="border-b bg-background px-6 py-3 flex items-center gap-2">
       <span className="font-bold text-lg mr-4">MyWorker</span>
       <NavLink to="/" end className={linkClass}>Projects</NavLink>
+      <NavLink to="/tasks" className={linkClass}>Tasks</NavLink>
       <NavLink to="/reporting" className={linkClass}>Reporting</NavLink>
+      <NavLink to="/archive" className={linkClass}>Archive</NavLink>
       <NavLink to="/settings" className={linkClass}>Settings</NavLink>
     </nav>
   )
@@ -64,7 +71,9 @@ export default function App() {
               <Route path="/projects/new" element={<ProjectForm />} />
               <Route path="/projects/:id" element={<ProjectDetail />} />
               <Route path="/projects/:id/edit" element={<ProjectForm />} />
+              <Route path="/tasks" element={<TasksView />} />
               <Route path="/reporting" element={<ReportingView />} />
+              <Route path="/archive" element={<ArchiveView />} />
               <Route path="/settings" element={<Settings />} />
             </Routes>
           </main>

@@ -1,5 +1,23 @@
 import { query, run, lastInsertId } from './index'
-import type { Project, RagStatus } from '@/types'
+import type { Project, RagStatus, JiraLink } from '@/types'
+
+// Subquery: finds the id(s) of any project_status option labelled "done"
+const DONE_SUBQ = `SELECT id FROM dropdown_options WHERE type='project_status' AND lower(label)='done'`
+
+function parseLinkedJiras(raw: string): JiraLink[] {
+  if (!raw || raw.trim() === '') return []
+  try {
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) return parsed as JiraLink[]
+    return []
+  } catch {
+    return []
+  }
+}
+
+function stringifyLinkedJiras(jiras: JiraLink[]): string {
+  return jiras.length === 0 ? '' : JSON.stringify(jiras)
+}
 
 function rowToProject(row: Record<string, unknown>): Project {
   return {
@@ -10,16 +28,36 @@ function rowToProject(row: Record<string, unknown>): Project {
     priorityId: row.priority_id as number | null,
     latestStatus: row.latest_status as string,
     productAreaId: row.product_area_id as number | null,
+    statusId: row.status_id as number | null,
     stakeholders: row.stakeholders as string,
-    linkedJiras: row.linked_jiras as string,
+    linkedJiras: parseLinkedJiras(row.linked_jiras as string),
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   }
 }
 
+/** Returns all non-archived (non-Done) projects, newest first */
 export async function getAllProjects(): Promise<Project[]> {
   const rows = await query(`
-    SELECT * FROM projects ORDER BY updated_at DESC
+    SELECT * FROM projects
+    WHERE status_id IS NULL OR status_id NOT IN (${DONE_SUBQ})
+    ORDER BY updated_at DESC
+  `)
+  return rows.map(rowToProject)
+}
+
+/** Returns every project regardless of status — used for lookups that need the full set */
+export async function getAllProjectsIncludingArchived(): Promise<Project[]> {
+  const rows = await query(`SELECT * FROM projects ORDER BY updated_at DESC`)
+  return rows.map(rowToProject)
+}
+
+/** Returns all archived (Done) projects, newest first */
+export async function getArchivedProjects(): Promise<Project[]> {
+  const rows = await query(`
+    SELECT * FROM projects
+    WHERE status_id IN (${DONE_SUBQ})
+    ORDER BY updated_at DESC
   `)
   return rows.map(rowToProject)
 }
@@ -36,15 +74,16 @@ export interface CreateProjectInput {
   priorityId?: number | null
   latestStatus?: string
   productAreaId?: number | null
+  statusId?: number | null
   stakeholders?: string
-  linkedJiras?: string
+  linkedJiras?: JiraLink[]
 }
 
 export async function createProject(input: CreateProjectInput): Promise<number> {
   await run(
     `INSERT INTO projects
-      (work_item, work_desc, rag_status, priority_id, latest_status, product_area_id, stakeholders, linked_jiras)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      (work_item, work_desc, rag_status, priority_id, latest_status, product_area_id, status_id, stakeholders, linked_jiras)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.workItem,
       input.workDescription ?? '',
@@ -52,8 +91,9 @@ export async function createProject(input: CreateProjectInput): Promise<number> 
       input.priorityId ?? null,
       input.latestStatus ?? '',
       input.productAreaId ?? null,
+      input.statusId ?? null,
       input.stakeholders ?? '',
-      input.linkedJiras ?? '',
+      stringifyLinkedJiras(input.linkedJiras ?? []),
     ],
   )
   return await lastInsertId()
@@ -75,6 +115,7 @@ export async function updateProject(input: UpdateProjectInput): Promise<void> {
       priority_id     = ?,
       latest_status   = ?,
       product_area_id = ?,
+      status_id       = ?,
       stakeholders    = ?,
       linked_jiras    = ?
      WHERE id = ?`,
@@ -85,8 +126,11 @@ export async function updateProject(input: UpdateProjectInput): Promise<void> {
       input.priorityId !== undefined ? input.priorityId : current.priorityId,
       input.latestStatus ?? current.latestStatus,
       input.productAreaId !== undefined ? input.productAreaId : current.productAreaId,
+      input.statusId !== undefined ? input.statusId : current.statusId,
       input.stakeholders ?? current.stakeholders,
-      input.linkedJiras ?? current.linkedJiras,
+      input.linkedJiras !== undefined
+        ? stringifyLinkedJiras(input.linkedJiras)
+        : stringifyLinkedJiras(current.linkedJiras),
       input.id,
     ],
   )

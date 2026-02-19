@@ -161,6 +161,102 @@ const migrations: Migration[] = [
     version: 2,
     up: `ALTER TABLE tasks ADD COLUMN priority_id INTEGER REFERENCES dropdown_options(id) ON DELETE SET NULL;`,
   },
+  {
+    version: 3,
+    up: `ALTER TABLE dropdown_options ADD COLUMN color TEXT NOT NULL DEFAULT '';`,
+  },
+  {
+    version: 4,
+    up: `
+      -- Recreate tasks table with nullable project_id (to support inbox tasks)
+      CREATE TABLE IF NOT EXISTS tasks_new (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id  INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+        title       TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        notes       TEXT NOT NULL DEFAULT '',
+        status      TEXT NOT NULL DEFAULT 'open'
+                      CHECK(status IN ('open','in_progress','done')),
+        owner       TEXT NOT NULL DEFAULT '',
+        priority_id INTEGER REFERENCES dropdown_options(id) ON DELETE SET NULL,
+        start_date  TEXT,
+        due_date    TEXT,
+        created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      INSERT INTO tasks_new
+        (id, project_id, title, description, notes, status, owner, priority_id, start_date, due_date, created_at, updated_at)
+      SELECT
+        id, project_id, title, description, notes, status, owner, priority_id, start_date, due_date, created_at, updated_at
+      FROM tasks;
+      DROP TABLE tasks;
+      ALTER TABLE tasks_new RENAME TO tasks;
+
+      CREATE TRIGGER IF NOT EXISTS tasks_updated_at
+        AFTER UPDATE ON tasks
+        BEGIN
+          UPDATE tasks SET updated_at = datetime('now') WHERE id = NEW.id;
+        END;
+
+      CREATE TRIGGER IF NOT EXISTS fts_tasks_insert
+        AFTER INSERT ON tasks
+        BEGIN
+          INSERT INTO fts_index(content, source_type, source_id, project_id)
+          VALUES (
+            NEW.title || ' ' || NEW.description || ' ' || NEW.notes || ' ' || NEW.owner,
+            'task', NEW.id, NEW.project_id
+          );
+        END;
+
+      CREATE TRIGGER IF NOT EXISTS fts_tasks_update
+        AFTER UPDATE ON tasks
+        BEGIN
+          DELETE FROM fts_index WHERE source_type = 'task' AND source_id = OLD.id;
+          INSERT INTO fts_index(content, source_type, source_id, project_id)
+          VALUES (
+            NEW.title || ' ' || NEW.description || ' ' || NEW.notes || ' ' || NEW.owner,
+            'task', NEW.id, NEW.project_id
+          );
+        END;
+
+      CREATE TRIGGER IF NOT EXISTS fts_tasks_delete
+        AFTER DELETE ON tasks
+        BEGIN
+          DELETE FROM fts_index WHERE source_type = 'task' AND source_id = OLD.id;
+        END;
+    `,
+  },
+  {
+    version: 5,
+    up: `
+      -- Recreate dropdown_options without the type CHECK constraint so 'project_status' is valid
+      CREATE TABLE IF NOT EXISTS dropdown_options_new (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        type       TEXT NOT NULL,
+        label      TEXT NOT NULL,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        color      TEXT NOT NULL DEFAULT ''
+      );
+      INSERT INTO dropdown_options_new (id, type, label, sort_order, color)
+        SELECT id, type, label, sort_order, color FROM dropdown_options;
+      DROP TABLE dropdown_options;
+      ALTER TABLE dropdown_options_new RENAME TO dropdown_options;
+
+      -- Add lifecycle status column to projects
+      ALTER TABLE projects ADD COLUMN status_id INTEGER REFERENCES dropdown_options(id) ON DELETE SET NULL;
+
+      -- Seed default project status options
+      INSERT INTO dropdown_options (type, label, sort_order, color) VALUES
+        ('project_status', 'To Do',       0, ''),
+        ('project_status', 'In Progress', 1, 'blue'),
+        ('project_status', 'Backlog',     2, 'amber'),
+        ('project_status', 'Done',        3, 'green');
+    `,
+  },
+  {
+    version: 6,
+    up: `ALTER TABLE tasks ADD COLUMN pre_archive_status TEXT;`,
+  },
 ]
 
 export async function runMigrations(handle: DbHandle): Promise<void> {

@@ -10,6 +10,13 @@ function rowToEntry(row: Record<string, unknown>): WorkLogEntry {
   }
 }
 
+export async function getAllWorkLogEntries(): Promise<WorkLogEntry[]> {
+  const rows = await query(
+    `SELECT * FROM work_log_entries ORDER BY created_at DESC`,
+  )
+  return rows.map(rowToEntry)
+}
+
 export async function getWorkLogByProject(projectId: number): Promise<WorkLogEntry[]> {
   const rows = await query(
     `SELECT * FROM work_log_entries

@@ -1,6 +1,11 @@
 export type RagStatus = 'Red' | 'Amber' | 'Green'
+
+export interface JiraLink {
+  url: string
+  label: string
+}
 export type TaskStatus = 'open' | 'in_progress' | 'done'
-export type DropdownType = 'priority' | 'product_area'
+export type DropdownType = 'priority' | 'product_area' | 'project_status'
 
 export interface Project {
   id: number
@@ -10,8 +15,9 @@ export interface Project {
   priorityId: number | null
   latestStatus: string
   productAreaId: number | null
+  statusId: number | null
   stakeholders: string
-  linkedJiras: string
+  linkedJiras: JiraLink[]
   createdAt: string
   updatedAt: string
 }
@@ -25,7 +31,7 @@ export interface WorkLogEntry {
 
 export interface Task {
   id: number
-  projectId: number
+  projectId: number | null
   title: string
   description: string
   notes: string
@@ -36,6 +42,7 @@ export interface Task {
   dueDate: string | null
   createdAt: string
   updatedAt: string
+  preArchiveStatus: TaskStatus | null
 }
 
 export interface DropdownOption {
@@ -43,4 +50,5 @@ export interface DropdownOption {
   type: DropdownType
   label: string
   sortOrder: number
+  color: string
 }

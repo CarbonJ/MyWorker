@@ -13,6 +13,44 @@ import type { DropdownOption, DropdownType } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+
+// ── Colour picker swatches ────────────────────────────────────────────────────
+
+const COLORS = [
+  { value: 'red',    bg: 'bg-red-500',    label: 'Red' },
+  { value: 'orange', bg: 'bg-orange-500', label: 'Orange' },
+  { value: 'amber',  bg: 'bg-amber-400',  label: 'Amber' },
+  { value: 'green',  bg: 'bg-green-500',  label: 'Green' },
+  { value: 'blue',   bg: 'bg-blue-500',   label: 'Blue' },
+  { value: 'purple', bg: 'bg-purple-500', label: 'Purple' },
+  { value: 'grey',   bg: 'bg-slate-400',  label: 'Grey' },
+]
+
+function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
+  return (
+    <div className="flex items-center gap-1">
+      {/* No-colour swatch — transparent with dashed border */}
+      <button
+        type="button"
+        title="No colour"
+        onClick={() => onChange('')}
+        className={`w-4 h-4 rounded-full border border-dashed border-slate-400 bg-transparent flex items-center justify-center text-slate-400 text-[9px] leading-none ${value === '' ? 'ring-2 ring-offset-1 ring-foreground' : 'opacity-60 hover:opacity-100'}`}
+      >
+        ×
+      </button>
+      {COLORS.map(c => (
+        <button
+          key={c.value}
+          type="button"
+          title={c.label}
+          onClick={() => onChange(c.value)}
+          className={`w-4 h-4 rounded-full ${c.bg} ${value === c.value ? 'ring-2 ring-offset-1 ring-foreground' : 'opacity-60 hover:opacity-100'}`}
+        />
+      ))}
+    </div>
+  )
+}
 
 // ── Dropdown Option List Manager ─────────────────────────────────────────────
 
@@ -21,6 +59,7 @@ function OptionList({ type, title }: { type: DropdownType; title: string }) {
   const [newLabel, setNewLabel] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editLabel, setEditLabel] = useState('')
+  const [editColor, setEditColor] = useState('')
 
   const load = useCallback(async () => {
     const opts = await getDropdownOptions(type)
@@ -44,12 +83,21 @@ function OptionList({ type, title }: { type: DropdownType; title: string }) {
   const handleSaveEdit = async (id: number, sortOrder: number) => {
     if (!editLabel.trim()) return
     try {
-      await updateDropdownOption(id, editLabel.trim(), sortOrder)
+      await updateDropdownOption(id, editLabel.trim(), sortOrder, editColor)
       setEditingId(null)
       load()
     } catch (err) {
       console.error('Failed to update option', err)
       toast.error(`Failed to update option: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
+  const handleColorChange = async (opt: DropdownOption, color: string) => {
+    try {
+      await updateDropdownOption(opt.id, opt.label, opt.sortOrder, color)
+      load()
+    } catch (err) {
+      toast.error(`Failed to update color: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
@@ -99,15 +147,17 @@ function OptionList({ type, title }: { type: DropdownType; title: string }) {
                   className="h-7 text-sm flex-1"
                   autoFocus
                 />
+                <ColorPicker value={editColor} onChange={setEditColor} />
                 <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => handleSaveEdit(opt.id, opt.sortOrder)}>Save</Button>
                 <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setEditingId(null)}>Cancel</Button>
               </>
             ) : (
               <>
                 <span className="flex-1 text-sm">{opt.label}</span>
+                <ColorPicker value={opt.color} onChange={color => handleColorChange(opt, color)} />
                 <button onClick={() => moveUp(i)} disabled={i === 0} className="text-muted-foreground hover:text-foreground disabled:opacity-30 text-xs px-1">↑</button>
                 <button onClick={() => moveDown(i)} disabled={i === options.length - 1} className="text-muted-foreground hover:text-foreground disabled:opacity-30 text-xs px-1">↓</button>
-                <button onClick={() => { setEditingId(opt.id); setEditLabel(opt.label) }} className="text-xs text-muted-foreground hover:text-foreground px-1">Edit</button>
+                <button onClick={() => { setEditingId(opt.id); setEditLabel(opt.label); setEditColor(opt.color) }} className="text-xs text-muted-foreground hover:text-foreground px-1">Edit</button>
                 <button onClick={() => handleDelete(opt.id)} className="text-xs text-destructive hover:text-destructive/80 px-1">Delete</button>
               </>
             )}
@@ -192,74 +242,88 @@ export default function Settings() {
   const sectionTitle = 'text-base font-semibold'
 
   return (
-    <div className="max-w-2xl mx-auto px-6 py-8 space-y-8">
-      <h1 className="text-2xl font-semibold">Settings</h1>
+    <div className="max-w-2xl mx-auto px-6 py-8">
+      <h1 className="text-2xl font-semibold mb-6">Settings</h1>
 
-      {/* Dropdown options */}
-      <section className={section}>
-        <h2 className={sectionTitle}>Dropdown Options</h2>
-        <OptionList type="priority" title="Priority" />
-        <Separator />
-        <OptionList type="product_area" title="Product Area" />
-      </section>
+      <Tabs defaultValue="customization">
+        <TabsList>
+          <TabsTrigger value="customization">Customization</TabsTrigger>
+          <TabsTrigger value="data">Data</TabsTrigger>
+        </TabsList>
 
-      <Separator />
+        {/* ── Customization tab ───────────────────────────────────────── */}
+        <TabsContent value="customization" className="space-y-8">
+          <section className={section}>
+            <h2 className={sectionTitle}>Dropdown Options</h2>
+            <OptionList type="priority" title="Priority" />
+            <Separator />
+            <OptionList type="product_area" title="Product Area" />
+            <Separator />
+            <OptionList type="project_status" title="Project Status" />
+          </section>
+        </TabsContent>
 
-      {/* Storage */}
-      <section className={section}>
-        <h2 className={sectionTitle}>Storage</h2>
-        {'showDirectoryPicker' in window ? (
-          <>
-            <p className="text-sm text-muted-foreground">
-              MyWorker saves your database to your chosen folder (e.g. OneDrive) automatically on every change.
+        {/* ── Data tab ────────────────────────────────────────────────── */}
+        <TabsContent value="data" className="space-y-8">
+
+          {/* Storage */}
+          <section className={section}>
+            <h2 className={sectionTitle}>Storage</h2>
+            {'showDirectoryPicker' in window ? (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  MyWorker saves your database to your chosen folder (e.g. OneDrive) automatically on every change.
+                </p>
+                <Button variant="outline" onClick={handleChangeFolder}>
+                  Change storage folder…
+                </Button>
+              </>
+            ) : (
+              <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 space-y-1">
+                <p className="font-medium">Folder sync not available in this browser</p>
+                <p>
+                  Your data is safely stored in browser storage (IndexedDB).
+                  To enable automatic OneDrive sync, open MyWorker in <strong>Chrome</strong> or <strong>Edge</strong>.
+                </p>
+                <p className="text-xs opacity-75">
+                  Firefox and Safari do not support the File System Access API required for folder sync.
+                  Use <strong>Export backup (JSON)</strong> below to manually back up your data in any browser.
+                </p>
+              </div>
+            )}
+          </section>
+
+          <Separator />
+
+          {/* Import / Export */}
+          <section className={section}>
+            <h2 className={sectionTitle}>Backup &amp; Restore</h2>
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={handleExport}>
+                Export backup (JSON)
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => importRef.current?.click()}
+                disabled={importing}
+              >
+                {importing ? 'Importing…' : 'Import backup (JSON)'}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Import will replace all existing data. Make sure to export a backup first.
             </p>
-            <Button variant="outline" onClick={handleChangeFolder}>
-              Change storage folder…
-            </Button>
-          </>
-        ) : (
-          <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 space-y-1">
-            <p className="font-medium">Folder sync not available in this browser</p>
-            <p>
-              Your data is safely stored in browser storage (IndexedDB).
-              To enable automatic OneDrive sync, open MyWorker in <strong>Chrome</strong> or <strong>Edge</strong>.
-            </p>
-            <p className="text-xs opacity-75">
-              Firefox and Safari do not support the File System Access API required for folder sync.
-              Use <strong>Export backup (JSON)</strong> below to manually back up your data in any browser.
-            </p>
-          </div>
-        )}
-      </section>
+            <input
+              ref={importRef}
+              type="file"
+              accept=".json"
+              className="hidden"
+              onChange={handleImport}
+            />
+          </section>
 
-      <Separator />
-
-      {/* Import / Export */}
-      <section className={section}>
-        <h2 className={sectionTitle}>Backup &amp; Restore</h2>
-        <div className="flex gap-3">
-          <Button variant="outline" onClick={handleExport}>
-            Export backup (JSON)
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => importRef.current?.click()}
-            disabled={importing}
-          >
-            {importing ? 'Importing…' : 'Import backup (JSON)'}
-          </Button>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Import will replace all existing data. Make sure to export a backup first.
-        </p>
-        <input
-          ref={importRef}
-          type="file"
-          accept=".json"
-          className="hidden"
-          onChange={handleImport}
-        />
-      </section>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
