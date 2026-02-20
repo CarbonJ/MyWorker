@@ -7,9 +7,7 @@
  */
 
 import { useRef, useState, type ReactNode } from 'react'
-
-const SPLIT_MIN_PCT = 20
-const SPLIT_MAX_PCT = 80
+import { SPLIT_MIN_PCT, SPLIT_MAX_PCT, SPLIT_DEFAULT_PCT } from '@/lib/constants'
 
 interface Props {
   left: ReactNode
@@ -17,7 +15,7 @@ interface Props {
   initialSplitPct?: number
 }
 
-export function SplitPane({ left, right, initialSplitPct = 60 }: Props) {
+export function SplitPane({ left, right, initialSplitPct = SPLIT_DEFAULT_PCT }: Props) {
   const [splitPct, setSplitPct] = useState(initialSplitPct)
   const containerRef = useRef<HTMLDivElement>(null)
   const dragging = useRef(false)

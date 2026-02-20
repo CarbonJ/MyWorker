@@ -64,6 +64,16 @@ export async function importFromJson(file: File): Promise<void> {
   const validTaskStatus = new Set(['open', 'in_progress', 'done'])
   const validDropdownType = new Set(['priority', 'product_area', 'project_status'])
 
+  /** Matches YYYY-MM-DD (basic ISO date format check). */
+  const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
+  function requireIsoDate(value: unknown, label: string): void {
+    if (value !== null && value !== undefined) {
+      if (typeof value !== 'string' || !ISO_DATE_RE.test(value))
+        throw new Error(`${label}: must be a YYYY-MM-DD date string, got "${value}"`)
+    }
+  }
+
   for (const [i, opt] of (data.dropdownOptions ?? []).entries()) {
     if (typeof opt.id !== 'number' || opt.id <= 0)
       throw new Error(`dropdownOptions[${i}]: invalid id`)
@@ -72,6 +82,9 @@ export async function importFromJson(file: File): Promise<void> {
     if (typeof opt.label !== 'string' || !(opt.label as string).trim())
       throw new Error(`dropdownOptions[${i}]: label must be a non-empty string`)
   }
+
+  // Build a set of valid project IDs for referential integrity checks below.
+  const projectIds = new Set(data.projects.map(p => p.id as number))
 
   for (const [i, p] of data.projects.entries()) {
     if (typeof p.id !== 'number' || p.id <= 0)
@@ -87,6 +100,8 @@ export async function importFromJson(file: File): Promise<void> {
       throw new Error(`workLogEntries[${i}]: invalid id`)
     if (typeof e.project_id !== 'number' || e.project_id <= 0)
       throw new Error(`workLogEntries[${i}]: invalid project_id`)
+    if (!projectIds.has(e.project_id as number))
+      throw new Error(`workLogEntries[${i}]: project_id ${e.project_id} does not match any project in the backup`)
     if (typeof e.note !== 'string')
       throw new Error(`workLogEntries[${i}]: note must be a string`)
   }
@@ -94,12 +109,16 @@ export async function importFromJson(file: File): Promise<void> {
   for (const [i, t] of (data.tasks ?? []).entries()) {
     if (typeof t.id !== 'number' || t.id <= 0)
       throw new Error(`tasks[${i}]: invalid id`)
-    if (typeof t.project_id !== 'number' || t.project_id <= 0)
-      throw new Error(`tasks[${i}]: invalid project_id`)
+    if (typeof t.project_id !== 'number' && t.project_id !== null && t.project_id !== undefined)
+      throw new Error(`tasks[${i}]: project_id must be a number or null`)
+    if (typeof t.project_id === 'number' && !projectIds.has(t.project_id))
+      throw new Error(`tasks[${i}]: project_id ${t.project_id} does not match any project in the backup`)
     if (typeof t.title !== 'string' || !(t.title as string).trim())
       throw new Error(`tasks[${i}]: title must be a non-empty string`)
     if (!validTaskStatus.has(t.status as string))
       throw new Error(`tasks[${i}]: invalid status "${t.status}"`)
+    requireIsoDate(t.start_date, `tasks[${i}].start_date`)
+    requireIsoDate(t.due_date,   `tasks[${i}].due_date`)
   }
 
   // All destructive operations run inside a transaction.

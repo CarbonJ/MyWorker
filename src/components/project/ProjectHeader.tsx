@@ -13,6 +13,7 @@ import { MarkdownContent } from '@/components/MarkdownContent'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { pillClass, dotClass } from '@/lib/colors'
+import { DESC_EXPAND_CHAR_THRESHOLD, DESC_EXPAND_LINE_THRESHOLD } from '@/lib/constants'
 
 interface Props {
   project: Project
@@ -91,7 +92,7 @@ export function ProjectHeader({
               <div className={descExpanded ? undefined : 'line-clamp-3'}>
                 <MarkdownContent className="text-sm text-muted-foreground">{project.workDescription}</MarkdownContent>
               </div>
-              {(project.workDescription.length > 200 || project.workDescription.split('\n').length > 3) && (
+              {(project.workDescription.length > DESC_EXPAND_CHAR_THRESHOLD || project.workDescription.split('\n').length > DESC_EXPAND_LINE_THRESHOLD) && (
                 <button
                   onClick={() => setDescExpanded(v => !v)}
                   className="text-xs text-muted-foreground hover:text-foreground mt-0.5"

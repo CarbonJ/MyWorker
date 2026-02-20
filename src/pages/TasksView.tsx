@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { getAllTasks, createTask, updateTask } from '@/db/tasks'
 import { getAllProjectsIncludingArchived } from '@/db/projects'
@@ -12,6 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar'
 
 import { pillClass, dotClass } from '@/lib/colors'
+import { useDataLoader } from '@/hooks/useDataLoader'
 import { useErrorHandler } from '@/hooks/useErrorHandler'
 import { fmtDate, isOverdue, isDueToday } from '@/lib/utils'
 
@@ -53,15 +54,17 @@ function StatusCircle({ status }: { status: TaskStatus }) {
 type TaskSortField = 'project' | 'status' | 'priority' | 'dueDate'
 type SortDir = 'asc' | 'desc'
 
+interface PageData {
+  tasks: Task[]
+  projects: Project[]
+  priorities: DropdownOption[]
+  productAreas: DropdownOption[]
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function TasksView() {
   const { handleError } = useErrorHandler()
-  const [tasks,        setTasks]        = useState<Task[]>([])
-  const [projects,     setProjects]     = useState<Project[]>([])
-  const [priorities,   setPriorities]   = useState<DropdownOption[]>([])
-  const [productAreas, setProductAreas] = useState<DropdownOption[]>([])
-
   const [taskModalOpen, setTaskModalOpen] = useState(false)
   const [editingTask,   setEditingTask]   = useState<Task | null>(null)
 
@@ -80,24 +83,23 @@ export default function TasksView() {
   const [sortField,      setSortField]      = useState<TaskSortField>('dueDate')
   const [sortDir,        setSortDir]        = useState<SortDir>('asc')
 
-  const load = useCallback(async () => {
-    try {
-      const [ts, ps, pris, areas] = await Promise.all([
+  const { data, reload: load } = useDataLoader<PageData>(
+    async () => {
+      const [tasks, projects, priorities, productAreas] = await Promise.all([
         getAllTasks(),
         getAllProjectsIncludingArchived(),
         getDropdownOptions('priority'),
         getDropdownOptions('product_area'),
       ])
-      setTasks(ts)
-      setProjects(ps)
-      setPriorities(pris)
-      setProductAreas(areas)
-    } catch (err) {
-      handleError(err, 'Failed to load tasks')
-    }
-  }, [])
+      return { tasks, projects, priorities, productAreas }
+    },
+    'Failed to load tasks',
+  )
 
-  useEffect(() => { load() }, [load])
+  const tasks        = data?.tasks        ?? []
+  const projects     = data?.projects     ?? []
+  const priorities   = data?.priorities   ?? []
+  const productAreas = data?.productAreas ?? []
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 

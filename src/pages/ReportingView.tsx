@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useState, useMemo } from 'react'
 import { getAllProjects } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
 import { getAllTasks } from '@/db/tasks'
@@ -9,23 +9,22 @@ import { ReportingExportModal } from '@/components/ReportingExportModal'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { RAG_ORDER, pillClass, dotClass } from '@/lib/colors'
-import { useErrorHandler } from '@/hooks/useErrorHandler'
+import { useDataLoader } from '@/hooks/useDataLoader'
 import { fmtDate } from '@/lib/utils'
 
 type SortKey = 'ragStatus' | 'workItem' | 'productArea' | 'priority' | 'latestStatus' | 'projectStatus' | 'openTasks'
 type SortDir = 'asc' | 'desc'
 
+interface PageData {
+  projects: Project[]
+  priorities: DropdownOption[]
+  productAreas: DropdownOption[]
+  projectStatuses: DropdownOption[]
+  allTasks: Task[]
+  allWorkLog: WorkLogEntry[]
+}
 
 export default function ReportingView() {
-  const [projects,        setProjects]        = useState<Project[]>([])
-  const [priorities,      setPriorities]      = useState<DropdownOption[]>([])
-  const [productAreas,    setProductAreas]    = useState<DropdownOption[]>([])
-  const [projectStatuses, setProjectStatuses] = useState<DropdownOption[]>([])
-  const [allTasks,        setAllTasks]        = useState<Task[]>([])
-  const [allWorkLog,      setAllWorkLog]      = useState<WorkLogEntry[]>([])
-
-  const { handleError } = useErrorHandler()
-
   const [sortKey, setSortKey] = useState<SortKey>('ragStatus')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
 
@@ -36,9 +35,9 @@ export default function ReportingView() {
   // Export modal
   const [exportOpen, setExportOpen] = useState(false)
 
-  const load = useCallback(async () => {
-    try {
-      const [ps, pris, areas, statuses, tasks, log] = await Promise.all([
+  const { data, reload: load } = useDataLoader<PageData>(
+    async () => {
+      const [projects, priorities, productAreas, projectStatuses, allTasks, allWorkLog] = await Promise.all([
         getAllProjects(),
         getDropdownOptions('priority'),
         getDropdownOptions('product_area'),
@@ -46,18 +45,17 @@ export default function ReportingView() {
         getAllTasks(),
         getAllWorkLogEntries(),
       ])
-      setProjects(ps)
-      setPriorities(pris)
-      setProductAreas(areas)
-      setProjectStatuses(statuses)
-      setAllTasks(tasks)
-      setAllWorkLog(log)
-    } catch (err) {
-      handleError(err, 'Failed to load projects')
-    }
-  }, [])
+      return { projects, priorities, productAreas, projectStatuses, allTasks, allWorkLog }
+    },
+    'Failed to load projects',
+  )
 
-  useEffect(() => { load() }, [load])
+  const projects        = data?.projects        ?? []
+  const priorities      = data?.priorities      ?? []
+  const productAreas    = data?.productAreas    ?? []
+  const projectStatuses = data?.projectStatuses ?? []
+  const allTasks        = data?.allTasks        ?? []
+  const allWorkLog      = data?.allWorkLog      ?? []
 
   const labelFor = (opts: DropdownOption[], id: number | null) =>
     opts.find(o => o.id === id)?.label ?? '—'

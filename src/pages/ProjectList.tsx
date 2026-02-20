@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getAllProjects } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
@@ -12,20 +12,23 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { RAG_ORDER, pillClass, dotClass } from '@/lib/colors'
 import { fmtDate } from '@/lib/utils'
-import { useErrorHandler } from '@/hooks/useErrorHandler'
+import { useDataLoader } from '@/hooks/useDataLoader'
+import { SEARCH_DEBOUNCE_MS } from '@/lib/constants'
 
 type SortKey = 'workItem' | 'productArea' | 'priority' | 'ragStatus' | 'latestStatus' | 'updatedAt' | 'openTasks'
 type SortDir = 'asc' | 'desc'
 
+interface PageData {
+  projects: Project[]
+  priorities: DropdownOption[]
+  productAreas: DropdownOption[]
+  projectStatuses: DropdownOption[]
+  allTasks: Task[]
+  allWorkLog: WorkLogEntry[]
+}
+
 export default function ProjectList() {
   const navigate = useNavigate()
-  const { handleError } = useErrorHandler()
-  const [projects, setProjects] = useState<Project[]>([])
-  const [priorities, setPriorities] = useState<DropdownOption[]>([])
-  const [productAreas, setProductAreas] = useState<DropdownOption[]>([])
-  const [projectStatuses, setProjectStatuses] = useState<DropdownOption[]>([])
-  const [allTasks,        setAllTasks]        = useState<Task[]>([])
-  const [allWorkLog,      setAllWorkLog]      = useState<WorkLogEntry[]>([])
   const [search, setSearch] = useState('')
   const [searchIds, setSearchIds] = useState<number[] | null>(null)
   const [sortKey, setSortKey] = useState<SortKey>('updatedAt')
@@ -35,9 +38,9 @@ export default function ProjectList() {
   const [areaFilter, setAreaFilter] = useState<string>('All')          // 'All' | product_area id as string
   const [statusFilter, setStatusFilter] = useState<string>('All')      // 'All' | project_status id as string
 
-  const load = useCallback(async () => {
-    try {
-      const [ps, pris, areas, statuses, tasks, log] = await Promise.all([
+  const { data } = useDataLoader<PageData>(
+    async () => {
+      const [projects, priorities, productAreas, projectStatuses, allTasks, allWorkLog] = await Promise.all([
         getAllProjects(),
         getDropdownOptions('priority'),
         getDropdownOptions('product_area'),
@@ -45,26 +48,25 @@ export default function ProjectList() {
         getAllTasks(),
         getAllWorkLogEntries(),
       ])
-      setProjects(ps)
-      setPriorities(pris)
-      setProductAreas(areas)
-      setProjectStatuses(statuses)
-      setAllTasks(tasks)
-      setAllWorkLog(log)
-    } catch (err) {
-      handleError(err, 'Failed to load projects')
-    }
-  }, [])
+      return { projects, priorities, productAreas, projectStatuses, allTasks, allWorkLog }
+    },
+    'Failed to load projects',
+  )
 
-  useEffect(() => { load() }, [load])
+  const projects       = data?.projects       ?? []
+  const priorities     = data?.priorities     ?? []
+  const productAreas   = data?.productAreas   ?? []
+  const projectStatuses = data?.projectStatuses ?? []
+  const allTasks       = data?.allTasks       ?? []
+  const allWorkLog     = data?.allWorkLog     ?? []
 
-  // Full-text search — debounced 200ms
+  // Full-text search — debounced
   useEffect(() => {
     if (!search.trim()) { setSearchIds(null); return }
     const t = setTimeout(async () => {
       const ids = await searchProjectIds(search)
       setSearchIds(ids)
-    }, 200)
+    }, SEARCH_DEBOUNCE_MS)
     return () => clearTimeout(t)
   }, [search])
 
