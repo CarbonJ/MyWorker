@@ -44,18 +44,18 @@
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-ring: var(--sidebar-ring);
-    /* Slate color scale (Tailwind standard converted to OKLCH) */
-    --color-slate-50: oklch(0.984 0 0);
-    --color-slate-100: oklch(0.968 0 0);
-    --color-slate-200: oklch(0.929 0 0);
-    --color-slate-300: oklch(0.831 0 0);
-    --color-slate-400: oklch(0.710 0 0);
-    --color-slate-500: oklch(0.554 0 0);
-    --color-slate-600: oklch(0.446 0 0);
-    --color-slate-700: oklch(0.369 0 0);
-    --color-slate-800: oklch(0.254 0 0);
-    --color-slate-900: oklch(0.169 0 0);
-    --color-slate-950: oklch(0.100 0 0);
+    /* Slate color scale */
+    --color-slate-50: var(--slate-50);
+    --color-slate-100: var(--slate-100);
+    --color-slate-200: var(--slate-200);
+    --color-slate-300: var(--slate-300);
+    --color-slate-400: var(--slate-400);
+    --color-slate-500: var(--slate-500);
+    --color-slate-600: var(--slate-600);
+    --color-slate-700: var(--slate-700);
+    --color-slate-800: var(--slate-800);
+    --color-slate-900: var(--slate-900);
+    --color-slate-950: var(--slate-950);
 }
 
 :root {
@@ -91,6 +91,17 @@
     --sidebar-accent-foreground: oklch(0.205 0 0);
     --sidebar-border: oklch(0.922 0 0);
     --sidebar-ring: oklch(0.708 0 0);
+    --slate-50: oklch(0.984 0 0);
+    --slate-100: oklch(0.968 0 0);
+    --slate-200: oklch(0.929 0 0);
+    --slate-300: oklch(0.831 0 0);
+    --slate-400: oklch(0.710 0 0);
+    --slate-500: oklch(0.554 0 0);
+    --slate-600: oklch(0.446 0 0);
+    --slate-700: oklch(0.369 0 0);
+    --slate-800: oklch(0.254 0 0);
+    --slate-900: oklch(0.169 0 0);
+    --slate-950: oklch(0.100 0 0);
 }
 
 .dark {
@@ -125,6 +136,17 @@
     --sidebar-accent-foreground: oklch(0.985 0 0);
     --sidebar-border: oklch(1 0 0 / 10%);
     --sidebar-ring: oklch(0.556 0 0);
+    --slate-50: oklch(0.984 0 0);
+    --slate-100: oklch(0.968 0 0);
+    --slate-200: oklch(0.929 0 0);
+    --slate-300: oklch(0.831 0 0);
+    --slate-400: oklch(0.710 0 0);
+    --slate-500: oklch(0.554 0 0);
+    --slate-600: oklch(0.446 0 0);
+    --slate-700: oklch(0.369 0 0);
+    --slate-800: oklch(0.254 0 0);
+    --slate-900: oklch(0.169 0 0);
+    --slate-950: oklch(0.100 0 0);
 }
 
 @layer base {
