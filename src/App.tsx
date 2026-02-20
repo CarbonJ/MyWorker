@@ -21,8 +21,8 @@ function DueDateBanner() {
       const n = tasks.length
       setCount(n)
       document.title = n > 0 ? `(${n}) MyWorker` : 'MyWorker'
-    }).catch(err => {
-      console.warn('[app] Failed to load due-soon tasks', err)
+    }).catch(() => {
+      // Non-critical — banner simply won't show if this fails
     })
   }, [])
 

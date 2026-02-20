@@ -219,7 +219,6 @@ export default function Settings() {
       await exportToJson()
       toast.success('Backup downloaded')
     } catch (err) {
-      console.error('Export failed', err)
       toast.error(`Export failed: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
@@ -260,7 +259,6 @@ export default function Settings() {
       toast.success('Storage folder updated')
     } catch (err) {
       if (err instanceof Error && err.name !== 'AbortError') {
-        console.error('Failed to change folder', err)
         toast.error(`Failed to change folder: ${err.message}`)
       }
       // AbortError = user cancelled the picker, nothing to do

@@ -191,8 +191,20 @@ export function setUserFolderHandle(dirHandle: FileSystemDirectoryHandle): void 
   if (instance) instance.dirHandle = dirHandle
 }
 
-/** Helper: execute SQL, returning all result rows.
- *  Serialised through execMutex — SQLite does not support concurrent ops. */
+/**
+ * Execute SQL and return all result rows.
+ *
+ * Serialised through execMutex so concurrent callers queue up rather than
+ * interleaving their prepare/step/finalize calls, which would corrupt state.
+ *
+ * Use exec() directly when:
+ *   - Running statements inside a manual BEGIN/COMMIT transaction (call
+ *     persistToUserFolder() yourself once after COMMIT)
+ *   - Running read-only queries that don't need OneDrive sync
+ *
+ * Use run() for simple one-shot writes outside a transaction — it calls
+ * persistToUserFolder() automatically so OneDrive stays up to date.
+ */
 export function exec(
   sqlite: SQLite.SQLiteAPI,
   db: number,
@@ -206,6 +218,15 @@ export function exec(
   return result
 }
 
+/**
+ * Internal implementation of exec().
+ *
+ * Uses the wa-sqlite `statements()` async iterator, which handles the
+ * prepare → step → finalize lifecycle for each SQL statement. A single
+ * `sql` string may contain multiple statements separated by semicolons
+ * (e.g. the multi-statement migration strings), and the iterator processes
+ * each one in sequence. Parameters are bound positionally (? placeholders).
+ */
 async function _execInner(
   sqlite: SQLite.SQLiteAPI,
   db: number,
@@ -238,7 +259,7 @@ async function _execInner(
   return rows
 }
 
-/** Convenience: run a query using the active db instance. */
+/** Convenience wrapper: run a read query using the active db instance. */
 export async function query(
   sql: string,
   params: SQLiteCompatibleType[] = [],
@@ -247,7 +268,14 @@ export async function query(
   return exec(sqlite, db, sql, params)
 }
 
-/** Convenience: run a write statement and persist to OneDrive. */
+/**
+ * Convenience wrapper: run a single write statement and persist to OneDrive.
+ *
+ * Do NOT use run() inside a BEGIN/COMMIT transaction — it calls
+ * persistToUserFolder() immediately, which would sync a partial (mid-transaction)
+ * database snapshot to OneDrive. Instead use exec() directly and call
+ * persistToUserFolder() once after the COMMIT.
+ */
 export async function run(
   sql: string,
   params: SQLiteCompatibleType[] = [],

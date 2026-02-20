@@ -73,8 +73,16 @@ export async function searchProjectIds(rawQuery: string): Promise<number[]> {
   return ids
 }
 
-/** Escape special FTS5 characters in a token */
+/**
+ * Strip FTS5 special characters from a single search token.
+ *
+ * Why strip rather than quote/escape: FTS5 supports wrapping tokens in double
+ * quotes to treat them as literals, but quoted tokens cannot carry the trailing
+ * `*` wildcard needed for prefix matching ("repo"* is a syntax error). Stripping
+ * the handful of special characters (`"`, `^`, `*`, `:`, `.`) is simpler and
+ * covers all realistic user input — these characters have no meaningful search
+ * value in this app's content anyway.
+ */
 function escapeFtsToken(token: string): string {
-  // FTS5 special chars: " ^ * : .  — wrap in quotes to be safe, then strip quotes for prefix
   return token.replace(/["^*:.]/g, '')
 }

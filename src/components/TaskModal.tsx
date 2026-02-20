@@ -103,7 +103,6 @@ export function TaskModal({ projectId: initialProjectId, task, open, onClose, on
       onSaved()
       onClose()
     } catch (err) {
-      console.error('Failed to save task', err)
       toast.error(`Failed to save task: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setSaving(false)
@@ -118,7 +117,6 @@ export function TaskModal({ projectId: initialProjectId, task, open, onClose, on
       onSaved()
       onClose()
     } catch (err) {
-      console.error('Failed to delete task', err)
       toast.error(`Failed to delete task: ${err instanceof Error ? err.message : String(err)}`)
     }
   }

@@ -2,7 +2,18 @@
  * Import / Export
  *
  * Export: serialises all data to a JSON file and triggers a browser download.
- * Import: reads a previously exported JSON file and restores all data.
+ *
+ * Import sequencing (order matters):
+ *   1. Parse JSON and validate all records — no data is touched if anything is invalid.
+ *   2. Open a database transaction (BEGIN).
+ *   3. Delete existing data and restore from the backup file.
+ *   4. Rebuild the FTS index from scratch — the index is derived data and is not
+ *      stored in the backup file, so it must be regenerated after every import.
+ *   5. Commit and persist to the OneDrive folder.
+ *
+ * The transaction guarantees that if anything fails after step 2, the database
+ * automatically rolls back to its original state. The user's data is never
+ * partially replaced.
  */
 
 import { query, exec, getDb, persistToUserFolder } from './index'

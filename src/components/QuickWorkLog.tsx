@@ -74,7 +74,6 @@ function QuickWorkLogModal({ open, onClose, defaultProjectId }: ModalProps) {
       toast.success('Work log entry added')
       onClose()
     } catch (err) {
-      console.error('Failed to add entry', err)
       toast.error(`Failed to add entry: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setSaving(false)

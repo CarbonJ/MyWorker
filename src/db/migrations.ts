@@ -1,8 +1,19 @@
 /**
  * Schema migrations
  *
- * Each migration has a version number. The db tracks the current version
- * in the user_version PRAGMA. Only new migrations are applied on startup.
+ * How the system works:
+ * - SQLite's built-in `user_version` PRAGMA stores the current schema version.
+ *   It starts at 0 on a fresh database and is bumped to `migration.version`
+ *   after each migration runs successfully.
+ * - On every app startup, runMigrations() checks user_version and applies only
+ *   the migrations with a version number higher than the stored value.
+ *   This means migrations run exactly once per installation, in order.
+ *
+ * IMPORTANT — never edit an existing migration:
+ *   Once a migration has been applied to any real database it cannot safely be
+ *   changed. Editing it only affects new installations — existing ones have
+ *   already run that version and will never re-run it. To make a schema change,
+ *   always add a new migration with the next version number.
  */
 
 import type { DbHandle } from './index'
@@ -275,17 +286,20 @@ const migrations: Migration[] = [
 export async function runMigrations(handle: DbHandle): Promise<void> {
   const { sqlite, db } = handle
 
-  // Get current schema version
+  // Read the version that was last successfully applied on this device
   const versionRows = await exec(sqlite, db, 'PRAGMA user_version;')
   const currentVersion = Number(versionRows[0]?.user_version ?? 0)
 
-  // Apply any migrations newer than current version
+  // Skip if already up to date (the common case on subsequent app loads)
   const pending = migrations.filter(m => m.version > currentVersion)
   if (pending.length === 0) return
 
   for (const migration of pending) {
     try {
       await exec(sqlite, db, migration.up)
+      // Bump user_version only after the migration succeeds.
+      // If the migration throws, user_version stays at the previous value
+      // and the migration will be retried on the next startup.
       await exec(sqlite, db, `PRAGMA user_version = ${migration.version};`)
     } catch (err) {
       console.error(`[db] Migration v${migration.version} FAILED`, err)

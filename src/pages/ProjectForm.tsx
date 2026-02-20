@@ -58,7 +58,6 @@ export default function ProjectForm() {
         setLinkedJiras(p.linkedJiras)
       }
     } catch (err) {
-      console.error('Failed to load project form', err)
       toast.error(`Failed to load: ${err instanceof Error ? err.message : String(err)}`)
     }
   }, [id, isEdit, navigate])
@@ -93,7 +92,6 @@ export default function ProjectForm() {
         navigate(`/projects/${newId}`)
       }
     } catch (err) {
-      console.error('Failed to save project', err)
       toast.error(`Failed to save project: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setSaving(false)
@@ -107,7 +105,6 @@ export default function ProjectForm() {
       toast.success('Project deleted')
       navigate('/')
     } catch (err) {
-      console.error('Failed to delete project', err)
       toast.error(`Failed to delete project: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
