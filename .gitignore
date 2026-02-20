@@ -15,9 +15,11 @@ dist-ssr
 # Claude Code local config
 .claude/
 
-# Refactor working document (local only)
+# Local working documents (never shipped)
 REFACTOR.md
 REFACTOR_PREVIEW.txt
+TODO.md
+CLAUDE.md
 
 # Editor directories and files
 .vscode/*
