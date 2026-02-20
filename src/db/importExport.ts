@@ -5,7 +5,7 @@
  * Import: reads a previously exported JSON file and restores all data.
  */
 
-import { query, run } from './index'
+import { query, exec, getDb, persistToUserFolder } from './index'
 
 interface ExportData {
   version: number
@@ -102,79 +102,92 @@ export async function importFromJson(file: File): Promise<void> {
       throw new Error(`tasks[${i}]: invalid status "${t.status}"`)
   }
 
-  // Clear existing data (CASCADE deletes handle related records)
-  await run('DELETE FROM dropdown_options')
-  await run('DELETE FROM projects')
+  // All destructive operations run inside a transaction.
+  // If anything fails after the deletes, the database rolls back
+  // to its original state — no data is lost.
+  const { sqlite, db } = getDb()
+  await exec(sqlite, db, 'BEGIN')
+  try {
+    // Clear existing data (CASCADE deletes handle related records)
+    await exec(sqlite, db, 'DELETE FROM dropdown_options')
+    await exec(sqlite, db, 'DELETE FROM projects')
 
-  // Restore dropdown options first (projects reference them)
-  for (const opt of data.dropdownOptions) {
-    await run(
-      `INSERT INTO dropdown_options (id, type, label, sort_order, color) VALUES (?, ?, ?, ?, ?)`,
-      [opt.id as number, opt.type as string, opt.label as string, opt.sort_order as number, (opt.color as string) ?? ''],
-    )
+    // Restore dropdown options first (projects reference them)
+    for (const opt of data.dropdownOptions) {
+      await exec(sqlite, db,
+        `INSERT INTO dropdown_options (id, type, label, sort_order, color) VALUES (?, ?, ?, ?, ?)`,
+        [opt.id as number, opt.type as string, opt.label as string, opt.sort_order as number, (opt.color as string) ?? ''],
+      )
+    }
+
+    // Restore projects
+    for (const p of data.projects) {
+      await exec(sqlite, db,
+        `INSERT INTO projects
+           (id, work_item, work_desc, rag_status, priority_id, latest_status,
+            product_area_id, status_id, stakeholders, linked_jiras, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          p.id as number, p.work_item as string, p.work_desc as string,
+          p.rag_status as string, p.priority_id as number | null,
+          p.latest_status as string, p.product_area_id as number | null,
+          (p.status_id as number | null) ?? null,
+          p.stakeholders as string, p.linked_jiras as string,
+          p.created_at as string, p.updated_at as string,
+        ],
+      )
+    }
+
+    // Restore work log entries
+    for (const e of data.workLogEntries) {
+      await exec(sqlite, db,
+        `INSERT INTO work_log_entries (id, project_id, note, created_at) VALUES (?, ?, ?, ?)`,
+        [e.id as number, e.project_id as number, e.note as string, e.created_at as string],
+      )
+    }
+
+    // Restore tasks
+    for (const t of data.tasks) {
+      await exec(sqlite, db,
+        `INSERT INTO tasks
+           (id, project_id, title, description, notes, status, owner,
+            start_date, due_date, priority_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          t.id as number, t.project_id as number, t.title as string,
+          t.description as string, t.notes as string, t.status as string,
+          t.owner as string, t.start_date as string | null,
+          t.due_date as string | null, t.priority_id as number | null,
+          t.created_at as string, t.updated_at as string,
+        ],
+      )
+    }
+
+    // Rebuild FTS index from scratch
+    await exec(sqlite, db, 'DELETE FROM fts_index')
+    await exec(sqlite, db, `
+      INSERT INTO fts_index (content, source_type, source_id, project_id)
+      SELECT
+        work_item || ' ' || work_desc || ' ' || latest_status || ' ' || stakeholders,
+        'project', id, id
+      FROM projects
+    `)
+    await exec(sqlite, db, `
+      INSERT INTO fts_index (content, source_type, source_id, project_id)
+      SELECT
+        title || ' ' || description || ' ' || notes || ' ' || owner,
+        'task', id, project_id
+      FROM tasks
+    `)
+    await exec(sqlite, db, `
+      INSERT INTO fts_index (content, source_type, source_id, project_id)
+      SELECT note, 'work_log', id, project_id FROM work_log_entries
+    `)
+
+    await exec(sqlite, db, 'COMMIT')
+  } catch (err) {
+    await exec(sqlite, db, 'ROLLBACK')
+    throw err
   }
-
-  // Restore projects
-  for (const p of data.projects) {
-    await run(
-      `INSERT INTO projects
-         (id, work_item, work_desc, rag_status, priority_id, latest_status,
-          product_area_id, status_id, stakeholders, linked_jiras, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        p.id as number, p.work_item as string, p.work_desc as string,
-        p.rag_status as string, p.priority_id as number | null,
-        p.latest_status as string, p.product_area_id as number | null,
-        (p.status_id as number | null) ?? null,
-        p.stakeholders as string, p.linked_jiras as string,
-        p.created_at as string, p.updated_at as string,
-      ],
-    )
-  }
-
-  // Restore work log entries
-  for (const e of data.workLogEntries) {
-    await run(
-      `INSERT INTO work_log_entries (id, project_id, note, created_at) VALUES (?, ?, ?, ?)`,
-      [e.id as number, e.project_id as number, e.note as string, e.created_at as string],
-    )
-  }
-
-  // Restore tasks
-  for (const t of data.tasks) {
-    await run(
-      `INSERT INTO tasks
-         (id, project_id, title, description, notes, status, owner,
-          start_date, due_date, priority_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        t.id as number, t.project_id as number, t.title as string,
-        t.description as string, t.notes as string, t.status as string,
-        t.owner as string, t.start_date as string | null,
-        t.due_date as string | null, t.priority_id as number | null,
-        t.created_at as string, t.updated_at as string,
-      ],
-    )
-  }
-
-  // Rebuild FTS index from scratch
-  await run('DELETE FROM fts_index')
-  await run(`
-    INSERT INTO fts_index (content, source_type, source_id, project_id)
-    SELECT
-      work_item || ' ' || work_desc || ' ' || latest_status || ' ' || stakeholders,
-      'project', id, id
-    FROM projects
-  `)
-  await run(`
-    INSERT INTO fts_index (content, source_type, source_id, project_id)
-    SELECT
-      title || ' ' || description || ' ' || notes || ' ' || owner,
-      'task', id, project_id
-    FROM tasks
-  `)
-  await run(`
-    INSERT INTO fts_index (content, source_type, source_id, project_id)
-    SELECT note, 'work_log', id, project_id FROM work_log_entries
-  `)
+  await persistToUserFolder()
 }

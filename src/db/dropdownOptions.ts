@@ -1,4 +1,4 @@
-import { query, run, lastInsertId } from './index'
+import { query, run, lastInsertId, exec, getDb, persistToUserFolder } from './index'
 import type { DropdownOption, DropdownType } from '@/types'
 
 function rowToOption(row: Record<string, unknown>): DropdownOption {
@@ -64,14 +64,25 @@ export async function deleteDropdownOption(id: number): Promise<void> {
   await run(`DELETE FROM dropdown_options WHERE id = ?`, [id])
 }
 
-/** Reorder a list of options by saving new sort_order values */
+/** Reorder a list of options by saving new sort_order values.
+ *  All updates run inside a transaction — if any step fails, the
+ *  database rolls back to its original state automatically. */
 export async function reorderDropdownOptions(
   orderedIds: number[],
 ): Promise<void> {
-  for (let i = 0; i < orderedIds.length; i++) {
-    await run(
-      `UPDATE dropdown_options SET sort_order = ? WHERE id = ?`,
-      [i, orderedIds[i]],
-    )
+  const { sqlite, db } = getDb()
+  await exec(sqlite, db, 'BEGIN')
+  try {
+    for (let i = 0; i < orderedIds.length; i++) {
+      await exec(sqlite, db,
+        `UPDATE dropdown_options SET sort_order = ? WHERE id = ?`,
+        [i, orderedIds[i]],
+      )
+    }
+    await exec(sqlite, db, 'COMMIT')
+  } catch (err) {
+    await exec(sqlite, db, 'ROLLBACK')
+    throw err
   }
+  await persistToUserFolder()
 }

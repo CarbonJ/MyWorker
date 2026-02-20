@@ -257,6 +257,19 @@ const migrations: Migration[] = [
     version: 6,
     up: `ALTER TABLE tasks ADD COLUMN pre_archive_status TEXT;`,
   },
+  {
+    version: 7,
+    up: `
+      -- Performance indexes for the most common query patterns.
+      -- Without these, every lookup scans every row; with them, SQLite jumps
+      -- directly to matching rows. Impact grows as data accumulates over time.
+      CREATE INDEX IF NOT EXISTS idx_projects_updated_at   ON projects(updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_tasks_project_id      ON tasks(project_id);
+      CREATE INDEX IF NOT EXISTS idx_tasks_due_date        ON tasks(due_date);
+      CREATE INDEX IF NOT EXISTS idx_worklog_project_id    ON work_log_entries(project_id);
+      CREATE INDEX IF NOT EXISTS idx_dropdown_type         ON dropdown_options(type);
+    `,
+  },
 ]
 
 export async function runMigrations(handle: DbHandle): Promise<void> {
