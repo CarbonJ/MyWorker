@@ -36,14 +36,55 @@
 
 ---
 
-## Getting Started
+## Installation & Deployment
+
+### For End Users
+
+1. Download the latest release from [GitHub Releases](https://github.com/CarbonJ/MyWorker/releases)
+2. Extract `myworker-app.zip` to a folder of your choice
+3. Run the appropriate launcher for your platform:
+   - **Windows:** Double-click `launch-myworker.bat`
+   - **macOS:** Double-click `launch-myworker.command` (or run via Terminal)
+   - **Linux:** Run `./launch-myworker.sh` from Terminal
+
+The app will open in your browser at `http://localhost:3000`. On first launch, you'll be prompted to choose a folder for the database file.
+
+For detailed setup and troubleshooting, see [DEPLOY.md](./DEPLOY.md).
+
+### For Developers
+
+To build and develop locally:
 
 ```bash
 npm install
 npm run dev
 ```
 
-The app will prompt you to choose a local folder on first launch — this is where the SQLite database file is stored. Placing it in a OneDrive folder gives you automatic sync and version history across devices.
+---
+
+## Getting Started (First Launch)
+
+On first launch, MyWorker will prompt you to choose a folder for the database file (`myworker.db`). This folder can be:
+
+- **Any local folder** on your machine
+- **A cloud-synced folder** (OneDrive, Google Drive, Dropbox, iCloud, Sync.com, etc.) for automatic backup and cross-device access
+- **A network folder** shared with other devices
+
+Once selected, MyWorker creates and manages the database automatically. The database file is portable — you can move it between machines and browsers as long as you select the same folder when prompted.
+
+---
+
+## Browser Compatibility
+
+MyWorker requires a recent version of:
+- Google Chrome / Chromium
+- Microsoft Edge
+- Mozilla Firefox
+- Safari
+
+**Required feature:** File System Access API (used to store the database in your chosen folder). Older browsers and Internet Explorer are not supported.
+
+The app works fully offline once running — an internet connection is only required for the initial download.
 
 ---
 
@@ -51,5 +92,5 @@ The app will prompt you to choose a local folder on first launch — this is whe
 
 - No server, no backend, no accounts
 - All data stored in a single `.sqlite` file on your local filesystem
-- OneDrive (or any sync folder) provides cross-device access and free version history
-- PWA service worker caches all assets for full offline use
+- Cloud services (OneDrive, Google Drive, etc.) provide optional cross-device access and version history — not required
+- PWA service worker caches all assets for full offline use — the app works completely offline once launched
