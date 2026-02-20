@@ -12,11 +12,15 @@ dist
 dist-ssr
 *.local
 
+# Claude Code local config
+.claude/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
+myworker-app.zip
 *.suo
 *.ntvs*
 *.njsproj
