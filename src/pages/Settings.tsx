@@ -10,6 +10,7 @@ import {
 import { exportToJson, importFromJson } from '@/db/importExport'
 import { setUserFolderHandle, query } from '@/db'
 import type { DropdownOption, DropdownType } from '@/types'
+import { useErrorHandler } from '@/hooks/useErrorHandler'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
@@ -55,6 +56,7 @@ function ColorPicker({ value, onChange }: { value: string; onChange: (c: string)
 // ── Dropdown Option List Manager ─────────────────────────────────────────────
 
 function OptionList({ type, title }: { type: DropdownType; title: string }) {
+  const { handleError } = useErrorHandler()
   const [options, setOptions] = useState<DropdownOption[]>([])
   const [newLabel, setNewLabel] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -75,8 +77,7 @@ function OptionList({ type, title }: { type: DropdownType; title: string }) {
       setNewLabel('')
       load()
     } catch (err) {
-      console.error('Failed to add option', err)
-      toast.error(`Failed to add option: ${err instanceof Error ? err.message : String(err)}`)
+      handleError(err, 'Failed to add option')
     }
   }
 
@@ -87,8 +88,7 @@ function OptionList({ type, title }: { type: DropdownType; title: string }) {
       setEditingId(null)
       load()
     } catch (err) {
-      console.error('Failed to update option', err)
-      toast.error(`Failed to update option: ${err instanceof Error ? err.message : String(err)}`)
+      handleError(err, 'Failed to update option')
     }
   }
 
@@ -97,7 +97,7 @@ function OptionList({ type, title }: { type: DropdownType; title: string }) {
       await updateDropdownOption(opt.id, opt.label, opt.sortOrder, color)
       load()
     } catch (err) {
-      toast.error(`Failed to update color: ${err instanceof Error ? err.message : String(err)}`)
+      handleError(err, 'Failed to update color')
     }
   }
 
@@ -107,8 +107,7 @@ function OptionList({ type, title }: { type: DropdownType; title: string }) {
       await deleteDropdownOption(id)
       load()
     } catch (err) {
-      console.error('Failed to delete option', err)
-      toast.error(`Failed to delete option: ${err instanceof Error ? err.message : String(err)}`)
+      handleError(err, 'Failed to delete option')
     }
   }
 

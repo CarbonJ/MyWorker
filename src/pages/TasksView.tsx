@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { toast } from 'sonner'
 import { getAllTasks, createTask, updateTask } from '@/db/tasks'
 import { getAllProjectsIncludingArchived } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
@@ -12,7 +11,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
 
-// ── Shared display constants (mirrors ProjectDetail) ──────────────────────────
+import { pillClass, dotClass } from '@/lib/colors'
+import { useErrorHandler } from '@/hooks/useErrorHandler'
+import { fmtDate, isOverdue, isDueToday } from '@/lib/utils'
+
+// ── Shared display constants ──────────────────────────────────────────────────
 
 const STATUS_LABEL: Record<string, string> = {
   open: 'Open',
@@ -24,34 +27,6 @@ const STATUS_CLASS: Record<string, string> = {
   open: 'bg-slate-100 text-slate-700',
   in_progress: 'bg-blue-100 text-blue-700',
   done: 'bg-green-100 text-green-700',
-}
-
-const COLOR_CLASS: Record<string, string> = {
-  red:    'bg-red-100 text-red-700 border-red-200',
-  orange: 'bg-orange-100 text-orange-700 border-orange-200',
-  amber:  'bg-amber-100 text-amber-700 border-amber-200',
-  green:  'bg-green-100 text-green-700 border-green-200',
-  blue:   'bg-blue-100 text-blue-700 border-blue-200',
-  purple: 'bg-purple-100 text-purple-700 border-purple-200',
-  grey:   'bg-slate-100 text-slate-600 border-slate-200',
-}
-
-const DOT_CLASS: Record<string, string> = {
-  red:    'bg-red-500',
-  orange: 'bg-orange-500',
-  amber:  'bg-amber-500',
-  green:  'bg-green-500',
-  blue:   'bg-blue-500',
-  purple: 'bg-purple-500',
-  grey:   'bg-slate-400',
-}
-
-function priorityClass(color: string): string {
-  return COLOR_CLASS[color] ?? 'bg-slate-100 text-slate-600 border-slate-200'
-}
-
-function priorityDot(color: string): string {
-  return DOT_CLASS[color] ?? 'bg-slate-400'
 }
 
 function cycleStatus(current: TaskStatus): TaskStatus {
@@ -72,18 +47,6 @@ function StatusCircle({ status }: { status: TaskStatus }) {
   return <span className="w-5 h-5 rounded-full border-2 border-slate-300" />
 }
 
-function fmtDate(iso: string): string {
-  const [y, m, d] = iso.split('-')
-  return `${m}/${d}/${y.slice(2)}`
-}
-
-function isOverdue(dueDate: string | null): boolean {
-  return !!dueDate && new Date(dueDate) < new Date(new Date().toDateString())
-}
-
-function isDueToday(dueDate: string | null): boolean {
-  return !!dueDate && dueDate === new Date().toISOString().slice(0, 10)
-}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -93,6 +56,7 @@ type SortDir = 'asc' | 'desc'
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function TasksView() {
+  const { handleError } = useErrorHandler()
   const [tasks,        setTasks]        = useState<Task[]>([])
   const [projects,     setProjects]     = useState<Project[]>([])
   const [priorities,   setPriorities]   = useState<DropdownOption[]>([])
@@ -129,7 +93,7 @@ export default function TasksView() {
       setPriorities(pris)
       setProductAreas(areas)
     } catch (err) {
-      toast.error(`Failed to load tasks: ${err instanceof Error ? err.message : String(err)}`)
+      handleError(err, 'Failed to load tasks')
     }
   }, [])
 
@@ -144,7 +108,7 @@ export default function TasksView() {
       setInboxDraft('')
       await load()
     } catch (err) {
-      toast.error(`Failed to add task: ${err instanceof Error ? err.message : String(err)}`)
+      handleError(err, 'Failed to add task')
     }
   }
 
@@ -154,7 +118,7 @@ export default function TasksView() {
       await updateTask({ id: task.id, status: cycleStatus(task.status) })
       await load()
     } catch (err) {
-      toast.error(`Failed to update task: ${err instanceof Error ? err.message : String(err)}`)
+      handleError(err, 'Failed to update task')
     }
   }
 
@@ -279,7 +243,7 @@ export default function TasksView() {
             {priorities.map(p => (
               <SelectItem key={p.id} value={p.id.toString()}>
                 <span className="inline-flex items-center gap-1.5">
-                  <span className={`w-1.5 h-1.5 rounded-full ${priorityDot(p.color)}`} />
+                  <span className={`w-1.5 h-1.5 rounded-full ${dotClass(p.color)}`} />
                   {p.label}
                 </span>
               </SelectItem>
@@ -392,8 +356,8 @@ export default function TasksView() {
                 const lbl = opt?.label ?? '—'
                 const color = opt?.color ?? ''
                 return (
-                  <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full border ${isDone ? 'bg-muted text-muted-foreground border-transparent' : priorityClass(color)}`}>
-                    {!isDone && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${priorityDot(color)}`} />}
+                  <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full border ${isDone ? 'bg-muted text-muted-foreground border-transparent' : pillClass(color)}`}>
+                    {!isDone && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass(color)}`} />}
                     {lbl}
                   </span>
                 )
@@ -430,7 +394,7 @@ export default function TasksView() {
                         await updateTask({ id: task.id, dueDate: iso })
                         await load()
                       } catch (err) {
-                        toast.error(`Failed to update due date: ${err instanceof Error ? err.message : String(err)}`)
+                        handleError(err, 'Failed to update due date')
                       }
                     }}
                     initialFocus
@@ -445,7 +409,7 @@ export default function TasksView() {
                             await updateTask({ id: task.id, dueDate: null })
                             await load()
                           } catch (err) {
-                            toast.error(`Failed to clear due date: ${err instanceof Error ? err.message : String(err)}`)
+                            handleError(err, 'Failed to clear due date')
                           }
                         }}
                       >

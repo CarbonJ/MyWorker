@@ -1,5 +1,4 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
-import { toast } from 'sonner'
 import { getAllProjects } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
 import { getAllTasks } from '@/db/tasks'
@@ -9,44 +8,13 @@ import { RagBadge } from '@/components/RagBadge'
 import { ReportingExportModal } from '@/components/ReportingExportModal'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { RAG_ORDER, pillClass, dotClass } from '@/lib/colors'
+import { useErrorHandler } from '@/hooks/useErrorHandler'
+import { fmtDate } from '@/lib/utils'
 
 type SortKey = 'ragStatus' | 'workItem' | 'productArea' | 'priority' | 'latestStatus' | 'projectStatus' | 'openTasks'
 type SortDir = 'asc' | 'desc'
 
-const RAG_ORDER: Record<RagStatus, number> = { Red: 0, Amber: 1, Green: 2 }
-
-const COLOR_CLASS: Record<string, string> = {
-  red:    'bg-red-100 text-red-700 border-red-200',
-  orange: 'bg-orange-100 text-orange-700 border-orange-200',
-  amber:  'bg-amber-100 text-amber-700 border-amber-200',
-  green:  'bg-green-100 text-green-700 border-green-200',
-  blue:   'bg-blue-100 text-blue-700 border-blue-200',
-  purple: 'bg-purple-100 text-purple-700 border-purple-200',
-  grey:   'bg-slate-100 text-slate-600 border-slate-200',
-}
-
-const DOT_CLASS: Record<string, string> = {
-  red:    'bg-red-500',
-  orange: 'bg-orange-500',
-  amber:  'bg-amber-500',
-  green:  'bg-green-500',
-  blue:   'bg-blue-500',
-  purple: 'bg-purple-500',
-  grey:   'bg-slate-400',
-}
-
-function pillClass(color: string): string {
-  return COLOR_CLASS[color] ?? 'bg-slate-100 text-slate-600 border-slate-200'
-}
-
-function dotClass(color: string): string {
-  return DOT_CLASS[color] ?? 'bg-slate-400'
-}
-
-function fmtDate(iso: string): string {
-  const [y, m, d] = iso.split('-')
-  return `${m}/${d}/${y.slice(2)}`
-}
 
 export default function ReportingView() {
   const [projects,        setProjects]        = useState<Project[]>([])
@@ -55,6 +23,8 @@ export default function ReportingView() {
   const [projectStatuses, setProjectStatuses] = useState<DropdownOption[]>([])
   const [allTasks,        setAllTasks]        = useState<Task[]>([])
   const [allWorkLog,      setAllWorkLog]      = useState<WorkLogEntry[]>([])
+
+  const { handleError } = useErrorHandler()
 
   const [sortKey, setSortKey] = useState<SortKey>('ragStatus')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
@@ -83,8 +53,7 @@ export default function ReportingView() {
       setAllTasks(tasks)
       setAllWorkLog(log)
     } catch (err) {
-      console.error('Failed to load projects', err)
-      toast.error(`Failed to load projects: ${err instanceof Error ? err.message : String(err)}`)
+      handleError(err, 'Failed to load projects')
     }
   }, [])
 

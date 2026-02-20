@@ -1,6 +1,5 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { toast } from 'sonner'
 import { getAllProjects } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
 import { searchProjectIds } from '@/db/search'
@@ -11,47 +10,16 @@ import { RagBadge } from '@/components/RagBadge'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { RAG_ORDER, pillClass, dotClass } from '@/lib/colors'
+import { fmtDate } from '@/lib/utils'
+import { useErrorHandler } from '@/hooks/useErrorHandler'
 
 type SortKey = 'workItem' | 'productArea' | 'priority' | 'ragStatus' | 'latestStatus' | 'updatedAt' | 'openTasks'
 type SortDir = 'asc' | 'desc'
 
-const RAG_ORDER: Record<RagStatus, number> = { Red: 0, Amber: 1, Green: 2 }
-
-const COLOR_CLASS: Record<string, string> = {
-  red:    'bg-red-100 text-red-700 border-red-200',
-  orange: 'bg-orange-100 text-orange-700 border-orange-200',
-  amber:  'bg-amber-100 text-amber-700 border-amber-200',
-  green:  'bg-green-100 text-green-700 border-green-200',
-  blue:   'bg-blue-100 text-blue-700 border-blue-200',
-  purple: 'bg-purple-100 text-purple-700 border-purple-200',
-  grey:   'bg-slate-100 text-slate-600 border-slate-200',
-}
-
-const DOT_CLASS: Record<string, string> = {
-  red:    'bg-red-500',
-  orange: 'bg-orange-500',
-  amber:  'bg-amber-500',
-  green:  'bg-green-500',
-  blue:   'bg-blue-500',
-  purple: 'bg-purple-500',
-  grey:   'bg-slate-400',
-}
-
-function priorityClass(color: string): string {
-  return COLOR_CLASS[color] ?? 'bg-slate-100 text-slate-600 border-slate-200'
-}
-
-function priorityDot(color: string): string {
-  return DOT_CLASS[color] ?? 'bg-slate-400'
-}
-
-function fmtDate(iso: string): string {
-  const [, m, d] = iso.split('-')
-  return `${m}/${d}`
-}
-
 export default function ProjectList() {
   const navigate = useNavigate()
+  const { handleError } = useErrorHandler()
   const [projects, setProjects] = useState<Project[]>([])
   const [priorities, setPriorities] = useState<DropdownOption[]>([])
   const [productAreas, setProductAreas] = useState<DropdownOption[]>([])
@@ -84,8 +52,7 @@ export default function ProjectList() {
       setAllTasks(tasks)
       setAllWorkLog(log)
     } catch (err) {
-      console.error('Failed to load projects', err)
-      toast.error(`Failed to load projects: ${err instanceof Error ? err.message : String(err)}`)
+      handleError(err, 'Failed to load projects')
     }
   }, [])
 
@@ -207,7 +174,7 @@ export default function ProjectList() {
             {priorities.map(p => (
               <SelectItem key={p.id} value={String(p.id)}>
                 <span className="inline-flex items-center gap-1.5">
-                  <span className={`w-1.5 h-1.5 rounded-full ${priorityDot(p.color)}`} />
+                  <span className={`w-1.5 h-1.5 rounded-full ${dotClass(p.color)}`} />
                   {p.label}
                 </span>
               </SelectItem>
@@ -289,8 +256,8 @@ export default function ProjectList() {
                     const opt = priorities.find(o => o.id === p.priorityId)
                     const color = opt?.color ?? ''
                     return (
-                      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${priorityClass(color)}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${priorityDot(color)}`} />
+                      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${pillClass(color)}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${dotClass(color)}`} />
                         {opt?.label ?? '—'}
                       </span>
                     )
@@ -303,8 +270,8 @@ export default function ProjectList() {
                     if (!opt) return <span className="text-muted-foreground">—</span>
                     const color = opt.color
                     return (
-                      <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${priorityClass(color)}`}>
-                        {color && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${priorityDot(color)}`} />}
+                      <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${pillClass(color)}`}>
+                        {color && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass(color)}`} />}
                         {opt.label}
                       </span>
                     )
