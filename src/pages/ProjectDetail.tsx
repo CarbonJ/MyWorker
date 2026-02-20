@@ -422,7 +422,7 @@ export default function ProjectDetail() {
               <h2 className="text-sm font-semibold">Tasks</h2>
               <Button size="sm" variant="outline"
                 onClick={() => { setEditingTask(null); setTaskModalOpen(true) }}>
-                + Add
+                + Add Task
               </Button>
             </div>
             {/* Filter bar */}
