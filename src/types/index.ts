@@ -4,6 +4,10 @@ export interface JiraLink {
   url: string
   label: string
 }
+
+export interface Stakeholder {
+  name: string
+}
 export type TaskStatus = 'open' | 'in_progress' | 'done'
 export type DropdownType = 'priority' | 'product_area' | 'project_status'
 
@@ -16,7 +20,7 @@ export interface Project {
   latestStatus: string
   productAreaId: number | null
   statusId: number | null
-  stakeholders: string
+  stakeholders: Stakeholder[]
   linkedJiras: JiraLink[]
   createdAt: string
   updatedAt: string

@@ -49,6 +49,14 @@ const DOT_CLASS: Record<string, string> = {
   grey:   'bg-slate-400',
 }
 
+function safeUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return url
+  } catch { /* invalid URL */ }
+  return null
+}
+
 function priorityClass(color: string): string {
   return COLOR_CLASS[color] ?? 'bg-slate-100 text-slate-600 border-slate-200'
 }
@@ -362,26 +370,38 @@ export default function ProjectDetail() {
                 </span>
               )}
             </div>
-            {project.stakeholders && (
-              <p className="text-muted-foreground">
-                <span className="font-medium text-foreground">Stakeholders:</span> {project.stakeholders}
-              </p>
+            {project.stakeholders.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 items-center">
+                <span className="font-medium text-foreground text-sm">Stakeholders:</span>
+                {project.stakeholders.map((s, i) => (
+                  <span key={i} className="bg-white border rounded-full px-2.5 py-0.5 text-xs text-foreground shadow-sm">
+                    {s.name}
+                  </span>
+                ))}
+              </div>
             )}
             {project.linkedJiras.length > 0 && (
               <div className="text-muted-foreground">
                 <span className="font-medium text-foreground">JIRAs: </span>
                 <span className="inline-flex flex-wrap gap-x-2 gap-y-0.5">
-                  {project.linkedJiras.map((jira, i) => (
-                    <a
-                      key={i}
-                      href={jira.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary underline-offset-2 hover:underline"
-                    >
-                      {jira.label || jira.url}
-                    </a>
-                  ))}
+                  {project.linkedJiras.map((jira, i) => {
+                    const href = safeUrl(jira.url)
+                    return href ? (
+                      <a
+                        key={i}
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 underline underline-offset-2 hover:text-blue-800"
+                      >
+                        {jira.label || jira.url}
+                      </a>
+                    ) : (
+                      <span key={i} className="text-muted-foreground text-xs" title="Invalid URL">
+                        {jira.label || jira.url}
+                      </span>
+                    )
+                  })}
                 </span>
               </div>
             )}

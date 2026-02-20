@@ -11,16 +11,24 @@ import { Label } from '@/components/ui/label'
 
 interface Props {
   defaultProjectId?: number
+  open?: boolean
+  onOpen?: () => void
+  onClose?: () => void
 }
 
-export function QuickWorkLogButton({ defaultProjectId }: Props) {
-  const [open, setOpen] = useState(false)
+export function QuickWorkLogButton({ defaultProjectId, open: openProp, onOpen, onClose }: Props) {
+  const [internalOpen, setInternalOpen] = useState(false)
+
+  // Support both controlled (open prop) and uncontrolled usage
+  const isOpen = openProp !== undefined ? openProp : internalOpen
+  const handleOpen = () => { onOpen ? onOpen() : setInternalOpen(true) }
+  const handleClose = () => { onClose ? onClose() : setInternalOpen(false) }
 
   return (
     <>
       {/* Global floating button */}
       <button
-        onClick={() => setOpen(true)}
+        onClick={handleOpen}
         className="fixed bottom-6 right-6 w-12 h-12 bg-primary text-primary-foreground rounded-full shadow-lg flex items-center justify-center text-xl hover:bg-primary/90 transition-colors z-50"
         title="Quick work log entry"
       >
@@ -28,8 +36,8 @@ export function QuickWorkLogButton({ defaultProjectId }: Props) {
       </button>
 
       <QuickWorkLogModal
-        open={open}
-        onClose={() => setOpen(false)}
+        open={isOpen}
+        onClose={handleClose}
         defaultProjectId={defaultProjectId}
       />
     </>

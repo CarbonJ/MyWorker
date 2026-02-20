@@ -321,11 +321,11 @@ export default function TasksView() {
       </div>
 
       {/* ── Column headers ──────────────────────────────────────────────── */}
-      <div className="shrink-0 grid grid-cols-[1.5rem_1fr_8rem_6rem_4rem_5.5rem_4.5rem] gap-2 px-6 py-1 text-xs text-muted-foreground border-b">
+      <div className="shrink-0 grid grid-cols-[1.5rem_minmax(0,50%)_6rem_12rem_5.5rem_6.5rem_5.5rem] gap-3 px-6 py-1 text-xs text-muted-foreground border-b">
         <span />
         <span>Title</span>
-        <SortBtn field="project" label="Project" />
         <span>Area</span>
+        <SortBtn field="project" label="Project" />
         <SortBtn field="priority" label="Priority" />
         <SortBtn field="status" label="Status" />
         <SortBtn field="dueDate" label="Due" align="right" />
@@ -346,12 +346,12 @@ export default function TasksView() {
             <div
               key={task.id}
               onClick={() => { setEditingTask(task); setTaskModalOpen(true) }}
-              className={`grid grid-cols-[1.5rem_1fr_8rem_6rem_4rem_5.5rem_4.5rem] gap-2 px-6 py-2 cursor-pointer hover:bg-accent transition-colors items-center ${isDone ? 'opacity-50' : ''}`}
+              className={`grid grid-cols-[1.5rem_minmax(0,50%)_6rem_12rem_5.5rem_6.5rem_5.5rem] gap-3 px-6 py-2 cursor-pointer hover:bg-accent transition-colors items-start ${isDone ? 'opacity-50' : ''}`}
             >
               {/* Status cycle button */}
               <button
                 onClick={e => cycleTaskStatus(e, task)}
-                className="flex items-center justify-center hover:scale-110 transition-transform"
+                className="flex items-center justify-center hover:scale-110 transition-transform mt-0.5"
                 title={`Mark as ${cycleStatus(task.status).replace('_', ' ')}`}
               >
                 <StatusCircle status={task.status} />
@@ -369,11 +369,6 @@ export default function TasksView() {
                 )}
               </div>
 
-              {/* Project */}
-              <span className="text-xs text-muted-foreground truncate">
-                {projectName ?? <span className="italic">Inbox</span>}
-              </span>
-
               {/* Product Area — "Inbox" for unassigned tasks, label for project tasks, "—" if project has no area */}
               <span className="text-xs truncate">
                 {(() => {
@@ -384,6 +379,11 @@ export default function TasksView() {
                     : undefined
                   return <span className="text-muted-foreground">{areaLabel ?? '—'}</span>
                 })()}
+              </span>
+
+              {/* Project */}
+              <span className="text-xs text-muted-foreground break-words">
+                {projectName ?? <span className="italic">Inbox</span>}
               </span>
 
               {/* Priority */}

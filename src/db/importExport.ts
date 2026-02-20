@@ -48,8 +48,58 @@ export async function importFromJson(file: File): Promise<void> {
   const text = await file.text()
   const data: ExportData = JSON.parse(text)
 
-  if (!data.version || !data.projects) {
-    throw new Error('Invalid backup file format.')
+  // --- Validate top-level shape ---
+  if (typeof data.version !== 'number' || !Array.isArray(data.projects)) {
+    throw new Error('Invalid backup file: missing or wrong-typed required fields.')
+  }
+  const optionalArrayKeys = ['dropdownOptions', 'workLogEntries', 'tasks'] as const
+  for (const key of optionalArrayKeys) {
+    if (data[key] !== undefined && !Array.isArray(data[key])) {
+      throw new Error(`Invalid backup file: "${key}" must be an array.`)
+    }
+  }
+
+  // --- Per-record validation ---
+  const validRag = new Set(['Red', 'Amber', 'Green'])
+  const validTaskStatus = new Set(['open', 'in_progress', 'done'])
+  const validDropdownType = new Set(['priority', 'product_area', 'project_status'])
+
+  for (const [i, opt] of (data.dropdownOptions ?? []).entries()) {
+    if (typeof opt.id !== 'number' || opt.id <= 0)
+      throw new Error(`dropdownOptions[${i}]: invalid id`)
+    if (!validDropdownType.has(opt.type as string))
+      throw new Error(`dropdownOptions[${i}]: invalid type "${opt.type}"`)
+    if (typeof opt.label !== 'string' || !(opt.label as string).trim())
+      throw new Error(`dropdownOptions[${i}]: label must be a non-empty string`)
+  }
+
+  for (const [i, p] of data.projects.entries()) {
+    if (typeof p.id !== 'number' || p.id <= 0)
+      throw new Error(`projects[${i}]: invalid id`)
+    if (typeof p.work_item !== 'string' || !(p.work_item as string).trim())
+      throw new Error(`projects[${i}]: work_item must be a non-empty string`)
+    if (!validRag.has(p.rag_status as string))
+      throw new Error(`projects[${i}]: invalid rag_status "${p.rag_status}"`)
+  }
+
+  for (const [i, e] of (data.workLogEntries ?? []).entries()) {
+    if (typeof e.id !== 'number' || e.id <= 0)
+      throw new Error(`workLogEntries[${i}]: invalid id`)
+    if (typeof e.project_id !== 'number' || e.project_id <= 0)
+      throw new Error(`workLogEntries[${i}]: invalid project_id`)
+    if (typeof e.note !== 'string')
+      throw new Error(`workLogEntries[${i}]: note must be a string`)
+  }
+
+  for (const [i, t] of (data.tasks ?? []).entries()) {
+    if (typeof t.id !== 'number' || t.id <= 0)
+      throw new Error(`tasks[${i}]: invalid id`)
+    if (typeof t.project_id !== 'number' || t.project_id <= 0)
+      throw new Error(`tasks[${i}]: invalid project_id`)
+    if (typeof t.title !== 'string' || !(t.title as string).trim())
+      throw new Error(`tasks[${i}]: title must be a non-empty string`)
+    if (!validTaskStatus.has(t.status as string))
+      throw new Error(`tasks[${i}]: invalid status "${t.status}"`)
   }
 
   // Clear existing data (CASCADE deletes handle related records)

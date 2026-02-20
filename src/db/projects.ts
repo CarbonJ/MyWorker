@@ -1,5 +1,5 @@
 import { query, run, lastInsertId } from './index'
-import type { Project, RagStatus, JiraLink } from '@/types'
+import type { Project, RagStatus, JiraLink, Stakeholder } from '@/types'
 
 // Subquery: finds the id(s) of any project_status option labelled "done"
 const DONE_SUBQ = `SELECT id FROM dropdown_options WHERE type='project_status' AND lower(label)='done'`
@@ -19,6 +19,22 @@ function stringifyLinkedJiras(jiras: JiraLink[]): string {
   return jiras.length === 0 ? '' : JSON.stringify(jiras)
 }
 
+function parseStakeholders(raw: string): Stakeholder[] {
+  if (!raw || raw.trim() === '') return []
+  try {
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) return parsed as Stakeholder[]
+    return []
+  } catch {
+    // Legacy: plain comma-separated string — migrate on read
+    return raw.split(',').map(n => ({ name: n.trim() })).filter(s => s.name)
+  }
+}
+
+function stringifyStakeholders(stakeholders: Stakeholder[]): string {
+  return stakeholders.length === 0 ? '' : JSON.stringify(stakeholders)
+}
+
 function rowToProject(row: Record<string, unknown>): Project {
   return {
     id: row.id as number,
@@ -29,7 +45,7 @@ function rowToProject(row: Record<string, unknown>): Project {
     latestStatus: row.latest_status as string,
     productAreaId: row.product_area_id as number | null,
     statusId: row.status_id as number | null,
-    stakeholders: row.stakeholders as string,
+    stakeholders: parseStakeholders(row.stakeholders as string),
     linkedJiras: parseLinkedJiras(row.linked_jiras as string),
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
@@ -75,7 +91,7 @@ export interface CreateProjectInput {
   latestStatus?: string
   productAreaId?: number | null
   statusId?: number | null
-  stakeholders?: string
+  stakeholders?: Stakeholder[]
   linkedJiras?: JiraLink[]
 }
 
@@ -92,7 +108,7 @@ export async function createProject(input: CreateProjectInput): Promise<number> 
       input.latestStatus ?? '',
       input.productAreaId ?? null,
       input.statusId ?? null,
-      input.stakeholders ?? '',
+      stringifyStakeholders(input.stakeholders ?? []),
       stringifyLinkedJiras(input.linkedJiras ?? []),
     ],
   )
@@ -127,7 +143,7 @@ export async function updateProject(input: UpdateProjectInput): Promise<void> {
       input.latestStatus ?? current.latestStatus,
       input.productAreaId !== undefined ? input.productAreaId : current.productAreaId,
       input.statusId !== undefined ? input.statusId : current.statusId,
-      input.stakeholders ?? current.stakeholders,
+      stringifyStakeholders(input.stakeholders !== undefined ? input.stakeholders : current.stakeholders),
       input.linkedJiras !== undefined
         ? stringifyLinkedJiras(input.linkedJiras)
         : stringifyLinkedJiras(current.linkedJiras),

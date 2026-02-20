@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom'
 import { Toaster } from '@/components/ui/sonner'
 import { DbProvider } from '@/hooks/useDb'
 import { QuickWorkLogButton } from '@/components/QuickWorkLog'
+import { TaskModal } from '@/components/TaskModal'
 import { getDueSoonTasks } from '@/db/tasks'
 import ProjectList from '@/pages/ProjectList'
 import ProjectDetail from '@/pages/ProjectDetail'
@@ -59,28 +60,66 @@ function NavBar() {
   )
 }
 
+function AppInner() {
+  const navigate = useNavigate()
+  const [quickLogOpen, setQuickLogOpen] = useState(false)
+  const [quickTaskOpen, setQuickTaskOpen] = useState(false)
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      // Cmd+L / Ctrl+L → open Quick Add inbox task modal
+      if (e.key === 'l' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        setQuickTaskOpen(true)
+        return
+      }
+      // Esc → navigate home, but only when no modal/dialog is open
+      if (e.key === 'Escape') {
+        const hasOpenDialog = !!document.querySelector('[role="dialog"]')
+        if (!hasOpenDialog) navigate('/')
+      }
+    }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [navigate])
+
+  return (
+    <div className="min-h-screen bg-background flex flex-col">
+      <NavBar />
+      <DueDateBanner />
+      <main className="flex-1 overflow-hidden">
+        <Routes>
+          <Route path="/" element={<ProjectList />} />
+          <Route path="/projects/new" element={<ProjectForm />} />
+          <Route path="/projects/:id" element={<ProjectDetail />} />
+          <Route path="/projects/:id/edit" element={<ProjectForm />} />
+          <Route path="/tasks" element={<TasksView />} />
+          <Route path="/reporting" element={<ReportingView />} />
+          <Route path="/archive" element={<ArchiveView />} />
+          <Route path="/settings" element={<Settings />} />
+        </Routes>
+      </main>
+      <QuickWorkLogButton
+        open={quickLogOpen}
+        onOpen={() => setQuickLogOpen(true)}
+        onClose={() => setQuickLogOpen(false)}
+      />
+      <TaskModal
+        open={quickTaskOpen}
+        projectId={null}
+        onClose={() => setQuickTaskOpen(false)}
+        onSaved={() => setQuickTaskOpen(false)}
+      />
+      <Toaster richColors position="bottom-right" />
+    </div>
+  )
+}
+
 export default function App() {
   return (
     <DbProvider>
       <BrowserRouter>
-        <div className="min-h-screen bg-background flex flex-col">
-          <NavBar />
-          <DueDateBanner />
-          <main className="flex-1 overflow-hidden">
-            <Routes>
-              <Route path="/" element={<ProjectList />} />
-              <Route path="/projects/new" element={<ProjectForm />} />
-              <Route path="/projects/:id" element={<ProjectDetail />} />
-              <Route path="/projects/:id/edit" element={<ProjectForm />} />
-              <Route path="/tasks" element={<TasksView />} />
-              <Route path="/reporting" element={<ReportingView />} />
-              <Route path="/archive" element={<ArchiveView />} />
-              <Route path="/settings" element={<Settings />} />
-            </Routes>
-          </main>
-        </div>
-        <QuickWorkLogButton />
-        <Toaster richColors position="bottom-right" />
+        <AppInner />
       </BrowserRouter>
     </DbProvider>
   )

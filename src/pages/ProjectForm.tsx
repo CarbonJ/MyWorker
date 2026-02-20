@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { getProjectById, createProject, updateProject, deleteProject } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
-import type { Project, DropdownOption, RagStatus, JiraLink } from '@/types'
+import type { Project, DropdownOption, RagStatus, JiraLink, Stakeholder } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -29,7 +29,7 @@ export default function ProjectForm() {
   const [latestStatus, setLatestStatus] = useState('')
   const [productAreaId, setProductAreaId] = useState<string>('')
   const [statusId, setStatusId] = useState<string>('')
-  const [stakeholders, setStakeholders] = useState('')
+  const [stakeholders, setStakeholders] = useState<Stakeholder[]>([])
   const [linkedJiras, setLinkedJiras] = useState<JiraLink[]>([])
 
   const load = useCallback(async () => {
@@ -54,7 +54,7 @@ export default function ProjectForm() {
         setLatestStatus(p.latestStatus)
         setProductAreaId(p.productAreaId?.toString() ?? '')
         setStatusId(p.statusId?.toString() ?? '')
-        setStakeholders(p.stakeholders)
+        setStakeholders(p.stakeholders ?? [])
         setLinkedJiras(p.linkedJiras)
       }
     } catch (err) {
@@ -112,6 +112,17 @@ export default function ProjectForm() {
     }
   }
 
+  const addStakeholder = () =>
+    setStakeholders(prev => [...prev, { name: '' }])
+
+  const removeStakeholder = (index: number) =>
+    setStakeholders(prev => prev.filter((_, i) => i !== index))
+
+  const updateStakeholder = (index: number, value: string) =>
+    setStakeholders(prev =>
+      prev.map((entry, i) => i === index ? { name: value } : entry)
+    )
+
   const addJiraLink = () =>
     setLinkedJiras(prev => [...prev, { url: '', label: '' }])
 
@@ -143,7 +154,7 @@ export default function ProjectForm() {
             id="workItem"
             value={workItem}
             onChange={e => setWorkItem(e.target.value)}
-            placeholder="e.g. Q3 Risk Assessment"
+            placeholder="Enter effort name"
             required
           />
         </div>
@@ -238,13 +249,39 @@ export default function ProjectForm() {
 
         {/* Stakeholders */}
         <div className={fieldClass}>
-          <Label htmlFor="stakeholders">Stakeholders</Label>
-          <Input
-            id="stakeholders"
-            value={stakeholders}
-            onChange={e => setStakeholders(e.target.value)}
-            placeholder="e.g. Jane Smith, John Doe"
-          />
+          <Label>Stakeholders</Label>
+          {stakeholders.length > 0 && (
+            <div className="space-y-2">
+              {stakeholders.map((entry, i) => (
+                <div key={i} className="flex gap-2 items-center">
+                  <Input
+                    value={entry.name}
+                    onChange={e => updateStakeholder(i, e.target.value)}
+                    placeholder="Name"
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeStakeholder(i)}
+                    className="shrink-0 text-muted-foreground hover:text-destructive"
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={addStakeholder}
+            className="mt-1"
+          >
+            + Add Stakeholder
+          </Button>
         </div>
 
         {/* Linked JIRAs */}
