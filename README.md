@@ -1,73 +1,55 @@
-# React + TypeScript + Vite
+# MyWorker
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+> 🤖 This project was built entirely with AI assistance using [Claude](https://claude.ai) by Anthropic.
 
-Currently, two official plugins are available:
+**MyWorker** is a personal project and task management Progressive Web App (PWA) designed for a Risk Manager's day-to-day workflow. It combines the structured tracking of tools like JIRA with the simplicity of a list-based view, running entirely in the browser with no server, no login, and no cloud dependency.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+---
 
-## React Compiler
+## Features
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Project tracking** — manage projects with RAG status (Red / Amber / Green), priority, product area, stakeholders, and linked JIRAs
+- **Work log** — append-only timestamped notes per project for effort tracking and status reporting
+- **Task management** — per-project tasks with title, description, status, owner, and due dates
+- **Full-text search** — FTS5-powered search across projects, tasks, and work log entries with partial and multi-word support
+- **Reporting view** — dense read-only table optimised for on-screen use during meetings
+- **Quick log entry** — global floating button to log a note to any project without navigating away
+- **Due date reminders** — in-app badges for overdue and due-today tasks
+- **User-managed dropdowns** — customise Priority and Product Area option lists at runtime
+- **Import / Export** — full JSON backup and restore
+- **Offline-first** — works fully offline via service worker caching
+- **Local storage** — database written to a user-chosen folder (e.g. OneDrive) via the File System Access API; no data leaves your machine
 
-## Expanding the ESLint configuration
+---
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Tech Stack
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+| Area | Technology |
+|------|------------|
+| Framework | React + TypeScript |
+| Design System | shadcn/ui + Tailwind CSS |
+| Bundler | Vite + vite-plugin-pwa |
+| Database | wa-sqlite (SQLite in the browser) with FTS5 |
+| Storage | File System Access API |
+| Backend | None — fully local |
+| Auth | None — single user |
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+---
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Getting Started
+
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+The app will prompt you to choose a local folder on first launch — this is where the SQLite database file is stored. Placing it in a OneDrive folder gives you automatic sync and version history across devices.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+---
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## Architecture Notes
+
+- No server, no backend, no accounts
+- All data stored in a single `.sqlite` file on your local filesystem
+- OneDrive (or any sync folder) provides cross-device access and free version history
+- PWA service worker caches all assets for full offline use
