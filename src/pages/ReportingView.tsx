@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useSearch } from '@/contexts/SearchContext'
 import { getAllProjects } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
 import { getAllTasks } from '@/db/tasks'
@@ -25,6 +26,7 @@ interface PageData {
 }
 
 export default function ReportingView() {
+  const { query } = useSearch()
   const [sortKey, setSortKey] = useState<SortKey>('ragStatus')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
 
@@ -97,6 +99,14 @@ export default function ReportingView() {
     if (ragFilter !== 'All') list = list.filter(p => p.ragStatus === ragFilter)
     if (areaFilter !== 'All') list = list.filter(p => String(p.productAreaId ?? '') === areaFilter)
 
+    if (query.trim()) {
+      const q = query.trim().toLowerCase()
+      list = list.filter(p =>
+        p.workItem.toLowerCase().includes(q) ||
+        p.latestStatus.toLowerCase().includes(q)
+      )
+    }
+
     return list.sort((a, b) => {
       let av: string | number = ''
       let bv: string | number = ''
@@ -117,7 +127,7 @@ export default function ReportingView() {
       if (av > bv) return sortDir === 'asc' ? 1 : -1
       return 0
     })
-  }, [projects, sortKey, sortDir, ragFilter, areaFilter, priorities, productAreas, projectStatuses, taskCountsByProject])
+  }, [projects, sortKey, sortDir, ragFilter, areaFilter, query, priorities, productAreas, projectStatuses, taskCountsByProject])
 
   const SortIcon = ({ col }: { col: SortKey }) =>
     <span className="ml-1 opacity-50">{sortKey === col ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span>

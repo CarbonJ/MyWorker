@@ -32,9 +32,25 @@ export const DOT_CLASS: Record<string, string> = {
 /** Sort weight for RAG status — Red is most urgent (0), Green is least (2). */
 export const RAG_ORDER: Record<RagStatus, number> = { Red: 0, Amber: 1, Green: 2 }
 
+/** Tailwind classes for a filled/active colored pill (solid background + white text). */
+export const COLOR_CLASS_ACTIVE: Record<string, string> = {
+  red:    'bg-red-500    text-white border-red-500',
+  orange: 'bg-orange-500 text-white border-orange-500',
+  amber:  'bg-amber-500  text-white border-amber-500',
+  green:  'bg-green-500  text-white border-green-500',
+  blue:   'bg-blue-500   text-white border-blue-500',
+  purple: 'bg-purple-500 text-white border-purple-500',
+  grey:   'bg-slate-500  text-white border-slate-500',
+}
+
 /** Returns the pill class for a given color string, with a safe fallback. */
 export function pillClass(color: string): string {
   return COLOR_CLASS[color] ?? 'bg-slate-100 text-slate-600 border-slate-200'
+}
+
+/** Returns the filled/active pill class for a given color string (for selected state). */
+export function pillClassActive(color: string): string {
+  return COLOR_CLASS_ACTIVE[color] ?? 'bg-slate-500 text-white border-slate-500'
 }
 
 /** Returns the dot class for a given color string, with a safe fallback. */

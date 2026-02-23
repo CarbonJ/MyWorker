@@ -12,19 +12,20 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
-import { ChevronsUpDown, Check } from 'lucide-react'
+import { ChevronsUpDown, Check, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface Props {
-  projectId?: number | null   // initial project; undefined = no default
-  task?: Task | null          // undefined/null = create mode
+  projectId?: number | null            // initial project; undefined = no default
+  initialProductAreaId?: number | null // initial area (used by CMD+L when area filter active)
+  task?: Task | null                   // undefined/null = create mode
   open: boolean
   onClose: () => void
   onSaved: () => void
-  projects?: Project[]        // optional pre-loaded list (avoids extra fetch)
+  projects?: Project[]                 // optional pre-loaded list (avoids extra fetch)
 }
 
-export function TaskModal({ projectId: initialProjectId, task, open, onClose, onSaved, projects: propProjects }: Props) {
+export function TaskModal({ projectId: initialProjectId, initialProductAreaId, task, open, onClose, onSaved, projects: propProjects }: Props) {
   const isEdit = !!task
 
   const [title,       setTitle]       = useState('')
@@ -42,12 +43,15 @@ export function TaskModal({ projectId: initialProjectId, task, open, onClose, on
   const [projectOpen,        setProjectOpen]        = useState(false)
   const [projectSearch,      setProjectSearch]      = useState('')
 
-  const [priorities, setPriorities] = useState<DropdownOption[]>([])
+  const [priorities,    setPriorities]    = useState<DropdownOption[]>([])
+  const [productAreas,  setProductAreas]  = useState<DropdownOption[]>([])
+  const [productAreaId, setProductAreaId] = useState<string>('')
 
   // Load options whenever modal opens
   useEffect(() => {
     if (!open) return
     getDropdownOptions('priority').then(setPriorities)
+    getDropdownOptions('product_area').then(setProductAreas)
     // Only fetch projects if they weren't passed in as a prop
     if (!propProjects) {
       getAllProjects().then(setProjects)
@@ -67,17 +71,20 @@ export function TaskModal({ projectId: initialProjectId, task, open, onClose, on
       setNotes(task.notes)
       setStatus(task.status)
       setPriorityId(task.priorityId?.toString() ?? '')
+      setProductAreaId(task.productAreaId?.toString() ?? '')
       setStartDate(task.startDate ?? '')
       setDueDate(task.dueDate ?? '')
       setSelectedProjectId(task.projectId)
     } else {
       setTitle(''); setDescription(''); setNotes('')
-      setStatus('open'); setPriorityId(''); setStartDate(''); setDueDate('')
+      setStatus('open'); setPriorityId('')
+      setProductAreaId(initialProductAreaId ? String(initialProductAreaId) : '')
+      setStartDate(''); setDueDate('')
       setSelectedProjectId(initialProjectId ?? null)
     }
     setProjectSearch('')
     setProjectOpen(false)
-  }, [task, open, initialProjectId])
+  }, [task, open, initialProjectId, initialProductAreaId])
 
   const handleSave = async () => {
     if (!title.trim()) { toast.error('Title is required'); return }
@@ -85,6 +92,8 @@ export function TaskModal({ projectId: initialProjectId, task, open, onClose, on
     try {
       const input = {
         projectId: selectedProjectId,
+        // Only send productAreaId for non-project tasks; DB layer also enforces this
+        productAreaId: selectedProjectId ? null : (productAreaId ? Number(productAreaId) : null),
         title: title.trim(),
         description,
         notes,
@@ -133,10 +142,28 @@ export function TaskModal({ projectId: initialProjectId, task, open, onClose, on
   }
 
   const selectedProject = projects.find(p => p.id === selectedProjectId)
+  // When a project is selected, show the area it inherits from that project (read-only)
+  const inheritedArea = selectedProject
+    ? productAreas.find(a => a.id === selectedProject.productAreaId)
+    : null
+
+  // Scope project list to the selected area (only when no project is already chosen)
+  const projectsForArea = productAreaId && !selectedProjectId
+    ? projects.filter(p => p.productAreaId === Number(productAreaId))
+    : projects
 
   const filteredProjects = projectSearch.trim()
-    ? projects.filter(p => p.workItem.toLowerCase().includes(projectSearch.toLowerCase()))
-    : projects
+    ? projectsForArea.filter(p => p.workItem.toLowerCase().includes(projectSearch.toLowerCase()))
+    : projectsForArea
+
+  // Reset project if area changes and the chosen project is no longer in scope
+  useEffect(() => {
+    if (!selectedProjectId || !productAreaId) return
+    const proj = projects.find(p => p.id === selectedProjectId)
+    if (proj && proj.productAreaId !== Number(productAreaId)) {
+      setSelectedProjectId(null)
+    }
+  }, [productAreaId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fieldClass = 'space-y-1.5'
 
@@ -166,6 +193,28 @@ export function TaskModal({ projectId: initialProjectId, task, open, onClose, on
               placeholder="Task title"
               autoFocus
             />
+          </div>
+
+          {/* Area — editable when no project selected; inherited (read-only) when project selected */}
+          <div className={fieldClass}>
+            <Label>Area</Label>
+            {selectedProjectId !== null ? (
+              <p className="text-sm text-muted-foreground h-9 flex items-center px-3 rounded-md border border-input bg-muted/40">
+                {inheritedArea ? inheritedArea.label : <span className="italic">None (inherited from project)</span>}
+              </p>
+            ) : (
+              <Select value={productAreaId || 'none'} onValueChange={v => setProductAreaId(v === 'none' ? '' : v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select area" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— Inbox (no area)</SelectItem>
+                  {productAreas.map(a => (
+                    <SelectItem key={a.id} value={a.id.toString()}>{a.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           {/* Project picker */}
@@ -290,21 +339,49 @@ export function TaskModal({ projectId: initialProjectId, task, open, onClose, on
           <div className="grid grid-cols-2 gap-4">
             <div className={fieldClass}>
               <Label htmlFor="task-start">Start Date</Label>
-              <Input
-                id="task-start"
-                type="date"
-                value={startDate}
-                onChange={e => setStartDate(e.target.value)}
-              />
+              <div className="relative">
+                <Input
+                  id="task-start"
+                  type="date"
+                  value={startDate}
+                  onChange={e => setStartDate(e.target.value)}
+                  autoComplete="off"
+                  className={startDate ? 'pr-8' : ''}
+                />
+                {startDate && (
+                  <button
+                    type="button"
+                    onClick={() => setStartDate('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    aria-label="Clear start date"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
             <div className={fieldClass}>
               <Label htmlFor="task-due">Due Date</Label>
-              <Input
-                id="task-due"
-                type="date"
-                value={dueDate}
-                onChange={e => setDueDate(e.target.value)}
-              />
+              <div className="relative">
+                <Input
+                  id="task-due"
+                  type="date"
+                  value={dueDate}
+                  onChange={e => setDueDate(e.target.value)}
+                  autoComplete="off"
+                  className={dueDate ? 'pr-8' : ''}
+                />
+                {dueDate && (
+                  <button
+                    type="button"
+                    onClick={() => setDueDate('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    aria-label="Clear due date"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

@@ -5,6 +5,7 @@ function rowToTask(row: Record<string, unknown>): Task {
   return {
     id: row.id as number,
     projectId: row.project_id as number | null,
+    productAreaId: (row.product_area_id as number | null) ?? null,
     title: row.title as string,
     description: row.description as string,
     notes: row.notes as string,
@@ -51,6 +52,8 @@ export async function getDueSoonTasks(): Promise<Task[]> {
 
 export interface CreateTaskInput {
   projectId?: number | null
+  /** Direct area — only used when projectId is null (area tasks). */
+  productAreaId?: number | null
   title: string
   description?: string
   notes?: string
@@ -74,10 +77,12 @@ export async function getAllTasks(): Promise<Task[]> {
 export async function createTask(input: CreateTaskInput): Promise<number> {
   await run(
     `INSERT INTO tasks
-      (project_id, title, description, notes, status, priority_id, start_date, due_date)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      (project_id, product_area_id, title, description, notes, status, priority_id, start_date, due_date)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.projectId ?? null,
+      // Only persist direct area when there is no project; otherwise it is inherited from the project
+      input.projectId ? null : (input.productAreaId ?? null),
       input.title,
       input.description ?? '',
       input.notes ?? '',
@@ -99,19 +104,26 @@ export async function updateTask(input: UpdateTaskInput): Promise<void> {
   if (rows.length === 0) throw new Error(`Task ${input.id} not found`)
   const current = rowToTask(rows[0])
 
+  const newProjectId = input.projectId !== undefined ? input.projectId : current.projectId
+  const newProductAreaId = newProjectId
+    ? null  // area is inherited from the project; clear any direct value
+    : (input.productAreaId !== undefined ? input.productAreaId : current.productAreaId)
+
   await run(
     `UPDATE tasks SET
-      project_id  = ?,
-      title       = ?,
-      description = ?,
-      notes       = ?,
-      status      = ?,
-      priority_id = ?,
-      start_date  = ?,
-      due_date    = ?
+      project_id      = ?,
+      product_area_id = ?,
+      title           = ?,
+      description     = ?,
+      notes           = ?,
+      status          = ?,
+      priority_id     = ?,
+      start_date      = ?,
+      due_date        = ?
      WHERE id = ?`,
     [
-      input.projectId !== undefined ? input.projectId : current.projectId,
+      newProjectId,
+      newProductAreaId,
       input.title ?? current.title,
       input.description ?? current.description,
       input.notes ?? current.notes,

@@ -36,6 +36,9 @@ export interface WorkLogEntry {
 export interface Task {
   id: number
   projectId: number | null
+  /** Direct area association — only meaningful when projectId is null.
+   *  When projectId is set, the effective area is inherited from the project. */
+  productAreaId: number | null
   title: string
   description: string
   notes: string

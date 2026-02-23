@@ -281,6 +281,19 @@ const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_dropdown_type         ON dropdown_options(type);
     `,
   },
+  {
+    version: 8,
+    up: `
+      -- Allow tasks to be scoped directly to a product area (without a project).
+      -- Three task tiers: project task (project_id set), area task (product_area_id set),
+      -- inbox task (both null). When project_id is set the area is inherited from the
+      -- project at query time; product_area_id on the task is only meaningful for
+      -- area tasks (project_id IS NULL).
+      ALTER TABLE tasks ADD COLUMN product_area_id INTEGER
+        REFERENCES dropdown_options(id) ON DELETE SET NULL;
+      CREATE INDEX IF NOT EXISTS idx_tasks_product_area_id ON tasks(product_area_id);
+    `,
+  },
 ]
 
 export async function runMigrations(handle: DbHandle): Promise<void> {

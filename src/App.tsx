@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
-import { BrowserRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { Toaster } from '@/components/ui/sonner'
 import { DbProvider } from '@/hooks/useDb'
 import { QuickWorkLogButton } from '@/components/QuickWorkLog'
 import { TaskModal } from '@/components/TaskModal'
+import { SearchProvider, useSearch } from '@/contexts/SearchContext'
+import { Input } from '@/components/ui/input'
+import { X } from 'lucide-react'
 import { getDueSoonTasks } from '@/db/tasks'
 import ProjectList from '@/pages/ProjectList'
 import ProjectDetail from '@/pages/ProjectDetail'
@@ -40,6 +43,12 @@ function DueDateBanner() {
 }
 
 function NavBar() {
+  const { query, setQuery } = useSearch()
+  const location = useLocation()
+
+  // Clear search when navigating to a different route
+  useEffect(() => { setQuery('') }, [location.pathname, setQuery])
+
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
       isActive
@@ -56,6 +65,24 @@ function NavBar() {
       <NavLink to="/reporting" className={linkClass}>Reporting</NavLink>
       <NavLink to="/archive" className={linkClass}>Archive</NavLink>
       <NavLink to="/settings" className={linkClass}>Settings</NavLink>
+      {/* Global search — top right */}
+      <div className="ml-auto relative flex items-center">
+        <Input
+          placeholder="Search…"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          className="h-8 w-56 text-sm pr-7"
+        />
+        {query && (
+          <button
+            onClick={() => setQuery('')}
+            className="absolute right-2 text-muted-foreground hover:text-foreground"
+            aria-label="Clear search"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
     </nav>
   )
 }
@@ -64,12 +91,21 @@ function AppInner() {
   const navigate = useNavigate()
   const [quickLogOpen, setQuickLogOpen] = useState(false)
   const [quickTaskOpen, setQuickTaskOpen] = useState(false)
+  const [quickTaskAreaId, setQuickTaskAreaId] = useState<number | null>(null)
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       // Cmd+L / Ctrl+L → open Quick Add inbox task modal
       if (e.key === 'l' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
+        // Pre-populate area when on the Tasks screen with an area filter active
+        if (window.location.pathname.includes('/tasks')) {
+          const stored = localStorage.getItem('myworker:tasks-filter-area') ?? ''
+          const areaId = stored && stored !== 'all' && stored !== 'inbox' ? Number(stored) : null
+          setQuickTaskAreaId(areaId)
+        } else {
+          setQuickTaskAreaId(null)
+        }
         setQuickTaskOpen(true)
         return
       }
@@ -84,6 +120,7 @@ function AppInner() {
   }, [navigate])
 
   return (
+    <SearchProvider>
     <div className="min-h-screen bg-background flex flex-col">
       <NavBar />
       <DueDateBanner />
@@ -107,11 +144,17 @@ function AppInner() {
       <TaskModal
         open={quickTaskOpen}
         projectId={null}
+        initialProductAreaId={quickTaskAreaId}
         onClose={() => setQuickTaskOpen(false)}
-        onSaved={() => setQuickTaskOpen(false)}
+        onSaved={() => {
+          setQuickTaskOpen(false)
+          // Notify any mounted page (e.g. TasksView) that it should reload
+          window.dispatchEvent(new Event('myworker:task-saved'))
+        }}
       />
       <Toaster richColors position="bottom-right" />
     </div>
+    </SearchProvider>
   )
 }
 

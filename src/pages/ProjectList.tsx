@@ -7,8 +7,8 @@ import { getAllTasks } from '@/db/tasks'
 import { getAllWorkLogEntries } from '@/db/workLog'
 import type { Project, DropdownOption, RagStatus, Task, WorkLogEntry } from '@/types'
 import { RagBadge } from '@/components/RagBadge'
-import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { useSearch } from '@/contexts/SearchContext'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { RAG_ORDER, pillClass, dotClass } from '@/lib/colors'
 import { fmtDate } from '@/lib/utils'
@@ -29,7 +29,7 @@ interface PageData {
 
 export default function ProjectList() {
   const navigate = useNavigate()
-  const [search, setSearch] = useState('')
+  const { query } = useSearch()
   const [searchIds, setSearchIds] = useState<number[] | null>(null)
   const [sortKey, setSortKey] = useState<SortKey>('updatedAt')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
@@ -62,13 +62,13 @@ export default function ProjectList() {
 
   // Full-text search — debounced
   useEffect(() => {
-    if (!search.trim()) { setSearchIds(null); return }
+    if (!query.trim()) { setSearchIds(null); return }
     const t = setTimeout(async () => {
-      const ids = await searchProjectIds(search)
+      const ids = await searchProjectIds(query)
       setSearchIds(ids)
     }, SEARCH_DEBOUNCE_MS)
     return () => clearTimeout(t)
-  }, [search])
+  }, [query])
 
   const labelFor = (opts: DropdownOption[], id: number | null) =>
     opts.find(o => o.id === id)?.label ?? '—'
@@ -148,12 +148,6 @@ export default function ProjectList() {
     <div className="flex flex-col h-[calc(100vh-57px)]">
       {/* Toolbar */}
       <div className="flex items-center gap-3 px-6 py-3 border-b bg-background shrink-0 flex-wrap">
-        <Input
-          placeholder="Search projects, tasks, work log…"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="max-w-sm"
-        />
         {/* RAG filter */}
         <Select value={ragFilter} onValueChange={v => setRagFilter(v as RagStatus | 'All')}>
           <SelectTrigger className="h-8 text-xs w-32">
@@ -207,12 +201,12 @@ export default function ProjectList() {
             ))}
           </SelectContent>
         </Select>
-        {(search || ragFilter !== 'All' || priorityFilter !== 'All' || areaFilter !== 'All' || statusFilter !== 'All') && (
+        {(ragFilter !== 'All' || priorityFilter !== 'All' || areaFilter !== 'All' || statusFilter !== 'All') && (
           <Button
             variant="ghost"
             size="sm"
             className="h-8 text-xs text-muted-foreground hover:text-foreground"
-            onClick={() => { setSearch(''); setRagFilter('All'); setPriorityFilter('All'); setAreaFilter('All'); setStatusFilter('All') }}
+            onClick={() => { setRagFilter('All'); setPriorityFilter('All'); setAreaFilter('All'); setStatusFilter('All') }}
           >
             ✕ Reset filters
           </Button>
@@ -241,7 +235,7 @@ export default function ProjectList() {
             {sorted.length === 0 && (
               <tr>
                 <td colSpan={9} className="px-4 py-16 text-center text-muted-foreground">
-                  {search ? 'No results found.' : 'No projects yet — create one to get started.'}
+                  {query ? 'No results found.' : 'No projects yet — create one to get started.'}
                 </td>
               </tr>
             )}
