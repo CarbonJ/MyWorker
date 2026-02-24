@@ -35,6 +35,11 @@ export async function addWorkLogEntry(projectId: number, note: string): Promise<
   return await lastInsertId()
 }
 
+/** Update the note text of an existing entry. created_at is intentionally unchanged to preserve sort order. */
+export async function updateWorkLogEntry(id: number, note: string): Promise<void> {
+  await run(`UPDATE work_log_entries SET note = ? WHERE id = ?`, [note, id])
+}
+
 export async function deleteWorkLogEntry(id: number): Promise<void> {
   await run(`DELETE FROM work_log_entries WHERE id = ?`, [id])
 }

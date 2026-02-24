@@ -47,6 +47,7 @@ function rowToProject(row: Record<string, unknown>): Project {
     statusId: row.status_id as number | null,
     stakeholders: parseStakeholders(row.stakeholders as string),
     linkedJiras: parseLinkedJiras(row.linked_jiras as string),
+    dueDate: (row.due_date as string | null) ?? null,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   }
@@ -93,13 +94,14 @@ export interface CreateProjectInput {
   statusId?: number | null
   stakeholders?: Stakeholder[]
   linkedJiras?: JiraLink[]
+  dueDate?: string | null
 }
 
 export async function createProject(input: CreateProjectInput): Promise<number> {
   await run(
     `INSERT INTO projects
-      (work_item, work_desc, rag_status, priority_id, latest_status, product_area_id, status_id, stakeholders, linked_jiras)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (work_item, work_desc, rag_status, priority_id, latest_status, product_area_id, status_id, stakeholders, linked_jiras, due_date)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.workItem,
       input.workDescription ?? '',
@@ -110,6 +112,7 @@ export async function createProject(input: CreateProjectInput): Promise<number> 
       input.statusId ?? null,
       stringifyStakeholders(input.stakeholders ?? []),
       stringifyLinkedJiras(input.linkedJiras ?? []),
+      input.dueDate ?? null,
     ],
   )
   return await lastInsertId()
@@ -133,7 +136,8 @@ export async function updateProject(input: UpdateProjectInput): Promise<void> {
       product_area_id = ?,
       status_id       = ?,
       stakeholders    = ?,
-      linked_jiras    = ?
+      linked_jiras    = ?,
+      due_date        = ?
      WHERE id = ?`,
     [
       input.workItem ?? current.workItem,
@@ -147,6 +151,7 @@ export async function updateProject(input: UpdateProjectInput): Promise<void> {
       input.linkedJiras !== undefined
         ? stringifyLinkedJiras(input.linkedJiras)
         : stringifyLinkedJiras(current.linkedJiras),
+      input.dueDate !== undefined ? input.dueDate : current.dueDate,
       input.id,
     ],
   )
@@ -154,4 +159,15 @@ export async function updateProject(input: UpdateProjectInput): Promise<void> {
 
 export async function deleteProject(id: number): Promise<void> {
   await run(`DELETE FROM projects WHERE id = ?`, [id])
+}
+
+/** Returns a sorted list of all unique stakeholder names across all projects — used for autocomplete. */
+export async function getAllStakeholderNames(): Promise<string[]> {
+  const rows = await query(`SELECT stakeholders FROM projects WHERE stakeholders != '' AND stakeholders IS NOT NULL`)
+  const nameSet = new Set<string>()
+  for (const row of rows) {
+    const parsed = parseStakeholders(row.stakeholders as string)
+    for (const s of parsed) if (s.name.trim()) nameSet.add(s.name.trim())
+  }
+  return [...nameSet].sort((a, b) => a.localeCompare(b))
 }

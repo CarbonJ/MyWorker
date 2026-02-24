@@ -73,6 +73,10 @@ function OptionList({ type, title }: { type: DropdownType; title: string }) {
 
   const handleAdd = async () => {
     if (!newLabel.trim()) return
+    if (options.some(o => o.label.toLowerCase() === newLabel.trim().toLowerCase())) {
+      toast.warning(`"${newLabel.trim()}" already exists`)
+      return
+    }
     try {
       await createDropdownOption(type, newLabel.trim())
       setNewLabel('')
@@ -189,7 +193,8 @@ interface DataStats {
   dbSizeMb: string
 }
 
-const AREA_BTN_KEY = 'myworker:area-filter-buttons'
+const AREA_BTN_KEY          = 'myworker:area-filter-buttons'
+const AREA_BTN_PROJECTS_KEY = 'myworker:area-filter-buttons-projects'
 
 export default function Settings() {
   const importRef = useRef<HTMLInputElement>(null)
@@ -198,10 +203,19 @@ export default function Settings() {
   const [areaFilterButtons, setAreaFilterButtons] = useState(
     () => localStorage.getItem(AREA_BTN_KEY) === 'true'
   )
+  // Area filter buttons on Projects screen — defaults to true (enabled)
+  const [areaFilterButtonsProjects, setAreaFilterButtonsProjects] = useState(
+    () => localStorage.getItem(AREA_BTN_PROJECTS_KEY) !== 'false'
+  )
 
   const toggleAreaFilterButtons = (checked: boolean) => {
     setAreaFilterButtons(checked)
     localStorage.setItem(AREA_BTN_KEY, String(checked))
+  }
+
+  const toggleAreaFilterButtonsProjects = (checked: boolean) => {
+    setAreaFilterButtonsProjects(checked)
+    localStorage.setItem(AREA_BTN_PROJECTS_KEY, String(checked))
   }
 
   useEffect(() => {
@@ -293,21 +307,39 @@ export default function Settings() {
         <TabsContent value="customization" className="space-y-8">
           <section className={section}>
             <h2 className={sectionTitle}>Dropdown Options</h2>
-            <OptionList type="priority" title="Priority" />
+            <OptionList type="priority" title="Priority Values" />
             <Separator />
-            <OptionList type="product_area" title="Product Area" />
-            <div className="flex items-center gap-2 pl-1">
-              <Checkbox
-                id="area-filter-buttons"
-                checked={areaFilterButtons}
-                onCheckedChange={v => toggleAreaFilterButtons(v === true)}
-              />
-              <label htmlFor="area-filter-buttons" className="text-sm cursor-pointer select-none text-muted-foreground">
-                Show area filter as buttons on the Tasks screen
-              </label>
+            <OptionList type="product_area" title="Areas" />
+            <Separator />
+            <OptionList type="project_status" title="Status Values" />
+          </section>
+
+          <Separator />
+
+          <section className={section}>
+            <h2 className={sectionTitle}>Filters</h2>
+            <div className="flex flex-col gap-3 pl-1">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="area-filter-buttons-projects"
+                  checked={areaFilterButtonsProjects}
+                  onCheckedChange={v => toggleAreaFilterButtonsProjects(v === true)}
+                />
+                <label htmlFor="area-filter-buttons-projects" className="text-sm cursor-pointer select-none text-muted-foreground">
+                  Show area filter as buttons on the Projects screen
+                </label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="area-filter-buttons"
+                  checked={areaFilterButtons}
+                  onCheckedChange={v => toggleAreaFilterButtons(v === true)}
+                />
+                <label htmlFor="area-filter-buttons" className="text-sm cursor-pointer select-none text-muted-foreground">
+                  Show area filter as buttons on the Tasks screen
+                </label>
+              </div>
             </div>
-            <Separator />
-            <OptionList type="project_status" title="Project Status" />
           </section>
         </TabsContent>
 

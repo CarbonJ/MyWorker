@@ -10,7 +10,7 @@ import { RagBadge } from '@/components/RagBadge'
 import { Button } from '@/components/ui/button'
 import { useSearch } from '@/contexts/SearchContext'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { RAG_ORDER, pillClass, dotClass } from '@/lib/colors'
+import { RAG_ORDER, pillClass, dotClass, pillClassActive } from '@/lib/colors'
 import { fmtDate } from '@/lib/utils'
 import { useDataLoader } from '@/hooks/useDataLoader'
 import { SEARCH_DEBOUNCE_MS } from '@/lib/constants'
@@ -31,11 +31,12 @@ export default function ProjectList() {
   const navigate = useNavigate()
   const { query } = useSearch()
   const [searchIds, setSearchIds] = useState<number[] | null>(null)
-  const [sortKey, setSortKey] = useState<SortKey>('updatedAt')
-  const [sortDir, setSortDir] = useState<SortDir>('desc')
+  const [sortKey, setSortKey] = useState<SortKey>('productArea')
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [ragFilter, setRagFilter] = useState<RagStatus | 'All'>('All')
   const [priorityFilter, setPriorityFilter] = useState<string>('All')  // 'All' | priority id as string
   const [areaFilter, setAreaFilter] = useState<string>('All')          // 'All' | product_area id as string
+  const [areaFilterButtons] = useState(() => localStorage.getItem('myworker:area-filter-buttons-projects') !== 'false')
   const [statusFilter, setStatusFilter] = useState<string>('All')      // 'All' | project_status id as string
 
   const { data } = useDataLoader<PageData>(
@@ -144,6 +145,8 @@ export default function ProjectList() {
 
   const thClass = 'px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground whitespace-nowrap'
 
+  const today = new Date().toISOString().slice(0, 10)
+
   return (
     <div className="flex flex-col h-[calc(100vh-57px)]">
       {/* Toolbar */}
@@ -178,17 +181,42 @@ export default function ProjectList() {
           </SelectContent>
         </Select>
         {/* Product Area filter */}
-        <Select value={areaFilter} onValueChange={setAreaFilter}>
-          <SelectTrigger className="h-8 text-xs w-40">
-            <SelectValue placeholder="Area" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="All">All Areas</SelectItem>
-            {productAreas.map(a => (
-              <SelectItem key={a.id} value={String(a.id)}>{a.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {areaFilterButtons ? (
+          <div className="flex items-center gap-1 flex-wrap">
+            {[
+              { value: 'All', label: 'All Areas', color: '' },
+              ...productAreas.map(a => ({ value: String(a.id), label: a.label, color: a.color })),
+            ].map(opt => {
+              const isActive = areaFilter === opt.value
+              const coloredClass = opt.color
+                ? (isActive ? pillClassActive(opt.color) : pillClass(opt.color))
+                : (isActive
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'border-input bg-background hover:bg-accent hover:text-accent-foreground')
+              return (
+                <button
+                  key={opt.value}
+                  onClick={() => setAreaFilter(isActive && opt.value !== 'All' ? 'All' : opt.value)}
+                  className={`h-7 px-2.5 text-xs rounded-full border transition-colors ${coloredClass}`}
+                >
+                  {opt.label}
+                </button>
+              )
+            })}
+          </div>
+        ) : (
+          <Select value={areaFilter} onValueChange={setAreaFilter}>
+            <SelectTrigger className="h-8 text-xs w-40">
+              <SelectValue placeholder="Area" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="All">All Areas</SelectItem>
+              {productAreas.map(a => (
+                <SelectItem key={a.id} value={String(a.id)}>{a.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         {/* Project Status filter */}
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="h-8 text-xs w-36">
@@ -222,13 +250,13 @@ export default function ProjectList() {
           <thead className="sticky top-0 bg-background border-b z-10">
             <tr>
               <th className={thClass} onClick={() => handleSort('workItem')}>Work Item<SortIcon col="workItem" /></th>
-              <th className={thClass} onClick={() => handleSort('productArea')}>Product Area<SortIcon col="productArea" /></th>
+              <th className={thClass} onClick={() => handleSort('productArea')}>Area<SortIcon col="productArea" /></th>
               <th className={thClass} onClick={() => handleSort('priority')}>Priority<SortIcon col="priority" /></th>
               <th className={thClass} onClick={() => handleSort('ragStatus')}>RAG<SortIcon col="ragStatus" /></th>
               <th className={thClass}>Status</th>
               <th className={thClass} onClick={() => handleSort('openTasks')}>Tasks<SortIcon col="openTasks" /></th>
-              <th className={thClass} onClick={() => handleSort('latestStatus')}>Latest Status<SortIcon col="latestStatus" /></th>
-              <th className={thClass}>Latest Update</th>
+              <th className={thClass} onClick={() => handleSort('latestStatus')}>Status Comment<SortIcon col="latestStatus" /></th>
+              <th className={thClass}>Latest Log Entry</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -245,7 +273,16 @@ export default function ProjectList() {
                 onClick={() => navigate(`/projects/${p.id}`)}
                 className="hover:bg-accent cursor-pointer transition-colors"
               >
-                <td className="px-4 py-3 font-medium">{p.workItem}</td>
+                <td className="px-4 py-3 font-medium">
+                  <span className="flex items-center gap-2">
+                    {p.workItem}
+                    {p.dueDate && p.dueDate < today && (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded bg-red-50 border border-red-200 text-red-700 shrink-0">
+                        🗓 Overdue
+                      </span>
+                    )}
+                  </span>
+                </td>
                 <td className="px-4 py-3">
                   {p.productAreaId ? (() => {
                     const opt = productAreas.find(o => o.id === p.productAreaId)

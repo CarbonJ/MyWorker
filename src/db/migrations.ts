@@ -294,6 +294,14 @@ const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_tasks_product_area_id ON tasks(product_area_id);
     `,
   },
+  {
+    version: 9,
+    up: `
+      -- Optional due date for a project. Used to display an overdue banner
+      -- on the Project Detail screen when the project has passed its due date.
+      ALTER TABLE projects ADD COLUMN due_date TEXT;
+    `,
+  },
 ]
 
 export async function runMigrations(handle: DbHandle): Promise<void> {
