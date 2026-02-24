@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { getAllTasks, createTask, updateTask } from '@/db/tasks'
 import { getAllProjectsIncludingArchived } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
@@ -66,6 +66,7 @@ interface PageData {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function TasksView() {
+  const navigate = useNavigate()
   const { query } = useSearch()
   const { handleError } = useErrorHandler()
   const [taskModalOpen, setTaskModalOpen] = useState(false)
@@ -452,9 +453,18 @@ export default function TasksView() {
                 </Popover>
               )}
 
-              {/* Project */}
+              {/* Project — clickable to navigate to project detail */}
               <span className="text-xs text-muted-foreground break-words">
-                {projectName ?? (task.productAreaId === null ? <span className="italic font-medium text-foreground">Inbox</span> : null)}
+                {task.projectId ? (
+                  <button
+                    onClick={e => { e.stopPropagation(); navigate(`/projects/${task.projectId}`) }}
+                    className="hover:underline hover:text-foreground transition-colors text-left"
+                  >
+                    {projectName}
+                  </button>
+                ) : (
+                  task.productAreaId === null ? <span className="italic font-medium text-foreground">Inbox</span> : null
+                )}
               </span>
 
               {/* Priority — inline editable */}

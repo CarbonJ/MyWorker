@@ -61,11 +61,22 @@ export function ProjectHeader({
     }
   }
 
+  const today = new Date().toISOString().slice(0, 10)
+  const isProjectOverdue = !isArchived && !!project.dueDate && project.dueDate < today
+
   return (
     <div className="shrink-0 px-6 py-4 border-b bg-background">
       <button onClick={() => navigate('/')} className="text-sm text-muted-foreground hover:text-foreground mb-3 block">
         ← Projects
       </button>
+
+      {isProjectOverdue && (
+        <div className="mb-3 px-3 py-2 rounded-md bg-red-50 border border-red-200 text-red-700 text-sm flex items-center gap-2">
+          <span>🗓</span>
+          <span className="font-semibold">Project overdue</span>
+          <span className="text-red-600">— due {new Date(project.dueDate! + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+        </div>
+      )}
 
       <div className="grid grid-cols-[1fr_1fr_14rem] gap-6">
 

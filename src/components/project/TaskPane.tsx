@@ -12,21 +12,11 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
+import { Check } from 'lucide-react'
 import { pillClass, dotClass } from '@/lib/colors'
 import { fmtDate, isOverdue, isDueToday } from '@/lib/utils'
 import { useErrorHandler } from '@/hooks/useErrorHandler'
 
-const STATUS_LABEL: Record<string, string> = {
-  open: 'Open',
-  in_progress: 'In Progress',
-  done: 'Done',
-}
-
-const STATUS_CLASS: Record<string, string> = {
-  open: 'bg-slate-100 text-slate-700',
-  in_progress: 'bg-blue-100 text-blue-700',
-  done: 'bg-green-100 text-green-700',
-}
 
 type TaskSortField = 'status' | 'priority' | 'dueDate'
 type SortDir = 'asc' | 'desc'
@@ -39,14 +29,14 @@ function cycleStatus(current: TaskStatus): TaskStatus {
 
 function StatusCircle({ status }: { status: TaskStatus }) {
   if (status === 'done') return (
-    <span className="w-5 h-5 rounded-full bg-green-500 border-2 border-green-500 flex items-center justify-center text-white text-[10px] font-bold leading-none">✓</span>
+    <span className="w-5 h-5 rounded bg-green-500 border-2 border-green-500 flex items-center justify-center text-white text-[10px] font-bold leading-none">✓</span>
   )
   if (status === 'in_progress') return (
-    <span className="w-5 h-5 rounded-full border-2 border-blue-500 flex items-center justify-center">
-      <span className="w-2 h-2 rounded-full bg-blue-500" />
+    <span className="w-5 h-5 rounded border-2 border-blue-500 flex items-center justify-center">
+      <span className="w-2 h-2 rounded-sm bg-blue-500" />
     </span>
   )
-  return <span className="w-5 h-5 rounded-full border-2 border-slate-300" />
+  return <span className="w-5 h-5 rounded border-2 border-slate-300" />
 }
 
 interface Props {
@@ -141,14 +131,11 @@ export function TaskPane({
             </SelectContent>
           </Select>
         </div>
-        <div className="grid grid-cols-[1.5rem_1fr_4rem_5.5rem_4.5rem] gap-2 px-4 pb-1 text-xs text-muted-foreground">
+        <div className="grid grid-cols-[1.5rem_1fr_4rem_4.5rem] gap-2 px-4 pb-1 text-xs text-muted-foreground">
           <span />
           <span>Title</span>
           <button onClick={() => onToggleSort('priority')} className="hover:text-foreground tabular-nums text-left">
             Priority{sortField === 'priority' ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
-          </button>
-          <button onClick={() => onToggleSort('status')} className="hover:text-foreground tabular-nums text-left">
-            Status{sortField === 'status' ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
           </button>
           <button onClick={() => onToggleSort('dueDate')} className="hover:text-foreground tabular-nums text-right">
             Due{sortField === 'dueDate' ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
@@ -167,7 +154,7 @@ export function TaskPane({
             <div
               key={task.id}
               onClick={() => onEditTask(task)}
-              className={`grid grid-cols-[1.5rem_1fr_4rem_5.5rem_4.5rem] gap-2 px-4 py-2 cursor-pointer hover:bg-accent transition-colors items-center ${isDone ? 'opacity-50' : ''}`}
+              className={`grid grid-cols-[1.5rem_1fr_4rem_4.5rem] gap-2 px-4 py-2 cursor-pointer hover:bg-accent transition-colors items-center ${isDone ? 'opacity-50' : ''}`}
             >
               <button
                 onClick={e => handleCycleStatus(e, task)}
@@ -184,19 +171,39 @@ export function TaskPane({
                   <p className="text-xs text-muted-foreground truncate leading-tight mt-0.5">{task.notes}</p>
                 )}
               </div>
-              {task.priorityId ? (() => {
-                const opt = priorities.find(p => p.id === task.priorityId)
-                const color = opt?.color ?? ''
-                return (
-                  <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full border ${isDone ? 'bg-muted text-muted-foreground border-transparent' : pillClass(color)}`}>
-                    {!isDone && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass(color)}`} />}
-                    {opt?.label ?? '—'}
-                  </span>
-                )
-              })() : <span className="text-xs text-muted-foreground">—</span>}
-              <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${isDone ? 'bg-muted text-muted-foreground' : STATUS_CLASS[task.status]}`}>
-                {STATUS_LABEL[task.status]}
-              </span>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button onClick={e => e.stopPropagation()} className="text-left">
+                    {task.priorityId ? (() => {
+                      const opt = priorities.find(p => p.id === task.priorityId)
+                      return (
+                        <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full border ${isDone ? 'bg-muted text-muted-foreground border-transparent' : pillClass(opt?.color ?? '')}`}>
+                          {!isDone && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass(opt?.color ?? '')}`} />}
+                          {opt?.label ?? '—'}
+                        </span>
+                      )
+                    })() : <span className="text-xs text-muted-foreground">—</span>}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-36 p-1" align="start" onClick={e => e.stopPropagation()}>
+                  {([{ id: null as number | null, label: '— None', color: '' }, ...priorities]).map(opt => (
+                    <button
+                      key={opt.id ?? '__none__'}
+                      onClick={async () => {
+                        try {
+                          await updateTask({ id: task.id, priorityId: opt.id })
+                          onReload()
+                        } catch (err) { handleError(err, 'Failed to update priority') }
+                      }}
+                      className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent"
+                    >
+                      <Check className={`h-3 w-3 shrink-0 ${task.priorityId === opt.id ? 'opacity-100' : 'opacity-0'}`} />
+                      {opt.id && <span className={`w-2 h-2 rounded-full shrink-0 ${dotClass(opt.color)}`} />}
+                      {opt.label}
+                    </button>
+                  ))}
+                </PopoverContent>
+              </Popover>
               <Popover>
                 <PopoverTrigger asChild>
                   <button

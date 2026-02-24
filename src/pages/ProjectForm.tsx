@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { getProjectById, createProject, updateProject, deleteProject } from '@/db/projects'
+import { getProjectById, createProject, updateProject, deleteProject, getAllStakeholderNames } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
 import type { Project, DropdownOption, RagStatus, JiraLink, Stakeholder } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -31,17 +31,21 @@ export default function ProjectForm() {
   const [statusId, setStatusId] = useState<string>('')
   const [stakeholders, setStakeholders] = useState<Stakeholder[]>([])
   const [linkedJiras, setLinkedJiras] = useState<JiraLink[]>([])
+  const [dueDate, setDueDate] = useState<string>('')
+  const [knownStakeholders, setKnownStakeholders] = useState<string[]>([])
 
   const load = useCallback(async () => {
     try {
-      const [pris, areas, statuses] = await Promise.all([
+      const [pris, areas, statuses, names] = await Promise.all([
         getDropdownOptions('priority'),
         getDropdownOptions('product_area'),
         getDropdownOptions('project_status'),
+        getAllStakeholderNames(),
       ])
       setPriorities(pris)
       setProductAreas(areas)
       setProjectStatuses(statuses)
+      setKnownStakeholders(names)
 
       if (isEdit && id) {
         const p = await getProjectById(Number(id))
@@ -56,6 +60,7 @@ export default function ProjectForm() {
         setStatusId(p.statusId?.toString() ?? '')
         setStakeholders(p.stakeholders ?? [])
         setLinkedJiras(p.linkedJiras)
+        setDueDate(p.dueDate ?? '')
       }
     } catch (err) {
       toast.error(`Failed to load: ${err instanceof Error ? err.message : String(err)}`)
@@ -80,6 +85,7 @@ export default function ProjectForm() {
         statusId: statusId ? Number(statusId) : null,
         stakeholders,
         linkedJiras,
+        dueDate: dueDate || null,
       }
 
       if (isEdit && id) {
@@ -200,13 +206,13 @@ export default function ProjectForm() {
           </div>
         </div>
 
-        {/* Product Area + Project Status */}
+        {/* Area + Project Status */}
         <div className={sectionClass}>
           <div className={fieldClass}>
-            <Label>Product Area</Label>
+            <Label>Area</Label>
             <Select value={productAreaId || 'none'} onValueChange={v => setProductAreaId(v === 'none' ? '' : v)}>
               <SelectTrigger>
-                <SelectValue placeholder="Select product area" />
+                <SelectValue placeholder="Select area" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">—</SelectItem>
@@ -233,9 +239,9 @@ export default function ProjectForm() {
           </div>
         </div>
 
-        {/* Latest Status */}
+        {/* Status Comment */}
         <div className={fieldClass}>
-          <Label htmlFor="latestStatus">Latest Status</Label>
+          <Label htmlFor="latestStatus">Status Comment</Label>
           <Input
             id="latestStatus"
             value={latestStatus}
@@ -244,14 +250,31 @@ export default function ProjectForm() {
           />
         </div>
 
+        {/* Due Date */}
+        <div className={fieldClass}>
+          <Label htmlFor="dueDate">Project Due Date <span className="text-muted-foreground font-normal">(optional)</span></Label>
+          <Input
+            id="dueDate"
+            type="date"
+            value={dueDate}
+            onChange={e => setDueDate(e.target.value)}
+            className="w-44"
+          />
+        </div>
+
         {/* Stakeholders */}
         <div className={fieldClass}>
           <Label>Stakeholders</Label>
+          {/* Datalist for autocomplete suggestions */}
+          <datalist id="stakeholder-suggestions">
+            {knownStakeholders.map(name => <option key={name} value={name} />)}
+          </datalist>
           {stakeholders.length > 0 && (
             <div className="space-y-2">
               {stakeholders.map((entry, i) => (
                 <div key={i} className="flex gap-2 items-center">
                   <Input
+                    list="stakeholder-suggestions"
                     value={entry.name}
                     onChange={e => updateStakeholder(i, e.target.value)}
                     placeholder="Name"

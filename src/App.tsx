@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { Toaster } from '@/components/ui/sonner'
 import { DbProvider } from '@/hooks/useDb'
-import { QuickWorkLogButton } from '@/components/QuickWorkLog'
 import { TaskModal } from '@/components/TaskModal'
 import { SearchProvider, useSearch } from '@/contexts/SearchContext'
 import { Input } from '@/components/ui/input'
@@ -89,14 +88,14 @@ function NavBar() {
 
 function AppInner() {
   const navigate = useNavigate()
-  const [quickLogOpen, setQuickLogOpen] = useState(false)
   const [quickTaskOpen, setQuickTaskOpen] = useState(false)
   const [quickTaskAreaId, setQuickTaskAreaId] = useState<number | null>(null)
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      // Cmd+L / Ctrl+L → open Quick Add inbox task modal
-      if (e.key === 'l' && (e.metaKey || e.ctrlKey)) {
+      // Cmd+Shift+L / Ctrl+Shift+L → open Quick Add inbox task modal
+      // (Cmd+L is reserved by Safari for the address bar)
+      if (e.key === 'L' && e.shiftKey && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
         // Pre-populate area when on the Tasks screen with an area filter active
         if (window.location.pathname.includes('/tasks')) {
@@ -136,11 +135,6 @@ function AppInner() {
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </main>
-      <QuickWorkLogButton
-        open={quickLogOpen}
-        onOpen={() => setQuickLogOpen(true)}
-        onClose={() => setQuickLogOpen(false)}
-      />
       <TaskModal
         open={quickTaskOpen}
         projectId={null}
