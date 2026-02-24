@@ -57,3 +57,19 @@ export function pillClassActive(color: string): string {
 export function dotClass(color: string): string {
   return DOT_CLASS[color] ?? 'bg-slate-400'
 }
+
+/** Tailwind text-color classes for a given color string. */
+export const TEXT_CLASS: Record<string, string> = {
+  red:    'text-red-700',
+  orange: 'text-orange-700',
+  amber:  'text-amber-700',
+  green:  'text-green-700',
+  blue:   'text-blue-700',
+  purple: 'text-purple-700',
+  grey:   'text-slate-600',
+}
+
+/** Returns the text color class for a given color string, with a safe fallback. */
+export function textClass(color: string): string {
+  return TEXT_CLASS[color] ?? 'text-muted-foreground'
+}

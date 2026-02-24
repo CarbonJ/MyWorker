@@ -246,7 +246,18 @@ export default function ProjectList() {
                 className="hover:bg-accent cursor-pointer transition-colors"
               >
                 <td className="px-4 py-3 font-medium">{p.workItem}</td>
-                <td className="px-4 py-3 text-muted-foreground">{labelFor(productAreas, p.productAreaId)}</td>
+                <td className="px-4 py-3">
+                  {p.productAreaId ? (() => {
+                    const opt = productAreas.find(o => o.id === p.productAreaId)
+                    const color = opt?.color ?? ''
+                    return (
+                      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${pillClass(color)}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${dotClass(color)}`} />
+                        {opt?.label ?? '—'}
+                      </span>
+                    )
+                  })() : <span className="text-muted-foreground">—</span>}
+                </td>
                 <td className="px-4 py-3">
                   {p.priorityId ? (() => {
                     const opt = priorities.find(o => o.id === p.priorityId)

@@ -7,9 +7,10 @@
 
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import type { Project, DropdownOption } from '@/types'
+import type { Project, DropdownOption, Task } from '@/types'
 import { RagBadge } from '@/components/RagBadge'
 import { MarkdownContent } from '@/components/MarkdownContent'
+import { ProjectStats } from '@/components/project/ProjectStats'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { pillClass, dotClass } from '@/lib/colors'
@@ -21,6 +22,7 @@ interface Props {
   priorities: DropdownOption[]
   productAreas: DropdownOption[]
   projectStatuses: DropdownOption[]
+  tasks: Task[]
   isArchived: boolean
   onSaveField: (patch: Partial<Omit<Project, 'id'>>) => void
   onMarkComplete: () => void
@@ -35,12 +37,9 @@ function safeUrl(url: string): string | null {
   return null
 }
 
-function labelFor(opts: DropdownOption[], id: number | null): string {
-  return opts.find(o => o.id === id)?.label ?? '—'
-}
 
 export function ProjectHeader({
-  project, projectId, priorities, productAreas, projectStatuses,
+  project, projectId, priorities, productAreas, projectStatuses, tasks,
   isArchived, onSaveField, onMarkComplete, onReopen,
 }: Props) {
   const navigate = useNavigate()
@@ -68,7 +67,7 @@ export function ProjectHeader({
         ← Projects
       </button>
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-[1fr_1fr_14rem] gap-6">
 
         {/* LEFT: Work Item + Description */}
         <div className="min-w-0 space-y-2 border rounded-lg p-3">
@@ -108,7 +107,7 @@ export function ProjectHeader({
         <div className="space-y-3 text-sm border rounded-lg p-3">
           {/* Latest Status — click to edit inline */}
           <div
-            className="px-3 py-2 bg-muted rounded-md cursor-text"
+            className="px-3 py-4 bg-muted rounded-md cursor-text"
             onClick={() => !editingStatus && openStatusEdit()}
           >
             <span className="font-medium">Status: </span>
@@ -129,11 +128,16 @@ export function ProjectHeader({
           {/* RAG + Priority + Area + Project Status */}
           <div className="flex items-center gap-2 flex-wrap">
             <RagBadge status={project.ragStatus} />
-            {project.priorityId && (
-              <span className="text-xs text-muted-foreground border rounded-full px-2 py-0.5">
-                {labelFor(priorities, project.priorityId)}
-              </span>
-            )}
+            {project.priorityId && (() => {
+              const opt = priorities.find(o => o.id === project.priorityId)
+              const color = opt?.color ?? ''
+              return (
+                <span className={`text-xs inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-medium border ${pillClass(color)}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${dotClass(color)}`} />
+                  {opt?.label ?? '—'}
+                </span>
+              )
+            })()}
             {project.statusId && (() => {
               const opt = projectStatuses.find(s => s.id === project.statusId)
               if (!opt) return null
@@ -144,11 +148,16 @@ export function ProjectHeader({
                 </span>
               )
             })()}
-            {project.productAreaId && (
-              <span className="text-muted-foreground">
-                <span className="font-medium text-foreground">Area:</span> {labelFor(productAreas, project.productAreaId)}
-              </span>
-            )}
+            {project.productAreaId && (() => {
+              const opt = productAreas.find(o => o.id === project.productAreaId)
+              const color = opt?.color ?? ''
+              return (
+                <span className={`text-xs inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-medium border ${pillClass(color)}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${dotClass(color)}`} />
+                  {opt?.label ?? '—'}
+                </span>
+              )
+            })()}
           </div>
 
           {project.stakeholders.length > 0 && (
@@ -183,6 +192,10 @@ export function ProjectHeader({
             </div>
           )}
         </div>
+
+        {/* RIGHT: Stats & Metrics */}
+        <ProjectStats tasks={tasks} project={project} />
+
       </div>
     </div>
   )

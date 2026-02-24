@@ -12,25 +12,12 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar'
 import { Check } from 'lucide-react'
 
-import { pillClass, pillClassActive, dotClass } from '@/lib/colors'
+import { pillClass, pillClassActive, dotClass, textClass } from '@/lib/colors'
 import { useDataLoader } from '@/hooks/useDataLoader'
 import { useErrorHandler } from '@/hooks/useErrorHandler'
 import { fmtDate, isOverdue, isDueToday } from '@/lib/utils'
 import { useSearch } from '@/contexts/SearchContext'
 
-// ── Shared display constants ──────────────────────────────────────────────────
-
-const STATUS_LABEL: Record<string, string> = {
-  open: 'Open',
-  in_progress: 'In Progress',
-  done: 'Done',
-}
-
-const STATUS_CLASS: Record<string, string> = {
-  open: 'bg-slate-100 text-slate-700',
-  in_progress: 'bg-blue-100 text-blue-700',
-  done: 'bg-green-100 text-green-700',
-}
 
 function cycleStatus(current: TaskStatus): TaskStatus {
   if (current === 'open')        return 'in_progress'
@@ -51,14 +38,14 @@ function resolveAreaId(task: Task, projects: Project[]): number | null {
 
 function StatusCircle({ status }: { status: TaskStatus }) {
   if (status === 'done') return (
-    <span className="w-5 h-5 rounded-full bg-green-500 border-2 border-green-500 flex items-center justify-center text-white text-[10px] font-bold leading-none">✓</span>
+    <span className="w-5 h-5 rounded-md bg-green-500 border-2 border-green-500 flex items-center justify-center text-white text-[10px] font-bold leading-none">✓</span>
   )
   if (status === 'in_progress') return (
-    <span className="w-5 h-5 rounded-full border-2 border-blue-500 flex items-center justify-center">
-      <span className="w-2 h-2 rounded-full bg-blue-500" />
+    <span className="w-5 h-5 rounded-md border-2 border-blue-500 flex items-center justify-center">
+      <span className="w-2 h-2 rounded-sm bg-blue-500" />
     </span>
   )
-  return <span className="w-5 h-5 rounded-full border-2 border-slate-300" />
+  return <span className="w-5 h-5 rounded-md border-2 border-slate-300" />
 }
 
 
@@ -372,13 +359,12 @@ export default function TasksView() {
       </div>
 
       {/* ── Column headers ──────────────────────────────────────────────── */}
-      <div className="shrink-0 grid grid-cols-[1.5rem_minmax(0,50%)_6rem_12rem_5.5rem_6.5rem_5.5rem] gap-3 px-6 py-1 text-xs text-muted-foreground border-b">
+      <div className="shrink-0 grid grid-cols-[1.5rem_minmax(0,50%)_6rem_12rem_5.5rem_5.5rem] gap-3 px-10 py-1 text-sm font-semibold text-muted-foreground border-b">
         <span />
         <span>Title</span>
         <span>Area</span>
         <SortBtn field="project" label="Project" />
         <SortBtn field="priority" label="Priority" />
-        <SortBtn field="status" label="Status" />
         <SortBtn field="dueDate" label="Due" align="right" />
       </div>
 
@@ -397,7 +383,7 @@ export default function TasksView() {
             <div
               key={task.id}
               onClick={() => { setEditingTask(task); setTaskModalOpen(true) }}
-              className={`grid grid-cols-[1.5rem_minmax(0,50%)_6rem_12rem_5.5rem_6.5rem_5.5rem] gap-3 px-6 py-2 cursor-pointer hover:bg-accent transition-colors items-start ${isDone ? 'opacity-50' : ''}`}
+              className={`grid grid-cols-[1.5rem_minmax(0,50%)_6rem_12rem_5.5rem_5.5rem] gap-3 px-10 py-2 cursor-pointer hover:bg-accent transition-colors items-start ${isDone ? 'opacity-50' : ''}`}
             >
               {/* Status cycle button */}
               <button
@@ -410,11 +396,11 @@ export default function TasksView() {
 
               {/* Title + notes */}
               <div className="min-w-0">
-                <p className={`text-sm font-medium leading-tight truncate ${isDone ? 'line-through' : ''}`}>
+                <p className={`text-sm font-medium leading-tight line-clamp-2 ${isDone ? 'line-through' : ''}`}>
                   {task.title}
                 </p>
                 {task.notes && (
-                  <p className="text-xs text-muted-foreground truncate leading-tight mt-0.5">
+                  <p className="text-xs text-muted-foreground line-clamp-2 leading-tight mt-0.5">
                     {task.notes}
                   </p>
                 )}
@@ -423,19 +409,27 @@ export default function TasksView() {
               {/* Product Area — inherited (read-only) for project tasks;
                   inline editable for non-project tasks */}
               {task.projectId !== null ? (
-                <span className="text-xs truncate text-muted-foreground">
-                  {productAreas.find(a => a.id === resolveAreaId(task, projects))?.label ?? '—'}
-                </span>
+                (() => {
+                  const area = productAreas.find(a => a.id === resolveAreaId(task, projects))
+                  return <span className={`text-xs truncate ${isDone ? 'text-muted-foreground' : textClass(area?.color ?? '')}`}>
+                    {area?.label ?? '—'}
+                  </span>
+                })()
               ) : (
                 <Popover>
                   <PopoverTrigger asChild>
                     <button
                       onClick={e => e.stopPropagation()}
-                      className="text-xs text-left truncate hover:underline decoration-dashed underline-offset-2 text-muted-foreground"
+                      className="text-xs text-left truncate hover:underline decoration-dashed underline-offset-2"
                     >
                       {task.productAreaId === null
-                        ? <span className="italic text-muted-foreground/60">Inbox</span>
-                        : (productAreas.find(a => a.id === task.productAreaId)?.label ?? '—')}
+                        ? <span className="italic font-medium text-foreground">Inbox</span>
+                        : (() => {
+                            const area = productAreas.find(a => a.id === task.productAreaId)
+                            return <span className={isDone ? 'text-muted-foreground' : textClass(area?.color ?? '')}>
+                              {area?.label ?? '—'}
+                            </span>
+                          })()}
                     </button>
                   </PopoverTrigger>
                   <PopoverContent className="w-44 p-1" align="start" onClick={e => e.stopPropagation()}>
@@ -460,7 +454,7 @@ export default function TasksView() {
 
               {/* Project */}
               <span className="text-xs text-muted-foreground break-words">
-                {projectName ?? (task.productAreaId === null ? <span className="italic">Inbox</span> : null)}
+                {projectName ?? (task.productAreaId === null ? <span className="italic font-medium text-foreground">Inbox</span> : null)}
               </span>
 
               {/* Priority — inline editable */}
@@ -500,35 +494,6 @@ export default function TasksView() {
                 </PopoverContent>
               </Popover>
 
-              {/* Status badge — inline editable */}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button
-                    onClick={e => e.stopPropagation()}
-                    className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${isDone ? 'bg-muted text-muted-foreground' : STATUS_CLASS[task.status]}`}
-                  >
-                    {STATUS_LABEL[task.status]}
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-36 p-1" align="start" onClick={e => e.stopPropagation()}>
-                  {(['open', 'in_progress', 'done'] as TaskStatus[]).map(s => (
-                    <button
-                      key={s}
-                      onClick={async () => {
-                        try {
-                          await updateTask({ id: task.id, status: s })
-                          await load()
-                        } catch (err) { handleError(err, 'Failed to update status') }
-                      }}
-                      className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent"
-                    >
-                      <Check className={`h-3 w-3 shrink-0 ${task.status === s ? 'opacity-100' : 'opacity-0'}`} />
-                      {STATUS_LABEL[s]}
-                    </button>
-                  ))}
-                </PopoverContent>
-              </Popover>
-
               {/* Due date — click to open calendar */}
               <Popover>
                 <PopoverTrigger asChild>
@@ -540,7 +505,7 @@ export default function TasksView() {
                       'text-muted-foreground'
                     }`}
                   >
-                    {task.dueDate ? fmtDate(task.dueDate) : '—'}
+                    {task.dueDate ? fmtDate(task.dueDate) : null}
                   </button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="end" onClick={e => e.stopPropagation()}>
