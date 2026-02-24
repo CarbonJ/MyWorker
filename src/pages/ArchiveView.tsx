@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useSearch } from '@/contexts/SearchContext'
 import { toast } from 'sonner'
 import { getArchivedProjects } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
@@ -35,6 +36,7 @@ function dotClass(color: string): string {
 
 export default function ArchiveView() {
   const navigate = useNavigate()
+  const { query } = useSearch()
   const [projects, setProjects] = useState<Project[]>([])
   const [priorities, setPriorities] = useState<DropdownOption[]>([])
   const [productAreas, setProductAreas] = useState<DropdownOption[]>([])
@@ -59,6 +61,10 @@ export default function ArchiveView() {
   const labelFor = (opts: DropdownOption[], id: number | null) =>
     opts.find(o => o.id === id)?.label ?? '—'
 
+  const visibleProjects = query.trim()
+    ? projects.filter(p => p.workItem.toLowerCase().includes(query.trim().toLowerCase()))
+    : projects
+
   const thClass = 'px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap'
 
   return (
@@ -66,7 +72,7 @@ export default function ArchiveView() {
       {/* Header */}
       <div className="shrink-0 flex items-center gap-3 px-6 py-3 border-b bg-background">
         <h1 className="text-lg font-semibold">Archive</h1>
-        <span className="text-sm text-muted-foreground">{projects.length} archived project{projects.length !== 1 ? 's' : ''}</span>
+        <span className="text-sm text-muted-foreground">{visibleProjects.length} archived project{visibleProjects.length !== 1 ? 's' : ''}</span>
       </div>
 
       {/* Table */}
@@ -83,14 +89,14 @@ export default function ArchiveView() {
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {projects.length === 0 && (
+            {visibleProjects.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-16 text-center text-muted-foreground">
-                  No archived projects yet. Mark a project complete to archive it.
+                  {query ? 'No results found.' : 'No archived projects yet. Mark a project complete to archive it.'}
                 </td>
               </tr>
             )}
-            {projects.map(p => {
+            {visibleProjects.map(p => {
               const priorityOpt = priorities.find(o => o.id === p.priorityId)
               return (
                 <tr

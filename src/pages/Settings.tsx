@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Checkbox } from '@/components/ui/checkbox'
 
 // ── Colour picker swatches ────────────────────────────────────────────────────
 
@@ -188,10 +189,20 @@ interface DataStats {
   dbSizeMb: string
 }
 
+const AREA_BTN_KEY = 'myworker:area-filter-buttons'
+
 export default function Settings() {
   const importRef = useRef<HTMLInputElement>(null)
   const [importing, setImporting] = useState(false)
   const [dataStats, setDataStats] = useState<DataStats | null>(null)
+  const [areaFilterButtons, setAreaFilterButtons] = useState(
+    () => localStorage.getItem(AREA_BTN_KEY) === 'true'
+  )
+
+  const toggleAreaFilterButtons = (checked: boolean) => {
+    setAreaFilterButtons(checked)
+    localStorage.setItem(AREA_BTN_KEY, String(checked))
+  }
 
   useEffect(() => {
     Promise.all([
@@ -285,6 +296,16 @@ export default function Settings() {
             <OptionList type="priority" title="Priority" />
             <Separator />
             <OptionList type="product_area" title="Product Area" />
+            <div className="flex items-center gap-2 pl-1">
+              <Checkbox
+                id="area-filter-buttons"
+                checked={areaFilterButtons}
+                onCheckedChange={v => toggleAreaFilterButtons(v === true)}
+              />
+              <label htmlFor="area-filter-buttons" className="text-sm cursor-pointer select-none text-muted-foreground">
+                Show area filter as buttons on the Tasks screen
+              </label>
+            </div>
             <Separator />
             <OptionList type="project_status" title="Project Status" />
           </section>

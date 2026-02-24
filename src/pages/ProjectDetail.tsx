@@ -141,6 +141,7 @@ export default function ProjectDetail() {
         priorities={priorities}
         productAreas={productAreas}
         projectStatuses={projectStatuses}
+        tasks={tasks}
         isArchived={isArchived}
         onSaveField={saveField}
         onMarkComplete={markComplete}
