@@ -15,7 +15,7 @@ import { fmtDate } from '@/lib/utils'
 import { useDataLoader } from '@/hooks/useDataLoader'
 import { SEARCH_DEBOUNCE_MS } from '@/lib/constants'
 
-type SortKey = 'workItem' | 'productArea' | 'priority' | 'ragStatus' | 'latestStatus' | 'updatedAt' | 'openTasks'
+type SortKey = 'workItem' | 'productArea' | 'priority' | 'ragStatus' | 'projectStatus' | 'latestStatus' | 'updatedAt' | 'openTasks'
 type SortDir = 'asc' | 'desc'
 
 interface PageData {
@@ -35,7 +35,7 @@ export default function ProjectList() {
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [ragFilter, setRagFilter] = useState<RagStatus | 'All'>('All')
   const [priorityFilter, setPriorityFilter] = useState<string>('All')  // 'All' | priority id as string
-  const [areaFilter, setAreaFilter] = useState<string>('All')          // 'All' | product_area id as string
+  const [areaFilter, setAreaFilter] = useState<string>(() => localStorage.getItem('myworker:area-filter-projects') ?? 'All')
   const [areaFilterButtons] = useState(() => localStorage.getItem('myworker:area-filter-buttons-projects') !== 'false')
   const [statusFilter, setStatusFilter] = useState<string>('All')      // 'All' | project_status id as string
 
@@ -60,6 +60,9 @@ export default function ProjectList() {
   const projectStatuses = data?.projectStatuses ?? []
   const allTasks       = data?.allTasks       ?? []
   const allWorkLog     = data?.allWorkLog     ?? []
+
+  // Persist area filter across navigation
+  useEffect(() => { localStorage.setItem('myworker:area-filter-projects', areaFilter) }, [areaFilter])
 
   // Full-text search — debounced
   useEffect(() => {
@@ -124,6 +127,7 @@ export default function ProjectList() {
         case 'productArea': av = labelFor(productAreas, a.productAreaId).toLowerCase(); bv = labelFor(productAreas, b.productAreaId).toLowerCase(); break
         case 'priority': av = labelFor(priorities, a.priorityId).toLowerCase(); bv = labelFor(priorities, b.priorityId).toLowerCase(); break
         case 'ragStatus': av = RAG_ORDER[a.ragStatus]; bv = RAG_ORDER[b.ragStatus]; break
+        case 'projectStatus': av = labelFor(projectStatuses, a.statusId).toLowerCase(); bv = labelFor(projectStatuses, b.statusId).toLowerCase(); break
         case 'latestStatus': av = a.latestStatus.toLowerCase(); bv = b.latestStatus.toLowerCase(); break
         case 'updatedAt': av = a.updatedAt; bv = b.updatedAt; break
         case 'openTasks': {
@@ -187,12 +191,13 @@ export default function ProjectList() {
               { value: 'All', label: 'All Areas', color: '' },
               ...productAreas.map(a => ({ value: String(a.id), label: a.label, color: a.color })),
             ].map(opt => {
+              const anyActive = areaFilter !== 'All'
               const isActive = areaFilter === opt.value
-              const coloredClass = opt.color
-                ? (isActive ? pillClassActive(opt.color) : pillClass(opt.color))
-                : (isActive
-                    ? 'bg-primary text-primary-foreground border-primary'
-                    : 'border-input bg-background hover:bg-accent hover:text-accent-foreground')
+              const coloredClass = isActive
+                ? (opt.color ? pillClassActive(opt.color) : 'bg-primary text-primary-foreground border-primary')
+                : anyActive
+                  ? 'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200'
+                  : (opt.color ? pillClass(opt.color) : 'border-input bg-background hover:bg-accent hover:text-accent-foreground')
               return (
                 <button
                   key={opt.value}
@@ -253,7 +258,7 @@ export default function ProjectList() {
               <th className={thClass} onClick={() => handleSort('productArea')}>Area<SortIcon col="productArea" /></th>
               <th className={thClass} onClick={() => handleSort('priority')}>Priority<SortIcon col="priority" /></th>
               <th className={thClass} onClick={() => handleSort('ragStatus')}>RAG<SortIcon col="ragStatus" /></th>
-              <th className={thClass}>Status</th>
+              <th className={thClass} onClick={() => handleSort('projectStatus')}>Status<SortIcon col="projectStatus" /></th>
               <th className={thClass} onClick={() => handleSort('openTasks')}>Tasks<SortIcon col="openTasks" /></th>
               <th className={thClass} onClick={() => handleSort('latestStatus')}>Status Comment<SortIcon col="latestStatus" /></th>
               <th className={thClass}>Latest Log Entry</th>

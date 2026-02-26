@@ -161,6 +161,30 @@ export async function deleteProject(id: number): Promise<void> {
   await run(`DELETE FROM projects WHERE id = ?`, [id])
 }
 
+/** Renames a stakeholder across all projects. */
+export async function renameStakeholder(oldName: string, newName: string): Promise<void> {
+  const rows = await query(`SELECT id, stakeholders FROM projects WHERE stakeholders IS NOT NULL AND stakeholders != ''`)
+  for (const row of rows) {
+    const parsed = parseStakeholders(row.stakeholders as string)
+    const updated = parsed.map(s => s.name === oldName ? { ...s, name: newName } : s)
+    if (updated.some((s, i) => s.name !== parsed[i].name)) {
+      await run(`UPDATE projects SET stakeholders = ? WHERE id = ?`, [stringifyStakeholders(updated), row.id as number])
+    }
+  }
+}
+
+/** Removes a stakeholder from all projects. */
+export async function deleteStakeholder(name: string): Promise<void> {
+  const rows = await query(`SELECT id, stakeholders FROM projects WHERE stakeholders IS NOT NULL AND stakeholders != ''`)
+  for (const row of rows) {
+    const parsed = parseStakeholders(row.stakeholders as string)
+    const updated = parsed.filter(s => s.name !== name)
+    if (updated.length !== parsed.length) {
+      await run(`UPDATE projects SET stakeholders = ? WHERE id = ?`, [stringifyStakeholders(updated), row.id as number])
+    }
+  }
+}
+
 /** Returns a sorted list of all unique stakeholder names across all projects — used for autocomplete. */
 export async function getAllStakeholderNames(): Promise<string[]> {
   const rows = await query(`SELECT stakeholders FROM projects WHERE stakeholders != '' AND stakeholders IS NOT NULL`)

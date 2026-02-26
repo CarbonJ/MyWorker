@@ -83,7 +83,7 @@ export default function TasksView() {
   const [filterStatus,   setFilterStatus]   = useState<string>(initialFilter)
   const [filterPriority, setFilterPriority] = useState<string>('all')
   const [filterProject,  setFilterProject]  = useState<string>('all')
-  const [filterArea,     setFilterArea]     = useState<string>('all')
+  const [filterArea,     setFilterArea]     = useState<string>(() => localStorage.getItem('myworker:tasks-filter-area') ?? 'all')
   const [sortField,      setSortField]      = useState<TaskSortField>('dueDate')
   const [sortDir,        setSortDir]        = useState<SortDir>('asc')
 
@@ -317,12 +317,13 @@ export default function TasksView() {
               { value: 'inbox', label: 'Inbox', color: '' },
               ...productAreas.map(a => ({ value: String(a.id), label: a.label, color: a.color })),
             ].map(opt => {
+              const anyActive = filterArea !== 'all'
               const isActive = filterArea === opt.value
-              const coloredClass = opt.color
-                ? (isActive ? pillClassActive(opt.color) : pillClass(opt.color))
-                : (isActive
-                    ? 'bg-primary text-primary-foreground border-primary'
-                    : 'border-input bg-background hover:bg-accent hover:text-accent-foreground')
+              const coloredClass = isActive
+                ? (opt.color ? pillClassActive(opt.color) : 'bg-primary text-primary-foreground border-primary')
+                : anyActive
+                  ? 'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200'
+                  : (opt.color ? pillClass(opt.color) : 'border-input bg-background hover:bg-accent hover:text-accent-foreground')
               return (
                 <button
                   key={opt.value}

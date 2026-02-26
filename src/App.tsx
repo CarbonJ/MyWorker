@@ -5,7 +5,7 @@ import { DbProvider } from '@/hooks/useDb'
 import { TaskModal } from '@/components/TaskModal'
 import { SearchProvider, useSearch } from '@/contexts/SearchContext'
 import { Input } from '@/components/ui/input'
-import { X } from 'lucide-react'
+import { X, Moon, Sun } from 'lucide-react'
 import { getDueSoonTasks } from '@/db/tasks'
 import ProjectList from '@/pages/ProjectList'
 import ProjectDetail from '@/pages/ProjectDetail'
@@ -41,7 +41,7 @@ function DueDateBanner() {
   )
 }
 
-function NavBar() {
+function NavBar({ isDark, onToggleDark }: { isDark: boolean; onToggleDark: () => void }) {
   const { query, setQuery } = useSearch()
   const location = useLocation()
 
@@ -82,6 +82,9 @@ function NavBar() {
           </button>
         )}
       </div>
+      <button onClick={onToggleDark} className="ml-2 text-muted-foreground hover:text-foreground" aria-label="Toggle dark mode">
+        {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+      </button>
     </nav>
   )
 }
@@ -90,6 +93,13 @@ function AppInner() {
   const navigate = useNavigate()
   const [quickTaskOpen, setQuickTaskOpen] = useState(false)
   const [quickTaskAreaId, setQuickTaskAreaId] = useState<number | null>(null)
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'))
+  const toggleDark = () => {
+    const next = !isDark
+    document.documentElement.classList.toggle('dark', next)
+    localStorage.setItem('myworker:theme', next ? 'dark' : 'light')
+    setIsDark(next)
+  }
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -121,7 +131,7 @@ function AppInner() {
   return (
     <SearchProvider>
     <div className="min-h-screen bg-background flex flex-col">
-      <NavBar />
+      <NavBar isDark={isDark} onToggleDark={toggleDark} />
       <DueDateBanner />
       <main className="flex-1 overflow-hidden">
         <Routes>

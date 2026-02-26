@@ -8,6 +8,7 @@ import {
   reorderDropdownOptions,
 } from '@/db/dropdownOptions'
 import { exportToJson, importFromJson } from '@/db/importExport'
+import { getAllStakeholderNames, renameStakeholder, deleteStakeholder } from '@/db/projects'
 import { setUserFolderHandle, query } from '@/db'
 import type { DropdownOption, DropdownType } from '@/types'
 import { useErrorHandler } from '@/hooks/useErrorHandler'
@@ -183,6 +184,82 @@ function OptionList({ type, title }: { type: DropdownType; title: string }) {
   )
 }
 
+// ── Stakeholder Manager ───────────────────────────────────────────────────────
+
+function StakeholderManager() {
+  const { handleError } = useErrorHandler()
+  const [names, setNames] = useState<string[]>([])
+  const [editingName, setEditingName] = useState<string | null>(null)
+  const [editValue, setEditValue] = useState('')
+
+  const load = useCallback(async () => {
+    const n = await getAllStakeholderNames()
+    setNames(n)
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  const handleRename = async (oldName: string) => {
+    const newName = editValue.trim()
+    if (!newName) return
+    if (newName !== oldName && names.includes(newName)) {
+      toast.warning(`"${newName}" already exists`)
+      return
+    }
+    try {
+      await renameStakeholder(oldName, newName)
+      setEditingName(null)
+      load()
+    } catch (err) {
+      handleError(err, 'Failed to rename stakeholder')
+    }
+  }
+
+  const handleDelete = async (name: string) => {
+    if (!confirm(`Remove "${name}" from all projects?`)) return
+    try {
+      await deleteStakeholder(name)
+      load()
+    } catch (err) {
+      handleError(err, 'Failed to delete stakeholder')
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <h3 className="font-medium">Stakeholders</h3>
+      <div className="divide-y divide-border border rounded-md">
+        {names.length === 0 && (
+          <p className="px-3 py-4 text-sm text-muted-foreground text-center">No stakeholders yet.</p>
+        )}
+        {names.map(name => (
+          <div key={name} className="flex items-center gap-2 px-3 py-2">
+            {editingName === name ? (
+              <>
+                <Input
+                  value={editValue}
+                  onChange={e => setEditValue(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleRename(name)}
+                  className="h-7 text-sm flex-1"
+                  autoFocus
+                />
+                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => handleRename(name)}>Save</Button>
+                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setEditingName(null)}>Cancel</Button>
+              </>
+            ) : (
+              <>
+                <span className="flex-1 text-sm">{name}</span>
+                <button onClick={() => { setEditingName(name); setEditValue(name) }} className="text-xs text-muted-foreground hover:text-foreground px-1">Edit</button>
+                <button onClick={() => handleDelete(name)} className="text-xs text-destructive hover:text-destructive/80 px-1">Delete</button>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ── Settings Page ─────────────────────────────────────────────────────────────
 
 interface DataStats {
@@ -294,53 +371,54 @@ export default function Settings() {
   const sectionTitle = 'text-base font-semibold'
 
   return (
-    <div className="max-w-2xl mx-auto px-6 py-8">
+    <div className="max-w-5xl mx-auto px-6 py-8">
       <h1 className="text-2xl font-semibold mb-6">Settings</h1>
 
       <Tabs defaultValue="customization">
         <TabsList>
           <TabsTrigger value="customization">Customization</TabsTrigger>
           <TabsTrigger value="data">Data</TabsTrigger>
+          <TabsTrigger value="maintenance">Maintenance</TabsTrigger>
         </TabsList>
 
         {/* ── Customization tab ───────────────────────────────────────── */}
-        <TabsContent value="customization" className="space-y-8">
-          <section className={section}>
-            <h2 className={sectionTitle}>Dropdown Options</h2>
-            <OptionList type="priority" title="Priority Values" />
-            <Separator />
-            <OptionList type="product_area" title="Areas" />
-            <Separator />
-            <OptionList type="project_status" title="Status Values" />
-          </section>
+        <TabsContent value="customization">
+          <div className="grid grid-cols-2 gap-8 pt-4">
+            <section className={section}>
+              <h2 className={sectionTitle}>Dropdown Options</h2>
+              <OptionList type="priority" title="Priority Values" />
+              <Separator />
+              <OptionList type="product_area" title="Areas" />
+              <Separator />
+              <OptionList type="project_status" title="Status Values" />
+            </section>
 
-          <Separator />
-
-          <section className={section}>
-            <h2 className={sectionTitle}>Filters</h2>
-            <div className="flex flex-col gap-3 pl-1">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="area-filter-buttons-projects"
-                  checked={areaFilterButtonsProjects}
-                  onCheckedChange={v => toggleAreaFilterButtonsProjects(v === true)}
-                />
-                <label htmlFor="area-filter-buttons-projects" className="text-sm cursor-pointer select-none text-muted-foreground">
-                  Show area filter as buttons on the Projects screen
-                </label>
+            <section className={section}>
+              <h2 className={sectionTitle}>Filters</h2>
+              <div className="flex flex-col gap-3 pl-1">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="area-filter-buttons-projects"
+                    checked={areaFilterButtonsProjects}
+                    onCheckedChange={v => toggleAreaFilterButtonsProjects(v === true)}
+                  />
+                  <label htmlFor="area-filter-buttons-projects" className="text-sm cursor-pointer select-none text-muted-foreground">
+                    Show area filter as buttons on the Projects screen
+                  </label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="area-filter-buttons"
+                    checked={areaFilterButtons}
+                    onCheckedChange={v => toggleAreaFilterButtons(v === true)}
+                  />
+                  <label htmlFor="area-filter-buttons" className="text-sm cursor-pointer select-none text-muted-foreground">
+                    Show area filter as buttons on the Tasks screen
+                  </label>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="area-filter-buttons"
-                  checked={areaFilterButtons}
-                  onCheckedChange={v => toggleAreaFilterButtons(v === true)}
-                />
-                <label htmlFor="area-filter-buttons" className="text-sm cursor-pointer select-none text-muted-foreground">
-                  Show area filter as buttons on the Tasks screen
-                </label>
-              </div>
-            </div>
-          </section>
+            </section>
+          </div>
         </TabsContent>
 
         {/* ── Data tab ────────────────────────────────────────────────── */}
@@ -436,6 +514,15 @@ export default function Settings() {
             />
           </section>
 
+        </TabsContent>
+
+        {/* ── Maintenance tab ─────────────────────────────────────────── */}
+        <TabsContent value="maintenance" className="space-y-8 pt-4">
+          <section className={section}>
+            <h2 className={sectionTitle}>Stakeholder Management</h2>
+            <p className="text-sm text-muted-foreground">Rename or remove stakeholders across all projects.</p>
+            <StakeholderManager />
+          </section>
         </TabsContent>
       </Tabs>
     </div>
