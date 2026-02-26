@@ -31,6 +31,7 @@ export default function ProjectForm() {
   const [statusId, setStatusId] = useState<string>('')
   const [stakeholders, setStakeholders] = useState<Stakeholder[]>([])
   const [linkedJiras, setLinkedJiras] = useState<JiraLink[]>([])
+  const [jiraErrors, setJiraErrors] = useState<string[]>([])
   const [dueDate, setDueDate] = useState<string>('')
   const [knownStakeholders, setKnownStakeholders] = useState<string[]>([])
 
@@ -69,9 +70,24 @@ export default function ProjectForm() {
 
   useEffect(() => { load() }, [load])
 
+  function validateJiraUrl(url: string): string {
+    if (!url) return ''
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      return 'URL must start with http:// or https://'
+    }
+    return ''
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!workItem.trim()) { toast.error('Work Item is required'); return }
+
+    const errors = linkedJiras.map(j => validateJiraUrl(j.url))
+    if (errors.some(e => e !== '')) {
+      setJiraErrors(errors)
+      toast.error('Fix JIRA URL errors before saving')
+      return
+    }
 
     setSaving(true)
     try {
@@ -129,8 +145,10 @@ export default function ProjectForm() {
   const addJiraLink = () =>
     setLinkedJiras(prev => [...prev, { url: '', label: '' }])
 
-  const removeJiraLink = (index: number) =>
+  const removeJiraLink = (index: number) => {
     setLinkedJiras(prev => prev.filter((_, i) => i !== index))
+    setJiraErrors(prev => prev.filter((_, i) => i !== index))
+  }
 
   const updateJiraLink = (index: number, field: 'url' | 'label', value: string) =>
     setLinkedJiras(prev =>
@@ -310,28 +328,38 @@ export default function ProjectForm() {
           {linkedJiras.length > 0 && (
             <div className="space-y-2">
               {linkedJiras.map((entry, i) => (
-                <div key={i} className="flex gap-2 items-center">
-                  <Input
-                    value={entry.label}
-                    onChange={e => updateJiraLink(i, 'label', e.target.value)}
-                    placeholder="Label (e.g. PROJ-123)"
-                    className="w-36 shrink-0"
-                  />
-                  <Input
-                    value={entry.url}
-                    onChange={e => updateJiraLink(i, 'url', e.target.value)}
-                    placeholder="https://..."
-                    className="flex-1"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeJiraLink(i)}
-                    className="shrink-0 text-muted-foreground hover:text-destructive"
-                  >
-                    Remove
-                  </Button>
+                <div key={i} className="space-y-1">
+                  <div className="flex gap-2 items-center">
+                    <Input
+                      value={entry.label}
+                      onChange={e => updateJiraLink(i, 'label', e.target.value)}
+                      placeholder="Label (e.g. PROJ-123)"
+                      className="w-36 shrink-0"
+                    />
+                    <Input
+                      value={entry.url}
+                      onChange={e => updateJiraLink(i, 'url', e.target.value)}
+                      onBlur={() => setJiraErrors(prev => {
+                        const next = [...prev]
+                        next[i] = validateJiraUrl(entry.url)
+                        return next
+                      })}
+                      placeholder="https://..."
+                      className={`flex-1 ${jiraErrors[i] ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeJiraLink(i)}
+                      className="shrink-0 text-muted-foreground hover:text-destructive"
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                  {jiraErrors[i] && (
+                    <p className="text-xs text-destructive pl-[9.5rem]">{jiraErrors[i]}</p>
+                  )}
                 </div>
               ))}
             </div>
