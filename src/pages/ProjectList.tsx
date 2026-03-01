@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef, useLayoutEffect, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getAllProjects } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
@@ -25,6 +25,35 @@ interface PageData {
   projectStatuses: DropdownOption[]
   allTasks: Task[]
   allWorkLog: WorkLogEntry[]
+}
+
+function ExpandableText({ children, textKey }: { children: ReactNode; textKey: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [isClamped, setIsClamped] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+
+  useLayoutEffect(() => {
+    if (expanded) return
+    const el = ref.current
+    if (!el) return
+    setIsClamped(el.scrollHeight > el.clientHeight)
+  }, [textKey, expanded])
+
+  return (
+    <div>
+      <div ref={ref} className={!expanded ? 'line-clamp-3' : undefined}>
+        {children}
+      </div>
+      {(isClamped || expanded) && (
+        <button
+          className="text-[10px] text-muted-foreground/60 hover:text-foreground transition-colors leading-none mt-0.5 flex items-center gap-0.5"
+          onClick={e => { e.stopPropagation(); setExpanded(v => !v) }}
+        >
+          {expanded ? '↑' : '… ↓'}
+        </button>
+      )}
+    </div>
+  )
 }
 
 export default function ProjectList() {
@@ -147,7 +176,7 @@ export default function ProjectList() {
   const SortIcon = ({ col }: { col: SortKey }) =>
     <span className="ml-1 opacity-50">{sortKey === col ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span>
 
-  const thClass = 'px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground whitespace-nowrap'
+  const thClass = 'px-4 py-1.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground whitespace-nowrap'
 
   const today = new Date().toISOString().slice(0, 10)
 
@@ -278,7 +307,7 @@ export default function ProjectList() {
                 onClick={() => navigate(`/projects/${p.id}`)}
                 className="hover:bg-accent cursor-pointer transition-colors"
               >
-                <td className="px-4 py-3 font-medium">
+                <td className="px-4 py-1.5 font-medium">
                   <span className="flex items-center gap-2">
                     {p.workItem}
                     {p.dueDate && p.dueDate < today && (
@@ -288,7 +317,7 @@ export default function ProjectList() {
                     )}
                   </span>
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-1.5">
                   {p.productAreaId ? (() => {
                     const opt = productAreas.find(o => o.id === p.productAreaId)
                     const color = opt?.color ?? ''
@@ -300,7 +329,7 @@ export default function ProjectList() {
                     )
                   })() : <span className="text-muted-foreground">—</span>}
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-1.5">
                   {p.priorityId ? (() => {
                     const opt = priorities.find(o => o.id === p.priorityId)
                     const color = opt?.color ?? ''
@@ -312,8 +341,8 @@ export default function ProjectList() {
                     )
                   })() : <span className="text-muted-foreground">—</span>}
                 </td>
-                <td className="px-4 py-3"><RagBadge status={p.ragStatus} /></td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-1.5"><RagBadge status={p.ragStatus} /></td>
+                <td className="px-4 py-1.5">
                   {p.statusId ? (() => {
                     const opt = projectStatuses.find(s => s.id === p.statusId)
                     if (!opt) return <span className="text-muted-foreground">—</span>
@@ -327,7 +356,7 @@ export default function ProjectList() {
                   })() : <span className="text-muted-foreground">—</span>}
                 </td>
                 {/* Open Tasks */}
-                <td className="px-4 py-3 whitespace-nowrap">
+                <td className="px-4 py-1.5 whitespace-nowrap">
                   {(() => {
                     const counts = taskCountsByProject.get(p.id)
                     return counts && (counts.open > 0 || counts.inProgress > 0) ? (
@@ -340,20 +369,27 @@ export default function ProjectList() {
                   })()}
                 </td>
                 {/* Latest Status */}
-                <td className="px-4 py-3 max-w-[16rem]">
-                  <span className="text-xs text-muted-foreground">{p.latestStatus || '—'}</span>
+                <td className="px-4 py-1.5 max-w-[16rem]">
+                  {p.latestStatus
+                    ? <ExpandableText textKey={p.latestStatus}>
+                        <span className="text-xs text-muted-foreground">{p.latestStatus}</span>
+                      </ExpandableText>
+                    : <span className="text-xs text-muted-foreground">—</span>
+                  }
                 </td>
                 {/* Latest Update */}
-                <td className="px-4 py-3 max-w-[20rem]">
+                <td className="px-4 py-1.5 max-w-[20rem]">
                   {(() => {
                     const latestLog = latestLogByProject.get(p.id)
                     return latestLog ? (
-                      <span className="text-xs text-muted-foreground">
-                        <span className="text-foreground/60 font-medium mr-1.5 shrink-0">
-                          {fmtDate(latestLog.createdAt.slice(0, 10))}
+                      <ExpandableText textKey={latestLog.note}>
+                        <span className="text-xs text-muted-foreground">
+                          <span className="text-foreground/60 font-medium mr-1.5 shrink-0">
+                            {fmtDate(latestLog.createdAt.slice(0, 10))}
+                          </span>
+                          <span>{latestLog.note}</span>
                         </span>
-                        <span>{latestLog.note}</span>
-                      </span>
+                      </ExpandableText>
                     ) : <span className="text-xs text-muted-foreground">—</span>
                   })()}
                 </td>
