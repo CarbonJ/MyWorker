@@ -385,7 +385,7 @@ export default function TasksView() {
             <div
               key={task.id}
               onClick={() => { setEditingTask(task); setTaskModalOpen(true) }}
-              className={`grid grid-cols-[1.5rem_minmax(0,50%)_6rem_12rem_5.5rem_5.5rem] gap-3 px-10 py-2 cursor-pointer hover:bg-accent transition-colors items-start ${isDone ? 'opacity-50' : ''}`}
+              className={`grid grid-cols-[1.5rem_minmax(0,50%)_6rem_12rem_5.5rem_5.5rem] gap-3 px-10 py-1.5 cursor-pointer hover:bg-accent transition-colors items-start ${isDone ? 'opacity-50' : ''}`}
             >
               {/* Status cycle button */}
               <button

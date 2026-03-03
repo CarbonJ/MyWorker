@@ -176,7 +176,7 @@ export default function ProjectList() {
   const SortIcon = ({ col }: { col: SortKey }) =>
     <span className="ml-1 opacity-50">{sortKey === col ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span>
 
-  const thClass = 'px-4 py-1.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground whitespace-nowrap'
+  const thClass = 'px-4 py-1 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground whitespace-nowrap'
 
   const today = new Date().toISOString().slice(0, 10)
 
@@ -307,8 +307,8 @@ export default function ProjectList() {
                 onClick={() => navigate(`/projects/${p.id}`)}
                 className="hover:bg-accent cursor-pointer transition-colors"
               >
-                <td className="px-4 py-1.5 font-medium">
-                  <span className="flex items-center gap-2">
+                <td className={`px-4 py-1 font-medium${p.workItem.length <= 65 ? ' whitespace-nowrap' : ''}`}>
+                  <span className="flex items-center gap-2 flex-wrap">
                     {p.workItem}
                     {p.dueDate && p.dueDate < today && (
                       <span className="inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded bg-red-50 border border-red-200 text-red-700 shrink-0">
@@ -317,7 +317,7 @@ export default function ProjectList() {
                     )}
                   </span>
                 </td>
-                <td className="px-4 py-1.5">
+                <td className="px-4 py-1">
                   {p.productAreaId ? (() => {
                     const opt = productAreas.find(o => o.id === p.productAreaId)
                     const color = opt?.color ?? ''
@@ -329,7 +329,7 @@ export default function ProjectList() {
                     )
                   })() : <span className="text-muted-foreground">—</span>}
                 </td>
-                <td className="px-4 py-1.5">
+                <td className="px-4 py-1">
                   {p.priorityId ? (() => {
                     const opt = priorities.find(o => o.id === p.priorityId)
                     const color = opt?.color ?? ''
@@ -341,8 +341,8 @@ export default function ProjectList() {
                     )
                   })() : <span className="text-muted-foreground">—</span>}
                 </td>
-                <td className="px-4 py-1.5"><RagBadge status={p.ragStatus} /></td>
-                <td className="px-4 py-1.5">
+                <td className="px-4 py-1"><RagBadge status={p.ragStatus} /></td>
+                <td className="px-4 py-1">
                   {p.statusId ? (() => {
                     const opt = projectStatuses.find(s => s.id === p.statusId)
                     if (!opt) return <span className="text-muted-foreground">—</span>
@@ -356,7 +356,7 @@ export default function ProjectList() {
                   })() : <span className="text-muted-foreground">—</span>}
                 </td>
                 {/* Open Tasks */}
-                <td className="px-4 py-1.5 whitespace-nowrap">
+                <td className="px-4 py-1 whitespace-nowrap">
                   {(() => {
                     const counts = taskCountsByProject.get(p.id)
                     return counts && (counts.open > 0 || counts.inProgress > 0) ? (
@@ -369,7 +369,7 @@ export default function ProjectList() {
                   })()}
                 </td>
                 {/* Latest Status */}
-                <td className="px-4 py-1.5 max-w-[16rem]">
+                <td className="px-4 py-1 max-w-[16rem]">
                   {p.latestStatus
                     ? <ExpandableText textKey={p.latestStatus}>
                         <span className="text-xs text-muted-foreground">{p.latestStatus}</span>
@@ -378,7 +378,7 @@ export default function ProjectList() {
                   }
                 </td>
                 {/* Latest Update */}
-                <td className="px-4 py-1.5 max-w-[20rem]">
+                <td className="px-4 py-1 max-w-[20rem]">
                   {(() => {
                     const latestLog = latestLogByProject.get(p.id)
                     return latestLog ? (

@@ -302,6 +302,17 @@ const migrations: Migration[] = [
       ALTER TABLE projects ADD COLUMN due_date TEXT;
     `,
   },
+  {
+    version: 10,
+    up: `
+      -- App metadata store: key/value pairs written by the app at startup.
+      -- Currently used to record which app version last opened this database.
+      CREATE TABLE IF NOT EXISTS app_metadata (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+    `,
+  },
 ]
 
 export async function runMigrations(handle: DbHandle): Promise<void> {

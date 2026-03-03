@@ -126,6 +126,13 @@ async function _initDb(
   // Run migrations (creates tables, FTS index, triggers, etc.)
   await runMigrations(instance)
 
+  // Record the app version that opened this database (upsert on every startup)
+  await exec(sqlite, db,
+    `INSERT INTO app_metadata (key, value) VALUES ('app_version', ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [__APP_VERSION__],
+  )
+
   // Sanity-check: run SQLite's own integrity_check pragma, which reads every
   // database page and detects corruption that query-level checks can miss.
   // Returns 'ok' on a clean database; returns an error message otherwise.

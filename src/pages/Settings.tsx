@@ -372,7 +372,8 @@ export default function Settings() {
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
-      <h1 className="text-2xl font-semibold mb-6">Settings</h1>
+      <h1 className="text-2xl font-semibold">Settings</h1>
+      <p className="text-sm text-muted-foreground mb-6">v{__APP_VERSION__}</p>
 
       <Tabs defaultValue="customization">
         <TabsList>

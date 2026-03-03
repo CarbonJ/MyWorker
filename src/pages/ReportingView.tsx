@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useLayoutEffect } from 'react'
+import type { ReactNode } from 'react'
 import { useSearch } from '@/contexts/SearchContext'
 import { getAllProjects } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
@@ -23,6 +24,35 @@ interface PageData {
   projectStatuses: DropdownOption[]
   allTasks: Task[]
   allWorkLog: WorkLogEntry[]
+}
+
+function ExpandableText({ children, textKey }: { children: ReactNode; textKey: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [isClamped, setIsClamped] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+
+  useLayoutEffect(() => {
+    if (expanded) return
+    const el = ref.current
+    if (!el) return
+    setIsClamped(el.scrollHeight > el.clientHeight)
+  }, [textKey, expanded])
+
+  return (
+    <div>
+      <div ref={ref} className={!expanded ? 'line-clamp-3' : undefined}>
+        {children}
+      </div>
+      {(isClamped || expanded) && (
+        <button
+          className="text-[10px] text-muted-foreground/60 hover:text-foreground transition-colors leading-none mt-0.5 flex items-center gap-0.5"
+          onClick={e => { e.stopPropagation(); setExpanded(v => !v) }}
+        >
+          {expanded ? '↑' : '… ↓'}
+        </button>
+      )}
+    </div>
+  )
 }
 
 export default function ReportingView() {
@@ -132,7 +162,7 @@ export default function ReportingView() {
   const SortIcon = ({ col }: { col: SortKey }) =>
     <span className="ml-1 opacity-50">{sortKey === col ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span>
 
-  const thClass = 'px-3 py-2 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground whitespace-nowrap'
+  const thClass = 'px-3 py-1.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground whitespace-nowrap'
   const filtersActive = ragFilter !== 'All' || areaFilter !== 'All'
 
   return (
@@ -224,18 +254,18 @@ export default function ReportingView() {
               return (
                 <tr key={p.id} className="hover:bg-accent/50">
                   {/* RAG */}
-                  <td className="px-3 py-2"><RagBadge status={p.ragStatus} /></td>
+                  <td className="px-3 py-1"><RagBadge status={p.ragStatus} /></td>
 
                   {/* Work Item */}
-                  <td className="px-3 py-2 font-medium whitespace-nowrap">{p.workItem}</td>
+                  <td className={`px-3 py-1 font-medium${p.workItem.length <= 65 ? ' whitespace-nowrap' : ''}`}>{p.workItem}</td>
 
                   {/* Product Area */}
-                  <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
+                  <td className="px-3 py-1 text-muted-foreground whitespace-nowrap">
                     {labelFor(productAreas, p.productAreaId)}
                   </td>
 
                   {/* Priority */}
-                  <td className="px-3 py-2">
+                  <td className="px-3 py-1">
                     {priorityOpt ? (
                       <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${pillClass(priorityOpt.color)}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${dotClass(priorityOpt.color)}`} />
@@ -245,7 +275,7 @@ export default function ReportingView() {
                   </td>
 
                   {/* Project Status */}
-                  <td className="px-3 py-2">
+                  <td className="px-3 py-1">
                     {statusOpt ? (
                       <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${pillClass(statusOpt.color)}`}>
                         {statusOpt.color && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass(statusOpt.color)}`} />}
@@ -255,7 +285,7 @@ export default function ReportingView() {
                   </td>
 
                   {/* Open Tasks */}
-                  <td className="px-3 py-2 whitespace-nowrap">
+                  <td className="px-3 py-1 whitespace-nowrap">
                     {counts && (counts.open > 0 || counts.inProgress > 0) ? (
                       <span className="text-xs text-muted-foreground">
                         {counts.open > 0 && <span className="text-slate-700 font-medium">{counts.open} open</span>}
@@ -268,19 +298,26 @@ export default function ReportingView() {
                   </td>
 
                   {/* Latest Status */}
-                  <td className="px-3 py-2 max-w-[16rem]">
-                    <span className="text-xs text-muted-foreground">{p.latestStatus || '—'}</span>
+                  <td className="px-3 py-1 max-w-[16rem]">
+                    {p.latestStatus
+                      ? <ExpandableText textKey={p.latestStatus}>
+                          <span className="text-xs text-muted-foreground">{p.latestStatus}</span>
+                        </ExpandableText>
+                      : <span className="text-xs text-muted-foreground">—</span>
+                    }
                   </td>
 
                   {/* Latest Work Log */}
-                  <td className="px-3 py-2 max-w-[20rem]">
+                  <td className="px-3 py-1 max-w-[20rem]">
                     {latestLog ? (
-                      <span className="text-xs text-muted-foreground">
-                        <span className="text-foreground/60 font-medium mr-1.5 shrink-0">
-                          {fmtDate(latestLog.createdAt.slice(0, 10))}
+                      <ExpandableText textKey={latestLog.note}>
+                        <span className="text-xs text-muted-foreground">
+                          <span className="text-foreground/60 font-medium mr-1.5 shrink-0">
+                            {fmtDate(latestLog.createdAt.slice(0, 10))}
+                          </span>
+                          <span>{latestLog.note}</span>
                         </span>
-                        <span>{latestLog.note}</span>
-                      </span>
+                      </ExpandableText>
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
