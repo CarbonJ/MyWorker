@@ -84,8 +84,8 @@ export default function TasksView() {
   const [filterPriority, setFilterPriority] = useState<string>('all')
   const [filterProject,  setFilterProject]  = useState<string>('all')
   const [filterArea,     setFilterArea]     = useState<string>(() => localStorage.getItem('myworker:tasks-filter-area') ?? 'all')
-  const [sortField,      setSortField]      = useState<TaskSortField>('dueDate')
-  const [sortDir,        setSortDir]        = useState<SortDir>('asc')
+  const [sortField,      setSortField]      = useState<TaskSortField>(() => (localStorage.getItem('myworker:sort-field-tasks') as TaskSortField) ?? 'dueDate')
+  const [sortDir,        setSortDir]        = useState<SortDir>(() => (localStorage.getItem('myworker:sort-dir-tasks') as SortDir) ?? 'asc')
 
   // UI preference: show area filter as pill buttons instead of a dropdown
   const [areaFilterButtons] = useState(
@@ -127,6 +127,9 @@ export default function TasksView() {
     if (proj && proj.productAreaId !== areaId) setFilterProject('all')
   }, [filterArea]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Persist sort and area filter across navigation
+  useEffect(() => { localStorage.setItem('myworker:sort-field-tasks', sortField) }, [sortField])
+  useEffect(() => { localStorage.setItem('myworker:sort-dir-tasks',   sortDir)   }, [sortDir])
   // Persist area filter so CMD+L can pre-populate it when opening from this screen
   useEffect(() => {
     localStorage.setItem('myworker:tasks-filter-area', filterArea)

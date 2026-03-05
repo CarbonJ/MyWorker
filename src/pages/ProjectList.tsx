@@ -60,8 +60,8 @@ export default function ProjectList() {
   const navigate = useNavigate()
   const { query } = useSearch()
   const [searchIds, setSearchIds] = useState<number[] | null>(null)
-  const [sortKey, setSortKey] = useState<SortKey>('productArea')
-  const [sortDir, setSortDir] = useState<SortDir>('asc')
+  const [sortKey, setSortKey] = useState<SortKey>(() => (localStorage.getItem('myworker:sort-key-projects') as SortKey) ?? 'productArea')
+  const [sortDir, setSortDir] = useState<SortDir>(() => (localStorage.getItem('myworker:sort-dir-projects') as SortDir) ?? 'asc')
   const [ragFilter, setRagFilter] = useState<RagStatus | 'All'>('All')
   const [priorityFilter, setPriorityFilter] = useState<string>('All')  // 'All' | priority id as string
   const [areaFilter, setAreaFilter] = useState<string>(() => localStorage.getItem('myworker:area-filter-projects') ?? 'All')
@@ -90,7 +90,9 @@ export default function ProjectList() {
   const allTasks       = data?.allTasks       ?? []
   const allWorkLog     = data?.allWorkLog     ?? []
 
-  // Persist area filter across navigation
+  // Persist sort and area filter across navigation
+  useEffect(() => { localStorage.setItem('myworker:sort-key-projects', sortKey) }, [sortKey])
+  useEffect(() => { localStorage.setItem('myworker:sort-dir-projects', sortDir) }, [sortDir])
   useEffect(() => { localStorage.setItem('myworker:area-filter-projects', areaFilter) }, [areaFilter])
 
   // Full-text search — debounced

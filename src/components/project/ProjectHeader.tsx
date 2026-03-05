@@ -175,7 +175,7 @@ export function ProjectHeader({
             <div className="flex flex-wrap gap-1.5 items-center">
               <span className="font-medium text-foreground text-sm">Stakeholders:</span>
               {project.stakeholders.map((s, i) => (
-                <span key={i} className="bg-white border rounded-full px-2.5 py-0.5 text-xs text-foreground shadow-sm">
+                <span key={i} className="bg-white border rounded-full px-2.5 py-0.5 text-xs text-slate-900 shadow-sm">
                   {s.name}
                 </span>
               ))}

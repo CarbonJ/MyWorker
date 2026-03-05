@@ -17,6 +17,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       strategies: 'generateSW',
       workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         // WASM files are large — cache them at runtime on first fetch
         runtimeCaching: [
