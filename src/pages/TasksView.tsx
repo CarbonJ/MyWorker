@@ -1,7 +1,7 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, Fragment } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { getAllTasks, createTask, updateTask } from '@/db/tasks'
-import { getAllProjectsIncludingArchived } from '@/db/projects'
+import { getAllProjects, getAllProjectsIncludingArchived } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
 import { addWorkLogEntry } from '@/db/workLog'
 import type { Task, TaskStatus, Project, DropdownOption } from '@/types'
@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
 import { Check, RefreshCw } from 'lucide-react'
+import { MarkdownContent } from '@/components/MarkdownContent'
 
 import { pillClass, pillClassActive, dotClass, textClass } from '@/lib/colors'
 import { useDataLoader } from '@/hooks/useDataLoader'
@@ -55,12 +56,13 @@ const AREA_BTN_KEY = 'myworker:area-filter-buttons'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type TaskSortField = 'project' | 'status' | 'priority' | 'dueDate'
+type TaskSortField = 'title' | 'area' | 'project' | 'status' | 'priority' | 'dueDate'
 type SortDir = 'asc' | 'desc'
 
 interface PageData {
   tasks: Task[]
-  projects: Project[]
+  projects: Project[]          // all projects incl. archived — for name lookups
+  activeProjectIds: Set<number> // non-done project IDs — used to suppress tasks from done projects
   priorities: DropdownOption[]
   productAreas: DropdownOption[]
 }
@@ -95,23 +97,32 @@ export default function TasksView() {
     () => localStorage.getItem(AREA_BTN_KEY) === 'true'
   )
 
+  // List vs grouped-by-project view
+  const [viewMode, setViewMode] = useState<'list' | 'grouped'>(
+    () => (localStorage.getItem('myworker:tasks-view-mode') as 'list' | 'grouped') ?? 'list'
+  )
+  // Accordion expand state for grouped view
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+
   const { data, reload: load } = useDataLoader<PageData>(
     async () => {
-      const [tasks, projects, priorities, productAreas] = await Promise.all([
+      const [tasks, projects, activeProjects, priorities, productAreas] = await Promise.all([
         getAllTasks(),
         getAllProjectsIncludingArchived(),
+        getAllProjects(),
         getDropdownOptions('priority'),
         getDropdownOptions('product_area'),
       ])
-      return { tasks, projects, priorities, productAreas }
+      return { tasks, projects, activeProjectIds: new Set(activeProjects.map(p => p.id)), priorities, productAreas }
     },
     'Failed to load tasks',
   )
 
-  const tasks        = data?.tasks        ?? []
-  const projects     = data?.projects     ?? []
-  const priorities   = data?.priorities   ?? []
-  const productAreas = data?.productAreas ?? []
+  const tasks            = data?.tasks            ?? []
+  const projects         = data?.projects         ?? []
+  const activeProjectIds = data?.activeProjectIds ?? new Set<number>()
+  const priorities       = data?.priorities       ?? []
+  const productAreas     = data?.productAreas     ?? []
 
   // Reload when a task is saved from the global quick-add shortcut (Cmd+L)
   useEffect(() => {
@@ -130,9 +141,10 @@ export default function TasksView() {
     if (proj && proj.productAreaId !== areaId) setFilterProject('all')
   }, [filterArea]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Persist sort and area filter across navigation
+  // Persist sort, area filter, and view mode across navigation
   useEffect(() => { localStorage.setItem('myworker:sort-field-tasks', sortField) }, [sortField])
   useEffect(() => { localStorage.setItem('myworker:sort-dir-tasks',   sortDir)   }, [sortDir])
+  useEffect(() => { localStorage.setItem('myworker:tasks-view-mode',  viewMode)  }, [viewMode])
   // Persist area filter so CMD+L can pre-populate it when opening from this screen
   useEffect(() => {
     localStorage.setItem('myworker:tasks-filter-area', filterArea)
@@ -216,6 +228,9 @@ export default function TasksView() {
   const visibleTasks = useMemo(() => {
     let list = [...tasks]
 
+    // Exclude tasks that belong to a done/archived project
+    list = list.filter(t => t.projectId === null || activeProjectIds.has(t.projectId))
+
     // Global search filter
     if (query.trim()) {
       const q = query.trim().toLowerCase()
@@ -260,7 +275,13 @@ export default function TasksView() {
     // Sort
     list.sort((a, b) => {
       let cmp = 0
-      if (sortField === 'status') {
+      if (sortField === 'title') {
+        cmp = a.title.toLowerCase() < b.title.toLowerCase() ? -1 : a.title.toLowerCase() > b.title.toLowerCase() ? 1 : 0
+      } else if (sortField === 'area') {
+        const al = (productAreas.find(x => x.id === resolveAreaId(a, projects))?.label ?? '').toLowerCase()
+        const bl = (productAreas.find(x => x.id === resolveAreaId(b, projects))?.label ?? '').toLowerCase()
+        cmp = al < bl ? -1 : al > bl ? 1 : 0
+      } else if (sortField === 'status') {
         const order: Record<string, number> = { open: 0, in_progress: 1, done: 2 }
         cmp = order[a.status] - order[b.status]
       } else if (sortField === 'priority') {
@@ -281,6 +302,55 @@ export default function TasksView() {
 
     return list
   }, [tasks, query, filterStatus, filterPriority, filterProject, filterArea, sortField, sortDir, priorities, projects, productAreas])
+
+  /** visibleTasks grouped by project for accordion view */
+  const groupedByProject = useMemo(() => {
+    if (viewMode !== 'grouped') return null
+    const map = new Map<string, { projectId: number | null; projectName: string; tasks: Task[] }>()
+    for (const t of visibleTasks) {
+      const key = t.projectId !== null ? String(t.projectId) : '__inbox__'
+      if (!map.has(key)) {
+        const proj = t.projectId !== null ? projects.find(p => p.id === t.projectId) : null
+        map.set(key, { projectId: t.projectId, projectName: proj?.workItem ?? 'Inbox', tasks: [] })
+      }
+      map.get(key)!.tasks.push(t)
+    }
+    // Sort: projects alphabetically, inbox last
+    const groups = Array.from(map.entries()).map(([key, val]) => ({ key, ...val }))
+    groups.sort((a, b) => {
+      if (a.key === '__inbox__') return 1
+      if (b.key === '__inbox__') return -1
+      return a.projectName.toLowerCase() < b.projectName.toLowerCase() ? -1 : 1
+    })
+    return groups
+  }, [viewMode, visibleTasks, projects])
+
+  /** Group keys that contain at least one overdue task — auto-expanded */
+  const overdueGroupKeys = useMemo(() => {
+    const keys = new Set<string>()
+    for (const t of visibleTasks) {
+      if (isOverdue(t.dueDate) && t.status !== 'done')
+        keys.add(t.projectId !== null ? String(t.projectId) : '__inbox__')
+    }
+    return keys
+  }, [visibleTasks])
+
+  // Auto-expand groups with overdue tasks when grouped view is active
+  useEffect(() => {
+    if (viewMode !== 'grouped' || overdueGroupKeys.size === 0) return
+    setExpandedGroups(prev => {
+      const next = new Set(prev)
+      overdueGroupKeys.forEach(k => next.add(k))
+      return next
+    })
+  }, [overdueGroupKeys, viewMode])
+
+  const toggleGroup = (key: string) =>
+    setExpandedGroups(prev => {
+      const n = new Set(prev)
+      n.has(key) ? n.delete(key) : n.add(key)
+      return n
+    })
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
@@ -400,20 +470,40 @@ export default function TasksView() {
             ✕ Reset filters
           </Button>
         )}
-        <span className="ml-auto text-xs text-muted-foreground">{visibleTasks.length} task{visibleTasks.length !== 1 ? 's' : ''}</span>
+        <div className="ml-auto flex items-center gap-2">
+          {/* List / By Project toggle */}
+          <div className="flex items-center border rounded-md overflow-hidden text-xs">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`h-7 px-3 transition-colors ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}`}
+            >
+              List
+            </button>
+            <button
+              onClick={() => setViewMode('grouped')}
+              className={`h-7 px-3 border-l transition-colors ${viewMode === 'grouped' ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}`}
+            >
+              By Project
+            </button>
+          </div>
+          <span className="text-xs text-muted-foreground">{visibleTasks.length} task{visibleTasks.length !== 1 ? 's' : ''}</span>
+        </div>
       </div>
 
-      {/* ── Column headers ──────────────────────────────────────────────── */}
-      <div className="shrink-0 grid grid-cols-[1.5rem_minmax(0,50%)_6rem_12rem_5.5rem_5.5rem] gap-3 px-10 py-1 text-sm font-semibold text-muted-foreground border-b">
-        <span />
-        <span>Title</span>
-        <span>Area</span>
-        <SortBtn field="project" label="Project" />
-        <SortBtn field="priority" label="Priority" />
-        <SortBtn field="dueDate" label="Due" align="right" />
-      </div>
+      {/* ── Column headers (list mode only) ─────────────────────────────── */}
+      {viewMode === 'list' && (
+        <div className="shrink-0 grid grid-cols-[1.5rem_minmax(0,50%)_6rem_12rem_5.5rem_5.5rem] gap-3 px-10 py-1 text-sm font-semibold text-muted-foreground border-b">
+          <span />
+          <SortBtn field="title" label="Title" />
+          <SortBtn field="area" label="Area" />
+          <SortBtn field="project" label="Project" />
+          <SortBtn field="priority" label="Priority" />
+          <SortBtn field="dueDate" label="Due" align="right" />
+        </div>
+      )}
 
-      {/* ── Task rows ───────────────────────────────────────────────────── */}
+      {/* ── Task rows — list view ───────────────────────────────────────── */}
+      {viewMode === 'list' && (
       <div className="flex-1 overflow-y-auto divide-y divide-border">
         {visibleTasks.length === 0 && (
           <p className="px-6 py-12 text-sm text-muted-foreground text-center">No tasks.</p>
@@ -445,9 +535,11 @@ export default function TasksView() {
                   {task.title}
                 </p>
                 {task.notes && (
-                  <p className="text-xs text-muted-foreground line-clamp-2 leading-tight mt-0.5">
-                    {task.notes}
-                  </p>
+                  <div className="line-clamp-2 mt-0.5">
+                    <MarkdownContent className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                      {task.notes}
+                    </MarkdownContent>
+                  </div>
                 )}
               </div>
 
@@ -616,6 +708,99 @@ export default function TasksView() {
           )
         })}
       </div>
+      )}
+
+      {/* ── Task rows — grouped by project view ─────────────────────────── */}
+      {viewMode === 'grouped' && (
+        <div className="flex-1 overflow-y-auto divide-y divide-border">
+          {visibleTasks.length === 0 && (
+            <p className="px-6 py-12 text-sm text-muted-foreground text-center">No tasks.</p>
+          )}
+          {(groupedByProject ?? []).map(({ key, projectId, projectName, tasks: groupTasks }) => {
+            const isExpanded = expandedGroups.has(key)
+            const hasOverdue = overdueGroupKeys.has(key)
+            return (
+              <Fragment key={key}>
+                {/* Group header */}
+                <div className="flex items-center gap-2 px-4 py-2 bg-muted/30 border-b sticky top-0 z-10">
+                  <button
+                    onClick={() => toggleGroup(key)}
+                    className={`text-muted-foreground hover:text-foreground w-8 h-7 flex items-center justify-center text-xs rounded hover:bg-accent transition-colors shrink-0 ${groupTasks.length === 0 ? 'invisible' : ''}`}
+                    title={isExpanded ? 'Collapse' : 'Expand'}
+                  >
+                    {isExpanded ? '▼' : '▶'}
+                  </button>
+                  {projectId !== null ? (
+                    <button
+                      onClick={() => navigate(`/projects/${projectId}`)}
+                      className="text-sm font-semibold hover:underline underline-offset-2 text-left"
+                    >
+                      {projectName}
+                    </button>
+                  ) : (
+                    <span className="text-sm font-semibold text-muted-foreground italic">Inbox</span>
+                  )}
+                  <span className="text-xs text-muted-foreground">({groupTasks.length})</span>
+                  {hasOverdue && (
+                    <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-red-50 border border-red-200 text-red-700">
+                      🗓 Overdue
+                    </span>
+                  )}
+                </div>
+                {/* Task sub-rows */}
+                {isExpanded && groupTasks.map(task => {
+                  const isDone = task.status === 'done'
+                  return (
+                    <div
+                      key={task.id}
+                      onClick={() => { setEditingTask(task); setTaskModalOpen(true) }}
+                      className={`flex items-center gap-3 px-4 pl-14 py-1.5 cursor-pointer hover:bg-accent transition-colors ${isDone ? 'opacity-50' : ''}`}
+                    >
+                      <button
+                        onClick={e => cycleTaskStatus(e, task)}
+                        className="flex items-center justify-center hover:scale-110 transition-transform shrink-0"
+                        title={`Mark as ${cycleStatus(task.status).replace('_', ' ')}`}
+                      >
+                        <StatusCircle status={task.status} />
+                      </button>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-medium leading-tight line-clamp-1 ${isDone ? 'line-through' : ''}`}>
+                          {task.title}
+                        </p>
+                        {task.notes && (
+                          <div className="line-clamp-1 mt-0.5">
+                            <MarkdownContent className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                              {task.notes}
+                            </MarkdownContent>
+                          </div>
+                        )}
+                      </div>
+                      {task.priorityId && (() => {
+                        const opt = priorities.find(p => p.id === task.priorityId)
+                        return (
+                          <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full border shrink-0 ${isDone ? 'bg-muted text-muted-foreground border-transparent' : pillClass(opt?.color ?? '')}`}>
+                            {!isDone && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass(opt?.color ?? '')}`} />}
+                            {opt?.label ?? '—'}
+                          </span>
+                        )
+                      })()}
+                      {task.dueDate && (
+                        <span className={`text-xs shrink-0 ${
+                          isOverdue(task.dueDate) && !isDone ? 'text-red-600 font-medium' :
+                          isDueToday(task.dueDate) && !isDone ? 'text-amber-600 font-medium' :
+                          'text-muted-foreground'
+                        }`}>
+                          {fmtDate(task.dueDate)}
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
+              </Fragment>
+            )
+          })}
+        </div>
+      )}
 
       {/* Task modal */}
       <TaskModal
