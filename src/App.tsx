@@ -14,6 +14,7 @@ import ReportingView from '@/pages/ReportingView'
 import TasksView from '@/pages/TasksView'
 import ArchiveView from '@/pages/ArchiveView'
 import Settings from '@/pages/Settings'
+import AreaDetail from '@/pages/AreaDetail'
 
 function DueDateBanner() {
   const [count, setCount] = useState(0)
@@ -143,6 +144,7 @@ function AppInner() {
           <Route path="/reporting" element={<ReportingView />} />
           <Route path="/archive" element={<ArchiveView />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/areas/:id" element={<AreaDetail />} />
         </Routes>
       </main>
       <TaskModal

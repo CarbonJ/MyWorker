@@ -14,6 +14,7 @@ import { RAG_ORDER, pillClass, dotClass, pillClassActive } from '@/lib/colors'
 import { fmtDate } from '@/lib/utils'
 import { useDataLoader } from '@/hooks/useDataLoader'
 import { SEARCH_DEBOUNCE_MS } from '@/lib/constants'
+import { MarkdownContent } from '@/components/MarkdownContent'
 
 type SortKey = 'workItem' | 'productArea' | 'priority' | 'ragStatus' | 'projectStatus' | 'latestStatus' | 'updatedAt' | 'openTasks'
 type SortDir = 'asc' | 'desc'
@@ -70,6 +71,11 @@ export default function ProjectList() {
   const [areaFilter, setAreaFilter] = useState<string>(() => localStorage.getItem('myworker:area-filter-projects') ?? 'All')
   const [areaFilterButtons] = useState(() => localStorage.getItem('myworker:area-filter-buttons-projects') !== 'false')
   const [statusFilter, setStatusFilter] = useState<string>('All')      // 'All' | project_status id as string
+  const [viewMode, setViewMode] = useState<'table' | 'grouped'>(
+    () => (localStorage.getItem('myworker:projects-view-mode') as 'table' | 'grouped') ?? 'table'
+  )
+  // Set of area keys (String(id) or '__none__') that are collapsed in grouped view
+  const [collapsedAreas, setCollapsedAreas] = useState<Set<string>>(new Set())
 
   const { data } = useDataLoader<PageData>(
     async () => {
@@ -98,6 +104,7 @@ export default function ProjectList() {
   useEffect(() => { localStorage.setItem('myworker:sort-dir-projects', sortDir) }, [sortDir])
   useEffect(() => { localStorage.setItem('myworker:projects-user-sorted', String(userHasSorted)) }, [userHasSorted])
   useEffect(() => { localStorage.setItem('myworker:area-filter-projects', areaFilter) }, [areaFilter])
+  useEffect(() => { localStorage.setItem('myworker:projects-view-mode', viewMode) }, [viewMode])
 
   // Full-text search — debounced
   useEffect(() => {
@@ -180,6 +187,37 @@ export default function ProjectList() {
     return list
   }, [projects, searchIds, sortKey, sortDir, ragFilter, priorityFilter, areaFilter, statusFilter, priorities, productAreas, projectStatuses, taskCountsByProject])
 
+  /** Group sorted projects by area for grouped view */
+  const groupedByArea = useMemo(() => {
+    if (viewMode !== 'grouped') return null
+    const map = new Map<string, { area: DropdownOption | null; projects: Project[] }>()
+    for (const p of sorted) {
+      const key = p.productAreaId !== null ? String(p.productAreaId) : '__none__'
+      if (!map.has(key)) {
+        const area = p.productAreaId !== null ? (productAreas.find(a => a.id === p.productAreaId) ?? null) : null
+        map.set(key, { area, projects: [] })
+      }
+      map.get(key)!.projects.push(p)
+    }
+    // Sort by productAreas sort_order; "No Area" last
+    const groups = Array.from(map.entries()).map(([key, val]) => ({ key, ...val }))
+    groups.sort((a, b) => {
+      if (a.key === '__none__') return 1
+      if (b.key === '__none__') return -1
+      return productAreas.findIndex(pa => String(pa.id) === a.key) - productAreas.findIndex(pa => String(pa.id) === b.key)
+    })
+    return groups
+  }, [viewMode, sorted, productAreas])
+
+  const ragSummary = (ps: Project[]) => {
+    const c = { Red: 0, Amber: 0, Green: 0 }
+    for (const p of ps) c[p.ragStatus]++
+    return c
+  }
+
+  const toggleCollapse = (key: string) =>
+    setCollapsedAreas(prev => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next })
+
   const SortIcon = ({ col }: { col: SortKey }) =>
     userHasSorted && sortKey === col
       ? <span className="ml-1 opacity-50">{sortDir === 'asc' ? '↑' : '↓'}</span>
@@ -222,8 +260,20 @@ export default function ProjectList() {
             ))}
           </SelectContent>
         </Select>
-        {/* Product Area filter */}
-        {areaFilterButtons ? (
+        {/* Project Status filter */}
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="h-8 text-xs w-36">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="All">All Statuses</SelectItem>
+            {projectStatuses.map(s => (
+              <SelectItem key={s.id} value={String(s.id)}>{s.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {/* Product Area filter — hidden in grouped mode (areas are already the section headers) */}
+        {viewMode === 'table' && areaFilterButtons ? (
           <div className="flex items-center gap-1 flex-wrap">
             {[
               { value: 'All', label: 'All Areas', color: '' },
@@ -247,7 +297,7 @@ export default function ProjectList() {
               )
             })}
           </div>
-        ) : (
+        ) : viewMode === 'table' ? (
           <Select value={areaFilter} onValueChange={setAreaFilter}>
             <SelectTrigger className="h-8 text-xs w-40">
               <SelectValue placeholder="Area" />
@@ -259,19 +309,7 @@ export default function ProjectList() {
               ))}
             </SelectContent>
           </Select>
-        )}
-        {/* Project Status filter */}
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="h-8 text-xs w-36">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="All">All Statuses</SelectItem>
-            {projectStatuses.map(s => (
-              <SelectItem key={s.id} value={String(s.id)}>{s.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        ) : null}
         {(ragFilter !== 'All' || priorityFilter !== 'All' || areaFilter !== 'All' || statusFilter !== 'All') && (
           <Button
             variant="ghost"
@@ -282,131 +320,206 @@ export default function ProjectList() {
             ✕ Reset filters
           </Button>
         )}
-        <Button className="ml-auto" onClick={() => navigate('/projects/new')}>
-          + New Project
-        </Button>
+        <div className="ml-auto flex items-center gap-2">
+          {/* Table / Grouped view toggle */}
+          <div className="flex items-center border rounded-md overflow-hidden text-xs">
+            <button
+              onClick={() => setViewMode('table')}
+              className={`h-8 px-3 transition-colors ${viewMode === 'table' ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}`}
+            >
+              Table
+            </button>
+            <button
+              onClick={() => { setViewMode('grouped'); setCollapsedAreas(new Set()) }}
+              className={`h-8 px-3 border-l transition-colors ${viewMode === 'grouped' ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}`}
+            >
+              Grouped
+            </button>
+          </div>
+          <Button onClick={() => navigate('/projects/new')}>+ New Project</Button>
+        </div>
       </div>
 
-      {/* Table */}
-      <div className="flex-1 overflow-auto">
-        <table className="w-full text-sm">
-          <thead className="sticky top-0 bg-background border-b z-10">
-            <tr>
-              <th className={thClass} onClick={() => handleSort('workItem')}>Work Item<SortIcon col="workItem" /></th>
-              <th className={thClass} onClick={() => handleSort('productArea')}>Area<SortIcon col="productArea" /></th>
-              <th className={thClass} onClick={() => handleSort('priority')}>Priority<SortIcon col="priority" /></th>
-              <th className={thClass} onClick={() => handleSort('ragStatus')}>RAG<SortIcon col="ragStatus" /></th>
-              <th className={thClass} onClick={() => handleSort('projectStatus')}>Status<SortIcon col="projectStatus" /></th>
-              <th className={thClass} onClick={() => handleSort('openTasks')}>Tasks<SortIcon col="openTasks" /></th>
-              <th className={thClass} onClick={() => handleSort('latestStatus')}>Status Comment<SortIcon col="latestStatus" /></th>
-              <th className={thClass}>Latest Log Entry</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {sorted.length === 0 && (
+      {/* ── Table view ── */}
+      {viewMode === 'table' && (
+        <div className="flex-1 overflow-auto">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 bg-background border-b z-10">
               <tr>
-                <td colSpan={9} className="px-4 py-16 text-center text-muted-foreground">
-                  {query ? 'No results found.' : 'No projects yet — create one to get started.'}
-                </td>
+                <th className={thClass} onClick={() => handleSort('workItem')}>Work Item<SortIcon col="workItem" /></th>
+                <th className={thClass} onClick={() => handleSort('productArea')}>Area<SortIcon col="productArea" /></th>
+                <th className={thClass} onClick={() => handleSort('priority')}>Priority<SortIcon col="priority" /></th>
+                <th className={thClass} onClick={() => handleSort('ragStatus')}>RAG<SortIcon col="ragStatus" /></th>
+                <th className={thClass} onClick={() => handleSort('projectStatus')}>Status<SortIcon col="projectStatus" /></th>
+                <th className={thClass} onClick={() => handleSort('openTasks')}>Tasks<SortIcon col="openTasks" /></th>
+                <th className={thClass} onClick={() => handleSort('latestStatus')}>Status Comment<SortIcon col="latestStatus" /></th>
+                <th className={thClass}>Latest Log Entry</th>
               </tr>
-            )}
-            {sorted.map(p => (
-              <tr
-                key={p.id}
-                onClick={() => navigate(`/projects/${p.id}`)}
-                className="hover:bg-accent cursor-pointer transition-colors"
-              >
-                <td className={`px-4 py-1 font-medium${p.workItem.length <= 65 ? ' whitespace-nowrap' : ''}`}>
-                  <span className="flex items-center gap-2 flex-wrap">
-                    {p.workItem}
-                    {p.dueDate && p.dueDate < today && (
-                      <span className="inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded bg-red-50 border border-red-200 text-red-700 shrink-0">
-                        🗓 Overdue
-                      </span>
-                    )}
+            </thead>
+            <tbody className="divide-y divide-border">
+              {sorted.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="px-4 py-16 text-center text-muted-foreground">
+                    {query ? 'No results found.' : 'No projects yet — create one to get started.'}
+                  </td>
+                </tr>
+              )}
+              {sorted.map(p => <ProjectRow key={p.id} p={p} />)}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ── Grouped view ── */}
+      {viewMode === 'grouped' && groupedByArea && (
+        <div className="flex-1 overflow-auto divide-y divide-border">
+          {groupedByArea.length === 0 && (
+            <p className="px-6 py-16 text-center text-muted-foreground text-sm">
+              No projects match the current filters.
+            </p>
+          )}
+          {groupedByArea.map(({ key, area, projects: grpProjects }) => {
+            const isCollapsed = collapsedAreas.has(key)
+            const rag = ragSummary(grpProjects)
+            const color = area?.color ?? ''
+            return (
+              <div key={key}>
+                {/* Section header */}
+                <div
+                  className="flex items-center gap-2.5 px-4 py-2.5 bg-muted/40 border-b cursor-pointer select-none hover:bg-muted/60 transition-colors sticky top-0 z-10"
+                  onClick={() => toggleCollapse(key)}
+                >
+                  <span className="text-[10px] text-muted-foreground w-2.5 shrink-0">
+                    {isCollapsed ? '▶' : '▼'}
                   </span>
-                </td>
-                <td className="px-4 py-1">
-                  {p.productAreaId ? (() => {
-                    const opt = productAreas.find(o => o.id === p.productAreaId)
-                    const color = opt?.color ?? ''
-                    return (
-                      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${pillClass(color)}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${dotClass(color)}`} />
-                        {opt?.label ?? '—'}
-                      </span>
-                    )
-                  })() : <span className="text-muted-foreground">—</span>}
-                </td>
-                <td className="px-4 py-1">
-                  {p.priorityId ? (() => {
-                    const opt = priorities.find(o => o.id === p.priorityId)
-                    const color = opt?.color ?? ''
-                    return (
-                      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${pillClass(color)}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${dotClass(color)}`} />
-                        {opt?.label ?? '—'}
-                      </span>
-                    )
-                  })() : <span className="text-muted-foreground">—</span>}
-                </td>
-                <td className="px-4 py-1"><RagBadge status={p.ragStatus} /></td>
-                <td className="px-4 py-1">
-                  {p.statusId ? (() => {
-                    const opt = projectStatuses.find(s => s.id === p.statusId)
-                    if (!opt) return <span className="text-muted-foreground">—</span>
-                    const color = opt.color
-                    return (
-                      <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${pillClass(color)}`}>
-                        {color && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass(color)}`} />}
-                        {opt.label}
-                      </span>
-                    )
-                  })() : <span className="text-muted-foreground">—</span>}
-                </td>
-                {/* Open Tasks */}
-                <td className="px-4 py-1 whitespace-nowrap">
-                  {(() => {
-                    const counts = taskCountsByProject.get(p.id)
-                    return counts && (counts.open > 0 || counts.inProgress > 0) ? (
-                      <span className="text-xs text-muted-foreground">
-                        {counts.open > 0 && <span className="text-slate-700 font-medium">{counts.open} open</span>}
-                        {counts.open > 0 && counts.inProgress > 0 && <span> · </span>}
-                        {counts.inProgress > 0 && <span className="text-blue-600 font-medium">{counts.inProgress} active</span>}
-                      </span>
-                    ) : <span className="text-xs text-muted-foreground">—</span>
-                  })()}
-                </td>
-                {/* Latest Status */}
-                <td className="px-4 py-1 max-w-[16rem]">
-                  {p.latestStatus
-                    ? <ExpandableText textKey={p.latestStatus}>
-                        <span className="text-xs text-muted-foreground">{p.latestStatus}</span>
-                      </ExpandableText>
-                    : <span className="text-xs text-muted-foreground">—</span>
-                  }
-                </td>
-                {/* Latest Update */}
-                <td className="px-4 py-1 max-w-[20rem]">
-                  {(() => {
-                    const latestLog = latestLogByProject.get(p.id)
-                    return latestLog ? (
-                      <ExpandableText textKey={latestLog.note}>
-                        <span className="text-xs text-muted-foreground">
-                          <span className="text-foreground/60 font-medium mr-1.5 shrink-0">
-                            {fmtDate(latestLog.createdAt.slice(0, 10))}
-                          </span>
-                          <span>{latestLog.note}</span>
-                        </span>
-                      </ExpandableText>
-                    ) : <span className="text-xs text-muted-foreground">—</span>
-                  })()}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                  {area && <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${dotClass(color)}`} />}
+                  <span className="font-semibold text-sm">{area?.label ?? 'No Area'}</span>
+                  <span className="text-xs text-muted-foreground">
+                    ({grpProjects.length} {grpProjects.length === 1 ? 'project' : 'projects'})
+                  </span>
+                  <span className="flex items-center gap-1.5 text-xs ml-1">
+                    {rag.Red   > 0 && <span className="text-red-600   font-medium">🔴 {rag.Red}</span>}
+                    {rag.Amber > 0 && <span className="text-amber-600 font-medium">🟡 {rag.Amber}</span>}
+                    {rag.Green > 0 && <span className="text-green-600 font-medium">🟢 {rag.Green}</span>}
+                  </span>
+                  {area && (
+                    <button
+                      onClick={e => { e.stopPropagation(); navigate(`/areas/${area.id}`) }}
+                      className="ml-auto text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline transition-colors shrink-0"
+                    >
+                      View Area →
+                    </button>
+                  )}
+                </div>
+                {/* Project rows */}
+                {!isCollapsed && (
+                  <table className="w-full text-sm">
+                    <tbody className="divide-y divide-border/60">
+                      {grpProjects.map(p => <ProjectRow key={p.id} p={p} />)}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
+
+  /** Shared project row used in both table and grouped view */
+  function ProjectRow({ p }: { p: Project }) {
+    return (
+      <tr
+        onClick={() => navigate(`/projects/${p.id}`)}
+        className="hover:bg-accent cursor-pointer transition-colors"
+      >
+        <td className={`px-4 py-1 font-medium${p.workItem.length <= 65 ? ' whitespace-nowrap' : ''}`}>
+          <span className="flex items-center gap-2 flex-wrap">
+            {p.workItem}
+            {p.dueDate && p.dueDate < today && (
+              <span className="inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded bg-red-50 border border-red-200 text-red-700 shrink-0">
+                🗓 Overdue
+              </span>
+            )}
+          </span>
+        </td>
+        <td className="px-4 py-1">
+          {p.productAreaId ? (() => {
+            const opt = productAreas.find(o => o.id === p.productAreaId)
+            const color = opt?.color ?? ''
+            return (
+              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${pillClass(color)}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${dotClass(color)}`} />
+                {opt?.label ?? '—'}
+              </span>
+            )
+          })() : <span className="text-muted-foreground">—</span>}
+        </td>
+        <td className="px-4 py-1">
+          {p.priorityId ? (() => {
+            const opt = priorities.find(o => o.id === p.priorityId)
+            const color = opt?.color ?? ''
+            return (
+              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${pillClass(color)}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${dotClass(color)}`} />
+                {opt?.label ?? '—'}
+              </span>
+            )
+          })() : <span className="text-muted-foreground">—</span>}
+        </td>
+        <td className="px-4 py-1"><RagBadge status={p.ragStatus} /></td>
+        <td className="px-4 py-1">
+          {p.statusId ? (() => {
+            const opt = projectStatuses.find(s => s.id === p.statusId)
+            if (!opt) return <span className="text-muted-foreground">—</span>
+            const color = opt.color
+            return (
+              <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${pillClass(color)}`}>
+                {color && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass(color)}`} />}
+                {opt.label}
+              </span>
+            )
+          })() : <span className="text-muted-foreground">—</span>}
+        </td>
+        <td className="px-4 py-1 whitespace-nowrap">
+          {(() => {
+            const counts = taskCountsByProject.get(p.id)
+            return counts && (counts.open > 0 || counts.inProgress > 0) ? (
+              <span className="text-xs text-muted-foreground">
+                {counts.open > 0 && <span className="text-slate-700 font-medium">{counts.open} open</span>}
+                {counts.open > 0 && counts.inProgress > 0 && <span> · </span>}
+                {counts.inProgress > 0 && <span className="text-blue-600 font-medium">{counts.inProgress} active</span>}
+              </span>
+            ) : <span className="text-xs text-muted-foreground">—</span>
+          })()}
+        </td>
+        <td className="px-4 py-1 max-w-[16rem]">
+          {p.latestStatus
+            ? <ExpandableText textKey={p.latestStatus}>
+                <span className="text-xs text-muted-foreground">{p.latestStatus}</span>
+              </ExpandableText>
+            : <span className="text-xs text-muted-foreground">—</span>
+          }
+        </td>
+        <td className="px-4 py-1 max-w-[20rem]">
+          {(() => {
+            const latestLog = latestLogByProject.get(p.id)
+            return latestLog ? (
+              <ExpandableText textKey={latestLog.note}>
+                <div className="text-xs text-muted-foreground">
+                  <span className="text-foreground/60 font-medium mr-1.5">
+                    {fmtDate(latestLog.createdAt.slice(0, 10))}
+                  </span>
+                  <MarkdownContent className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                    {latestLog.note}
+                  </MarkdownContent>
+                </div>
+              </ExpandableText>
+            ) : <span className="text-xs text-muted-foreground">—</span>
+          })()}
+        </td>
+      </tr>
+    )
+  }
 }
