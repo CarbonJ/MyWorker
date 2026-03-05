@@ -9,13 +9,10 @@ set -e
 
 DIST_DIR="dist"
 
-# ── Prompt for version number ─────────────────────────────────────────────────
-read -rp "Version number (e.g. 1.3.0): " VERSION
-if [[ -z "$VERSION" ]]; then
-  echo "❌ No version entered. Aborting."
-  exit 1
-fi
+# ── Read version from package.json ────────────────────────────────────────────
+VERSION=$(node -p "require('./package.json').version")
 OUTPUT_ZIP="myworker-app-v${VERSION}.zip"
+echo "▶ Packaging version $VERSION..."
 
 echo "▶ Building MyWorker..."
 npm run build

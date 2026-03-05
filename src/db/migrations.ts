@@ -313,6 +313,14 @@ const migrations: Migration[] = [
       );
     `,
   },
+  {
+    version: 11,
+    up: `
+      -- Recurring tasks: when marked complete, prompt for next due date and
+      -- reset to open rather than leaving as done.
+      ALTER TABLE tasks ADD COLUMN is_recurring INTEGER NOT NULL DEFAULT 0;
+    `,
+  },
 ]
 
 export async function runMigrations(handle: DbHandle): Promise<void> {

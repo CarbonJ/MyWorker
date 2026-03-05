@@ -5,17 +5,19 @@
  * inline status cycling and due-date editing via a calendar popover.
  */
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { Task, TaskStatus, DropdownOption } from '@/types'
 import { updateTask } from '@/db/tasks'
+import { addWorkLogEntry } from '@/db/workLog'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
-import { Check } from 'lucide-react'
+import { Check, RefreshCw } from 'lucide-react'
 import { pillClass, dotClass } from '@/lib/colors'
 import { fmtDate, isOverdue, isDueToday } from '@/lib/utils'
 import { useErrorHandler } from '@/hooks/useErrorHandler'
+import { RecurringCompleteDialog } from '@/components/RecurringCompleteDialog'
 
 
 type TaskSortField = 'status' | 'priority' | 'dueDate'
@@ -61,6 +63,7 @@ export function TaskPane({
   onAddTask, onEditTask, onReload,
 }: Props) {
   const { handleError } = useErrorHandler()
+  const [recurringTask, setRecurringTask] = useState<Task | null>(null)
 
   const visibleTasks = useMemo(() => {
     let list = [...tasks]
@@ -91,11 +94,48 @@ export function TaskPane({
 
   const handleCycleStatus = async (e: React.MouseEvent, task: Task) => {
     e.stopPropagation()
+    // Intercept in_progress → done for recurring tasks: show reschedule dialog
+    if (task.status === 'in_progress' && task.isRecurring) {
+      setRecurringTask(task)
+      return
+    }
     try {
-      await updateTask({ id: task.id, status: cycleStatus(task.status) })
+      const newStatus = cycleStatus(task.status)
+      await updateTask({ id: task.id, status: newStatus })
+      if (newStatus === 'done' && task.projectId) {
+        await addWorkLogEntry(task.projectId, `✓ Completed: ${task.title}`)
+      }
       onReload()
     } catch (err) {
       handleError(err, 'Failed to update task')
+    }
+  }
+
+  const handleReschedule = async (newDueDate: string, note: string) => {
+    if (!recurringTask) return
+    try {
+      await updateTask({ id: recurringTask.id, status: 'open', dueDate: newDueDate })
+      if (recurringTask.projectId) {
+        const logNote = `✓ Completed: ${recurringTask.title}. Next due: ${fmtDate(newDueDate)}${note ? `. ${note}` : ''}`
+        await addWorkLogEntry(recurringTask.projectId, logNote)
+      }
+      onReload()
+    } catch (err) {
+      handleError(err, 'Failed to reschedule task')
+    } finally {
+      setRecurringTask(null)
+    }
+  }
+
+  const handleMarkDonePermanently = async () => {
+    if (!recurringTask) return
+    try {
+      await updateTask({ id: recurringTask.id, status: 'done', isRecurring: false })
+      onReload()
+    } catch (err) {
+      handleError(err, 'Failed to update task')
+    } finally {
+      setRecurringTask(null)
     }
   }
 
@@ -131,7 +171,7 @@ export function TaskPane({
             </SelectContent>
           </Select>
         </div>
-        <div className="grid grid-cols-[1.5rem_1fr_4rem_4.5rem] gap-2 px-4 pb-1 text-xs text-muted-foreground">
+        <div className="grid grid-cols-[1.5rem_1fr_auto_4.5rem] gap-2 px-4 pb-1 text-xs text-muted-foreground">
           <span />
           <span>Title</span>
           <button onClick={() => onToggleSort('priority')} className="hover:text-foreground tabular-nums text-left">
@@ -154,7 +194,7 @@ export function TaskPane({
             <div
               key={task.id}
               onClick={() => onEditTask(task)}
-              className={`grid grid-cols-[1.5rem_1fr_4rem_4.5rem] gap-2 px-4 py-2 cursor-pointer hover:bg-accent transition-colors items-center ${isDone ? 'opacity-50' : ''}`}
+              className={`grid grid-cols-[1.5rem_1fr_auto_4.5rem] gap-2 px-4 py-2 cursor-pointer hover:bg-accent transition-colors items-center ${isDone ? 'opacity-50' : ''}`}
             >
               <button
                 onClick={e => handleCycleStatus(e, task)}
@@ -177,7 +217,7 @@ export function TaskPane({
                     {task.priorityId ? (() => {
                       const opt = priorities.find(p => p.id === task.priorityId)
                       return (
-                        <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full border ${isDone ? 'bg-muted text-muted-foreground border-transparent' : pillClass(opt?.color ?? '')}`}>
+                        <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full border whitespace-nowrap ${isDone ? 'bg-muted text-muted-foreground border-transparent' : pillClass(opt?.color ?? '')}`}>
                           {!isDone && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass(opt?.color ?? '')}`} />}
                           {opt?.label ?? '—'}
                         </span>
@@ -208,12 +248,13 @@ export function TaskPane({
                 <PopoverTrigger asChild>
                   <button
                     onClick={e => e.stopPropagation()}
-                    className={`text-xs text-right w-full hover:underline decoration-dashed underline-offset-2 ${
+                    className={`text-xs text-right w-full hover:underline decoration-dashed underline-offset-2 flex items-center justify-end gap-1 ${
                       isOverdue(task.dueDate) && !isDone ? 'text-red-600 font-medium' :
                       isDueToday(task.dueDate) && !isDone ? 'text-amber-600 font-medium' :
                       'text-muted-foreground'
                     }`}
                   >
+                    {task.isRecurring && <RefreshCw className="w-2.5 h-2.5 shrink-0 opacity-60" />}
                     {task.dueDate ? fmtDate(task.dueDate) : '—'}
                   </button>
                 </PopoverTrigger>
@@ -231,10 +272,24 @@ export function TaskPane({
                     }}
                     initialFocus
                   />
-                  {task.dueDate && (
-                    <div className="border-t px-3 py-2">
+                  <div className="border-t px-3 py-2 flex gap-2">
+                    <button
+                      className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center"
+                      onClick={async (e) => {
+                        e.stopPropagation()
+                        try {
+                          await updateTask({ id: task.id, dueDate: new Date().toISOString().slice(0, 10) })
+                          onReload()
+                        } catch (err) {
+                          handleError(err, 'Failed to set due date')
+                        }
+                      }}
+                    >
+                      Today
+                    </button>
+                    {task.dueDate && (
                       <button
-                        className="text-xs text-muted-foreground hover:text-foreground w-full text-center"
+                        className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center"
                         onClick={async (e) => {
                           e.stopPropagation()
                           try {
@@ -245,16 +300,27 @@ export function TaskPane({
                           }
                         }}
                       >
-                        Clear date
+                        Clear
                       </button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </PopoverContent>
               </Popover>
             </div>
           )
         })}
       </div>
+
+      {/* Recurring task completion dialog */}
+      {recurringTask && (
+        <RecurringCompleteDialog
+          task={recurringTask}
+          open={!!recurringTask}
+          onReschedule={handleReschedule}
+          onMarkDone={handleMarkDonePermanently}
+          onCancel={() => setRecurringTask(null)}
+        />
+      )}
     </div>
   )
 }

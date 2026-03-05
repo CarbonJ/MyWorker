@@ -51,6 +51,7 @@ export interface Task {
   createdAt: string
   updatedAt: string
   preArchiveStatus: TaskStatus | null
+  isRecurring: boolean
 }
 
 export interface DropdownOption {

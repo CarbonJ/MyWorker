@@ -3,14 +3,16 @@ import { useSearchParams, useNavigate } from 'react-router-dom'
 import { getAllTasks, createTask, updateTask } from '@/db/tasks'
 import { getAllProjectsIncludingArchived } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
+import { addWorkLogEntry } from '@/db/workLog'
 import type { Task, TaskStatus, Project, DropdownOption } from '@/types'
 import { TaskModal } from '@/components/TaskModal'
+import { RecurringCompleteDialog } from '@/components/RecurringCompleteDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
-import { Check } from 'lucide-react'
+import { Check, RefreshCw } from 'lucide-react'
 
 import { pillClass, pillClassActive, dotClass, textClass } from '@/lib/colors'
 import { useDataLoader } from '@/hooks/useDataLoader'
@@ -71,6 +73,7 @@ export default function TasksView() {
   const { handleError } = useErrorHandler()
   const [taskModalOpen, setTaskModalOpen] = useState(false)
   const [editingTask,   setEditingTask]   = useState<Task | null>(null)
+  const [recurringTask, setRecurringTask] = useState<Task | null>(null)
 
   // Inbox quick-add
   const [inboxDraft, setInboxDraft] = useState('')
@@ -158,11 +161,48 @@ export default function TasksView() {
 
   const cycleTaskStatus = async (e: React.MouseEvent, task: Task) => {
     e.stopPropagation()
+    // Intercept in_progress → done for recurring tasks: show reschedule dialog
+    if (task.status === 'in_progress' && task.isRecurring) {
+      setRecurringTask(task)
+      return
+    }
     try {
-      await updateTask({ id: task.id, status: cycleStatus(task.status) })
+      const newStatus = cycleStatus(task.status)
+      await updateTask({ id: task.id, status: newStatus })
+      if (newStatus === 'done' && task.projectId) {
+        await addWorkLogEntry(task.projectId, `✓ Completed: ${task.title}`)
+      }
       await load()
     } catch (err) {
       handleError(err, 'Failed to update task')
+    }
+  }
+
+  const handleReschedule = async (newDueDate: string, note: string) => {
+    if (!recurringTask) return
+    try {
+      await updateTask({ id: recurringTask.id, status: 'open', dueDate: newDueDate })
+      if (recurringTask.projectId) {
+        const logNote = `✓ Completed: ${recurringTask.title}. Next due: ${fmtDate(newDueDate)}${note ? `. ${note}` : ''}`
+        await addWorkLogEntry(recurringTask.projectId, logNote)
+      }
+      await load()
+    } catch (err) {
+      handleError(err, 'Failed to reschedule task')
+    } finally {
+      setRecurringTask(null)
+    }
+  }
+
+  const handleMarkDonePermanently = async () => {
+    if (!recurringTask) return
+    try {
+      await updateTask({ id: recurringTask.id, status: 'done', isRecurring: false })
+      await load()
+    } catch (err) {
+      handleError(err, 'Failed to update task')
+    } finally {
+      setRecurringTask(null)
     }
   }
 
@@ -513,12 +553,13 @@ export default function TasksView() {
                 <PopoverTrigger asChild>
                   <button
                     onClick={e => e.stopPropagation()}
-                    className={`text-xs text-right w-full hover:underline decoration-dashed underline-offset-2 ${
+                    className={`text-xs text-right w-full hover:underline decoration-dashed underline-offset-2 flex items-center justify-end gap-1 ${
                       isOverdue(task.dueDate) && !isDone ? 'text-red-600 font-medium' :
                       isDueToday(task.dueDate) && !isDone ? 'text-amber-600 font-medium' :
                       'text-muted-foreground'
                     }`}
                   >
+                    {task.isRecurring && <RefreshCw className="w-2.5 h-2.5 shrink-0 opacity-60" />}
                     {task.dueDate ? fmtDate(task.dueDate) : null}
                   </button>
                 </PopoverTrigger>
@@ -537,10 +578,24 @@ export default function TasksView() {
                     }}
                     initialFocus
                   />
-                  {task.dueDate && (
-                    <div className="border-t px-3 py-2">
+                  <div className="border-t px-3 py-2 flex gap-2">
+                    <button
+                      className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center"
+                      onClick={async (e) => {
+                        e.stopPropagation()
+                        try {
+                          await updateTask({ id: task.id, dueDate: new Date().toISOString().slice(0, 10) })
+                          await load()
+                        } catch (err) {
+                          handleError(err, 'Failed to set due date')
+                        }
+                      }}
+                    >
+                      Today
+                    </button>
+                    {task.dueDate && (
                       <button
-                        className="text-xs text-muted-foreground hover:text-foreground w-full text-center"
+                        className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center"
                         onClick={async (e) => {
                           e.stopPropagation()
                           try {
@@ -551,10 +606,10 @@ export default function TasksView() {
                           }
                         }}
                       >
-                        Clear date
+                        Clear
                       </button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </PopoverContent>
               </Popover>
             </div>
@@ -570,6 +625,17 @@ export default function TasksView() {
         onSaved={() => { load() }}
         projects={projects}
       />
+
+      {/* Recurring task completion dialog */}
+      {recurringTask && (
+        <RecurringCompleteDialog
+          task={recurringTask}
+          open={!!recurringTask}
+          onReschedule={handleReschedule}
+          onMarkDone={handleMarkDonePermanently}
+          onCancel={() => setRecurringTask(null)}
+        />
+      )}
     </div>
   )
 }

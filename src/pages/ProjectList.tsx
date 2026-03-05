@@ -62,6 +62,9 @@ export default function ProjectList() {
   const [searchIds, setSearchIds] = useState<number[] | null>(null)
   const [sortKey, setSortKey] = useState<SortKey>(() => (localStorage.getItem('myworker:sort-key-projects') as SortKey) ?? 'productArea')
   const [sortDir, setSortDir] = useState<SortDir>(() => (localStorage.getItem('myworker:sort-dir-projects') as SortDir) ?? 'asc')
+  // Tracks whether the user has manually clicked a column header. Until they do,
+  // Area asc is applied silently with no visible sort indicator.
+  const [userHasSorted, setUserHasSorted] = useState(() => localStorage.getItem('myworker:projects-user-sorted') === 'true')
   const [ragFilter, setRagFilter] = useState<RagStatus | 'All'>('All')
   const [priorityFilter, setPriorityFilter] = useState<string>('All')  // 'All' | priority id as string
   const [areaFilter, setAreaFilter] = useState<string>(() => localStorage.getItem('myworker:area-filter-projects') ?? 'All')
@@ -93,6 +96,7 @@ export default function ProjectList() {
   // Persist sort and area filter across navigation
   useEffect(() => { localStorage.setItem('myworker:sort-key-projects', sortKey) }, [sortKey])
   useEffect(() => { localStorage.setItem('myworker:sort-dir-projects', sortDir) }, [sortDir])
+  useEffect(() => { localStorage.setItem('myworker:projects-user-sorted', String(userHasSorted)) }, [userHasSorted])
   useEffect(() => { localStorage.setItem('myworker:area-filter-projects', areaFilter) }, [areaFilter])
 
   // Full-text search — debounced
@@ -109,6 +113,7 @@ export default function ProjectList() {
     opts.find(o => o.id === id)?.label ?? '—'
 
   const handleSort = (key: SortKey) => {
+    setUserHasSorted(true)
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortKey(key); setSortDir('asc') }
   }
@@ -176,7 +181,9 @@ export default function ProjectList() {
   }, [projects, searchIds, sortKey, sortDir, ragFilter, priorityFilter, areaFilter, statusFilter, priorities, productAreas, projectStatuses, taskCountsByProject])
 
   const SortIcon = ({ col }: { col: SortKey }) =>
-    <span className="ml-1 opacity-50">{sortKey === col ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span>
+    userHasSorted && sortKey === col
+      ? <span className="ml-1 opacity-50">{sortDir === 'asc' ? '↑' : '↓'}</span>
+      : null
 
   const thClass = 'px-4 py-1 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground whitespace-nowrap'
 

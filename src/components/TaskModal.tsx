@@ -14,6 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { ChevronsUpDown, Check, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Checkbox } from '@/components/ui/checkbox'
 
 interface Props {
   projectId?: number | null            // initial project; undefined = no default
@@ -35,6 +36,7 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
   const [priorityId,  setPriorityId]  = useState<string>('')
   const [startDate,   setStartDate]   = useState('')
   const [dueDate,     setDueDate]     = useState('')
+  const [isRecurring, setIsRecurring] = useState(false)
   const [saving,      setSaving]      = useState(false)
 
   // Project combobox state
@@ -75,11 +77,13 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
       setStartDate(task.startDate ?? '')
       setDueDate(task.dueDate ?? '')
       setSelectedProjectId(task.projectId)
+      setIsRecurring(task.isRecurring)
     } else {
       setTitle(''); setDescription(''); setNotes('')
       setStatus('open'); setPriorityId('')
       setProductAreaId(initialProductAreaId ? String(initialProductAreaId) : '')
       setStartDate(''); setDueDate('')
+      setIsRecurring(false)
       setSelectedProjectId(initialProjectId ?? null)
     }
     setProjectSearch('')
@@ -101,6 +105,7 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
         priorityId: priorityId ? Number(priorityId) : null,
         startDate: startDate || null,
         dueDate: dueDate || null,
+        isRecurring,
       }
       if (isEdit && task) {
         await updateTask({ id: task.id, ...input })
@@ -383,6 +388,19 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
                 )}
               </div>
             </div>
+          </div>
+
+          {/* Recurring */}
+          <div className="flex items-center gap-2.5">
+            <Checkbox
+              id="task-recurring"
+              checked={isRecurring}
+              onCheckedChange={v => setIsRecurring(!!v)}
+            />
+            <Label htmlFor="task-recurring" className="cursor-pointer font-normal">
+              Recurring task
+              <span className="ml-1.5 text-xs text-muted-foreground">(when completed, prompts for next due date)</span>
+            </Label>
           </div>
         </div>
 

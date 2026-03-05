@@ -17,6 +17,7 @@ function rowToTask(row: Record<string, unknown>): Task {
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
     preArchiveStatus: (row.pre_archive_status as TaskStatus | null) ?? null,
+    isRecurring: !!(row.is_recurring as number),
   }
 }
 
@@ -61,6 +62,7 @@ export interface CreateTaskInput {
   priorityId?: number | null
   startDate?: string | null
   dueDate?: string | null
+  isRecurring?: boolean
 }
 
 export async function getAllTasks(): Promise<Task[]> {
@@ -77,8 +79,8 @@ export async function getAllTasks(): Promise<Task[]> {
 export async function createTask(input: CreateTaskInput): Promise<number> {
   await run(
     `INSERT INTO tasks
-      (project_id, product_area_id, title, description, notes, status, priority_id, start_date, due_date)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (project_id, product_area_id, title, description, notes, status, priority_id, start_date, due_date, is_recurring)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.projectId ?? null,
       // Only persist direct area when there is no project; otherwise it is inherited from the project
@@ -90,6 +92,7 @@ export async function createTask(input: CreateTaskInput): Promise<number> {
       input.priorityId ?? null,
       input.startDate ?? null,
       input.dueDate ?? null,
+      input.isRecurring ? 1 : 0,
     ],
   )
   return await lastInsertId()
@@ -119,7 +122,8 @@ export async function updateTask(input: UpdateTaskInput): Promise<void> {
       status          = ?,
       priority_id     = ?,
       start_date      = ?,
-      due_date        = ?
+      due_date        = ?,
+      is_recurring    = ?
      WHERE id = ?`,
     [
       newProjectId,
@@ -131,6 +135,7 @@ export async function updateTask(input: UpdateTaskInput): Promise<void> {
       input.priorityId !== undefined ? input.priorityId : current.priorityId,
       input.startDate !== undefined ? input.startDate : current.startDate,
       input.dueDate !== undefined ? input.dueDate : current.dueDate,
+      input.isRecurring !== undefined ? (input.isRecurring ? 1 : 0) : (current.isRecurring ? 1 : 0),
       input.id,
     ],
   )
