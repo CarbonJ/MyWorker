@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { getProjectById, createProject, updateProject, deleteProject, getAllStakeholderNames } from '@/db/projects'
@@ -34,6 +34,20 @@ export default function ProjectForm() {
   const [jiraErrors, setJiraErrors] = useState<string[]>([])
   const [dueDate, setDueDate] = useState<string>('')
   const [knownStakeholders, setKnownStakeholders] = useState<string[]>([])
+
+  const formRef = useRef<HTMLFormElement>(null)
+
+  // Cmd+Enter / Ctrl+Enter saves the form from anywhere inside it
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault()
+        formRef.current?.requestSubmit()
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   const load = useCallback(async () => {
     try {
@@ -167,7 +181,7 @@ export default function ProjectForm() {
         </button>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form ref={formRef} onSubmit={handleSubmit} className="space-y-5">
         {/* Work Item */}
         <div className={fieldClass}>
           <Label htmlFor="workItem">Work Item <span className="text-destructive">*</span></Label>

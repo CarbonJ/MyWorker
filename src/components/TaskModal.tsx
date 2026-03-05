@@ -187,7 +187,7 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
+        <div className="space-y-4 py-2 overflow-x-hidden min-w-0">
           {/* Title */}
           <div className={fieldClass}>
             <Label htmlFor="task-title">Title <span className="text-destructive">*</span></Label>
@@ -292,6 +292,7 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
               onKeyDown={e => handleTabKey(e, description, setDescription)}
               placeholder="What needs to be done? (supports Markdown)"
               rows={2}
+              className="break-words"
             />
           </div>
 
@@ -305,6 +306,7 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
               onKeyDown={e => handleTabKey(e, notes, setNotes)}
               placeholder="Additional notes, links, context… (supports Markdown)"
               rows={2}
+              className="break-words"
             />
           </div>
 
