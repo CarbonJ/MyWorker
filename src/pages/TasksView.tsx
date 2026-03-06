@@ -16,6 +16,7 @@ import { Check, RefreshCw } from 'lucide-react'
 import { MarkdownContent } from '@/components/MarkdownContent'
 
 import { pillClass, pillClassActive, dotClass, textClass } from '@/lib/colors'
+import { loadGuiSettings, altRowStyle, buttonStyle } from '@/lib/guiSettings'
 import { useDataLoader } from '@/hooks/useDataLoader'
 import { useErrorHandler } from '@/hooks/useErrorHandler'
 import { fmtDate, isOverdue, isDueToday } from '@/lib/utils'
@@ -73,6 +74,8 @@ export default function TasksView() {
   const navigate = useNavigate()
   const { query } = useSearch()
   const { handleError } = useErrorHandler()
+  const { rowColor, rowOpacity, buttonColor, buttonOpacity } = loadGuiSettings()
+  const btnStyle = buttonStyle(buttonColor, buttonOpacity)
   const [taskModalOpen, setTaskModalOpen] = useState(false)
   const [editingTask,   setEditingTask]   = useState<Task | null>(null)
   const [recurringTask, setRecurringTask] = useState<Task | null>(null)
@@ -476,12 +479,14 @@ export default function TasksView() {
             <button
               onClick={() => setViewMode('list')}
               className={`h-7 px-3 transition-colors ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}`}
+              style={viewMode === 'list' ? btnStyle : {}}
             >
               List
             </button>
             <button
               onClick={() => setViewMode('grouped')}
               className={`h-7 px-3 border-l transition-colors ${viewMode === 'grouped' ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}`}
+              style={viewMode === 'grouped' ? btnStyle : {}}
             >
               By Project
             </button>
@@ -508,7 +513,7 @@ export default function TasksView() {
         {visibleTasks.length === 0 && (
           <p className="px-6 py-12 text-sm text-muted-foreground text-center">No tasks.</p>
         )}
-        {visibleTasks.map(task => {
+        {visibleTasks.map((task, index) => {
           const isDone = task.status === 'done'
           const projectName = task.projectId
             ? projects.find(p => p.id === task.projectId)?.workItem ?? '—'
@@ -519,6 +524,7 @@ export default function TasksView() {
               key={task.id}
               onClick={() => { setEditingTask(task); setTaskModalOpen(true) }}
               className={`grid grid-cols-[1.5rem_minmax(0,50%)_6rem_12rem_5.5rem_5.5rem] gap-3 px-10 py-1.5 cursor-pointer hover:bg-accent transition-colors items-start ${isDone ? 'opacity-50' : ''}`}
+              style={altRowStyle(rowColor, rowOpacity, index)}
             >
               {/* Status cycle button */}
               <button

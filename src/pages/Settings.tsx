@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
+import { ROW_COLOR_RGB, buttonStyle } from '@/lib/guiSettings'
 import { toast } from 'sonner'
 import {
   getDropdownOptions,
@@ -295,6 +296,23 @@ export default function Settings() {
     localStorage.setItem(AREA_BTN_PROJECTS_KEY, String(checked))
   }
 
+  // GUI color settings
+  const [guiRowColor,      setGuiRowColor]      = useState(() => localStorage.getItem('myworker:gui-row-color')           ?? '')
+  const [guiRowOpacity,    setGuiRowOpacity]    = useState(() => Number(localStorage.getItem('myworker:gui-row-opacity')  ?? '20'))
+  const [guiButtonColor,   setGuiButtonColor]   = useState(() => localStorage.getItem('myworker:gui-button-color')        ?? '')
+  const [guiButtonOpacity, setGuiButtonOpacity] = useState(() => Number(localStorage.getItem('myworker:gui-button-opacity') ?? '20'))
+
+  useEffect(() => { localStorage.setItem('myworker:gui-row-color',      guiRowColor)             }, [guiRowColor])
+  useEffect(() => { localStorage.setItem('myworker:gui-row-opacity',    String(guiRowOpacity))   }, [guiRowOpacity])
+  useEffect(() => {
+    localStorage.setItem('myworker:gui-button-color', guiButtonColor)
+    window.dispatchEvent(new Event('myworker:gui-settings-changed'))
+  }, [guiButtonColor])
+  useEffect(() => {
+    localStorage.setItem('myworker:gui-button-opacity', String(guiButtonOpacity))
+    window.dispatchEvent(new Event('myworker:gui-settings-changed'))
+  }, [guiButtonOpacity])
+
   useEffect(() => {
     Promise.all([
       query('SELECT COUNT(*) as n FROM projects'),
@@ -371,7 +389,7 @@ export default function Settings() {
   const sectionTitle = 'text-base font-semibold'
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8">
+    <div className="max-w-7xl mx-auto px-6 py-8">
       <h1 className="text-2xl font-semibold">Settings</h1>
       <p className="text-sm text-muted-foreground mb-6">v{__APP_VERSION__}</p>
 
@@ -384,7 +402,7 @@ export default function Settings() {
 
         {/* ── Customization tab ───────────────────────────────────────── */}
         <TabsContent value="customization">
-          <div className="grid grid-cols-2 gap-8 pt-4">
+          <div className="grid grid-cols-[2fr_1fr_1fr] gap-8 pt-4">
             <section className={section}>
               <h2 className={sectionTitle}>Dropdown Options</h2>
               <OptionList type="priority" title="Priority Values" />
@@ -417,6 +435,86 @@ export default function Settings() {
                     Show area filter as buttons on the Tasks screen
                   </label>
                 </div>
+              </div>
+            </section>
+
+            {/* ── GUI column ─────────────────────────────────────── */}
+            <section className={section}>
+              <h2 className={sectionTitle}>GUI</h2>
+              <div className="space-y-5">
+
+                {/* Row Color */}
+                <div className="space-y-2">
+                  <h3 className="font-medium text-sm">Row Color</h3>
+                  <div className="border rounded-md p-3 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground w-16 shrink-0">Color</span>
+                      <ColorPicker value={guiRowColor} onChange={setGuiRowColor} />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground w-16 shrink-0">Opacity</span>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={guiRowOpacity}
+                        onChange={e => setGuiRowOpacity(Number(e.target.value))}
+                        className="flex-1 cursor-pointer accent-primary h-1.5"
+                      />
+                      <span className="text-xs text-muted-foreground w-8 text-right tabular-nums">{guiRowOpacity}%</span>
+                    </div>
+                    {guiRowColor && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground w-16 shrink-0">Preview</span>
+                        <div className="flex gap-1">
+                          <div className="h-5 w-16 rounded border" />
+                          <div
+                            className="h-5 w-16 rounded border"
+                            style={{ backgroundColor: `rgba(${ROW_COLOR_RGB[guiRowColor] ?? ''}, ${guiRowOpacity / 100})` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Button Color */}
+                <div className="space-y-2">
+                  <h3 className="font-medium text-sm">Button Color</h3>
+                  <div className="border rounded-md p-3 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground w-16 shrink-0">Color</span>
+                      <ColorPicker value={guiButtonColor} onChange={setGuiButtonColor} />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground w-16 shrink-0">Opacity</span>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={guiButtonOpacity}
+                        onChange={e => setGuiButtonOpacity(Number(e.target.value))}
+                        className="flex-1 cursor-pointer accent-primary h-1.5"
+                      />
+                      <span className="text-xs text-muted-foreground w-8 text-right tabular-nums">{guiButtonOpacity}%</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground w-16 shrink-0">Preview</span>
+                      <div className="flex gap-2 items-center">
+                        <span className="h-6 px-3 rounded text-[10px] border bg-primary text-primary-foreground flex items-center leading-none">
+                          Default
+                        </span>
+                        <span
+                          className="h-6 px-3 rounded text-[10px] border bg-primary text-primary-foreground flex items-center leading-none"
+                          style={buttonStyle(guiButtonColor, guiButtonOpacity)}
+                        >
+                          Colored
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
               </div>
             </section>
           </div>

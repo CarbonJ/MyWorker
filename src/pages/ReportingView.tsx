@@ -11,6 +11,7 @@ import { ReportingExportModal } from '@/components/ReportingExportModal'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { RAG_ORDER, pillClass, dotClass } from '@/lib/colors'
+import { loadGuiSettings, buttonStyle } from '@/lib/guiSettings'
 import { useDataLoader } from '@/hooks/useDataLoader'
 import { fmtDate } from '@/lib/utils'
 
@@ -66,6 +67,9 @@ export default function ReportingView() {
 
   // Export modal
   const [exportOpen, setExportOpen] = useState(false)
+
+  const { buttonColor, buttonOpacity } = loadGuiSettings()
+  const btnStyle = buttonStyle(buttonColor, buttonOpacity)
 
   const { data, reload: load } = useDataLoader<PageData>(
     async () => {
@@ -210,7 +214,7 @@ export default function ReportingView() {
         )}
 
         <div className="ml-auto flex items-center gap-2">
-          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setExportOpen(true)}>
+          <Button variant="outline" size="sm" className="h-8 text-xs" style={btnStyle} onClick={() => setExportOpen(true)}>
             Export…
           </Button>
           <button

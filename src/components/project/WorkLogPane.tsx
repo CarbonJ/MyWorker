@@ -13,6 +13,7 @@ import { updateWorkLogEntry } from '@/db/workLog'
 import { WorkLogEntryForm } from '@/components/WorkLogEntry'
 import { MarkdownContent } from '@/components/MarkdownContent'
 import { Pencil, Check, X } from 'lucide-react'
+import { loadGuiSettings, altRowStyle } from '@/lib/guiSettings'
 
 interface Props {
   projectId: number
@@ -23,6 +24,7 @@ interface Props {
 export function WorkLogPane({ projectId, workLog, onSaved }: Props) {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editDraft, setEditDraft] = useState('')
+  const { rowColor, rowOpacity } = loadGuiSettings()
 
   const startEdit = (entry: WorkLogEntry) => {
     setEditingId(entry.id)
@@ -61,8 +63,8 @@ export function WorkLogPane({ projectId, workLog, onSaved }: Props) {
         {workLog.length === 0 && (
           <p className="px-4 py-6 text-sm text-muted-foreground text-center">No entries yet.</p>
         )}
-        {workLog.map(entry => (
-          <div key={entry.id} className="px-4 py-3">
+        {workLog.map((entry, index) => (
+          <div key={entry.id} className="px-4 py-3" style={altRowStyle(rowColor, rowOpacity, index)}>
             <div className="flex items-center gap-1.5 mb-1">
               <p className="text-xs text-muted-foreground">
                 {new Date(entry.createdAt + 'Z').toLocaleString()}

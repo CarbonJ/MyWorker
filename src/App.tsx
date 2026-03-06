@@ -7,6 +7,7 @@ import { SearchProvider, useSearch } from '@/contexts/SearchContext'
 import { Input } from '@/components/ui/input'
 import { X, Moon, Sun } from 'lucide-react'
 import { getDueSoonTasks } from '@/db/tasks'
+import { loadGuiSettings, buttonStyle } from '@/lib/guiSettings'
 import ProjectList from '@/pages/ProjectList'
 import ProjectDetail from '@/pages/ProjectDetail'
 import ProjectForm from '@/pages/ProjectForm'
@@ -45,9 +46,17 @@ function DueDateBanner() {
 function NavBar({ isDark, onToggleDark }: { isDark: boolean; onToggleDark: () => void }) {
   const { query, setQuery } = useSearch()
   const location = useLocation()
+  // Force a re-render whenever button GUI settings change (Settings page dispatches this)
+  const [, forceGuiUpdate] = useState(0)
 
   // Clear search when navigating to a different route
   useEffect(() => { setQuery('') }, [location.pathname, setQuery])
+
+  useEffect(() => {
+    const handler = () => forceGuiUpdate(n => n + 1)
+    window.addEventListener('myworker:gui-settings-changed', handler)
+    return () => window.removeEventListener('myworker:gui-settings-changed', handler)
+  }, [])
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -56,15 +65,19 @@ function NavBar({ isDark, onToggleDark }: { isDark: boolean; onToggleDark: () =>
         : 'text-muted-foreground hover:text-foreground hover:bg-accent'
     }`
 
+  const { buttonColor, buttonOpacity } = loadGuiSettings()
+  const btnStyle = buttonStyle(buttonColor, buttonOpacity)
+  const navStyle = ({ isActive }: { isActive: boolean }) => isActive ? btnStyle : {}
+
   return (
     <nav className="border-b bg-background px-6 py-3 flex items-center gap-2">
       <img src="/myworker.png" alt="MyWorker" className="w-7 h-7 rounded-md" />
       <span className="font-bold text-lg mr-4">MyWorker</span>
-      <NavLink to="/" end className={linkClass}>Projects</NavLink>
-      <NavLink to="/tasks" className={linkClass}>Tasks</NavLink>
-      <NavLink to="/reporting" className={linkClass}>Reporting</NavLink>
-      <NavLink to="/archive" className={linkClass}>Archive</NavLink>
-      <NavLink to="/settings" className={linkClass}>Settings</NavLink>
+      <NavLink to="/" end className={linkClass} style={navStyle}>Projects</NavLink>
+      <NavLink to="/tasks" className={linkClass} style={navStyle}>Tasks</NavLink>
+      <NavLink to="/reporting" className={linkClass} style={navStyle}>Reporting</NavLink>
+      <NavLink to="/archive" className={linkClass} style={navStyle}>Archive</NavLink>
+      <NavLink to="/settings" className={linkClass} style={navStyle}>Settings</NavLink>
       {/* Global search — top right */}
       <div className="ml-auto relative flex items-center">
         <Input

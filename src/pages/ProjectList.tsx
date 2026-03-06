@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { useSearch } from '@/contexts/SearchContext'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { RAG_ORDER, pillClass, dotClass, pillClassActive } from '@/lib/colors'
+import { loadGuiSettings, buttonStyle } from '@/lib/guiSettings'
 import { fmtDate, isOverdue, isDueToday } from '@/lib/utils'
 import { useDataLoader } from '@/hooks/useDataLoader'
 import { SEARCH_DEBOUNCE_MS } from '@/lib/constants'
@@ -59,17 +60,21 @@ function ExpandableText({ children, textKey }: { children: ReactNode; textKey: s
   )
 }
 
-/** Read-only status indicator used in accordion task sub-rows */
-function TaskStatusDot({ status }: { status: TaskStatus }) {
+/** Status indicator used in accordion sub-rows (sm) and loose tasks panel (md). */
+function TaskStatusDot({ status, size = 'sm' }: { status: TaskStatus; size?: 'sm' | 'md' }) {
+  const dim  = size === 'md' ? 'w-5 h-5 rounded-md' : 'w-3.5 h-3.5 rounded-md'
+  const font = size === 'md' ? 'text-[10px]' : 'text-[8px]'
+  const dot  = size === 'md' ? 'w-2 h-2 rounded-sm' : 'w-1 h-1 rounded-sm'
   if (status === 'done') return (
-    <span className="w-3.5 h-3.5 rounded-sm bg-green-500 border-2 border-green-500 flex items-center justify-center text-white text-[8px] font-bold leading-none shrink-0">✓</span>
+    <span className={`${dim} bg-green-500 border-2 border-green-500 flex items-center justify-center text-white ${font} font-bold leading-none shrink-0`}>✓</span>
   )
   if (status === 'in_progress') return (
-    <span className="w-3.5 h-3.5 rounded-sm border-2 border-blue-500 flex items-center justify-center shrink-0">
-      <span className="w-1 h-1 rounded-sm bg-blue-500" />
+    <span className={`${dim} border-2 border-blue-500 flex items-center justify-center shrink-0`}>
+      <span className={`${dot} bg-blue-500`} />
     </span>
   )
-  return <span className="w-3.5 h-3.5 rounded-sm border-2 border-slate-300 shrink-0" />
+  // 'open' — must include a display class (flex) so width/height apply on this span
+  return <span className={`${dim} border-2 border-slate-300 flex shrink-0`} />
 }
 
 export default function ProjectList() {
@@ -265,6 +270,9 @@ export default function ProjectList() {
 
   const thClass = 'px-4 py-1 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground whitespace-nowrap'
 
+  const { buttonColor, buttonOpacity } = loadGuiSettings()
+  const btnStyle = buttonStyle(buttonColor, buttonOpacity)
+
   const today = new Date().toISOString().slice(0, 10)
 
   return (
@@ -272,7 +280,7 @@ export default function ProjectList() {
       {/* Toolbar */}
       <div className="flex items-center gap-3 px-6 py-3 border-b bg-background shrink-0 flex-wrap">
         {/* New Project button */}
-        <Button onClick={() => navigate('/projects/new')} className="h-8 px-3 text-sm">+</Button>
+        <Button onClick={() => navigate('/projects/new')} className="h-8 px-3 text-sm" style={btnStyle}>+</Button>
         {/* RAG filter */}
         <Select value={ragFilter} onValueChange={v => setRagFilter(v as RagStatus | 'All')}>
           <SelectTrigger className="h-8 text-xs w-32">
@@ -386,12 +394,14 @@ export default function ProjectList() {
             <button
               onClick={() => setViewMode('table')}
               className={`h-8 px-3 transition-colors ${viewMode === 'table' ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}`}
+              style={viewMode === 'table' ? btnStyle : {}}
             >
               Overview
             </button>
             <button
               onClick={() => setViewMode('split')}
               className={`h-8 px-3 border-l transition-colors ${viewMode === 'split' ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}`}
+              style={viewMode === 'split' ? btnStyle : {}}
             >
               Task View
             </button>
@@ -534,11 +544,21 @@ export default function ProjectList() {
                             </tr>
                           )}
                           {isExpanded && projTasks.map(t => (
-                            <tr key={t.id} className="hover:bg-accent/40 transition-colors">
+                            <tr
+                              key={t.id}
+                              className="hover:bg-accent/40 transition-colors cursor-pointer"
+                              onClick={() => { setLooseEditingTask(t); setLooseModalOpen(true) }}
+                            >
                               <td className="w-10" />
                               <td className="px-3 py-1 pl-7" colSpan={4}>
                                 <span className="flex items-center gap-2">
-                                  <TaskStatusDot status={t.status} />
+                                  <button
+                                    onClick={async e => { e.stopPropagation(); await cycleTaskStatus(t) }}
+                                    className="shrink-0 hover:scale-110 transition-transform"
+                                    title={`Status: ${t.status} — click to cycle`}
+                                  >
+                                    <TaskStatusDot status={t.status} />
+                                  </button>
                                   <span className="text-xs italic truncate text-slate-600 dark:text-slate-400">{t.title}</span>
                                 </span>
                               </td>
@@ -584,6 +604,13 @@ export default function ProjectList() {
                   {looseTasks.length} task{looseTasks.length !== 1 ? 's' : ''}
                 </span>
               </div>
+              {/* Column headers — flex widths must match the row layout below */}
+              <div className="flex items-center gap-2 px-4 py-1 border-b bg-muted/20 shrink-0 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                <span className="w-5 shrink-0" />
+                <span className="flex-1">Task</span>
+                <span className="w-4 text-center shrink-0">Pri</span>
+                <span className="w-14 text-right shrink-0">Due</span>
+              </div>
               {/* Right panel task list */}
               <div className="flex-1 overflow-auto divide-y divide-border/60">
                 {looseTasks.length === 0 ? (
@@ -592,29 +619,48 @@ export default function ProjectList() {
                   looseTasks.map(t => (
                     <div
                       key={t.id}
-                      className="flex items-center gap-3 px-4 py-2 hover:bg-accent/50 transition-colors cursor-pointer"
+                      className="flex items-start gap-2 px-4 py-2 hover:bg-accent/50 transition-colors cursor-pointer"
                       onClick={() => { setLooseEditingTask(t); setLooseModalOpen(true) }}
                     >
                       {/* Clickable status dot cycles open → in_progress → done */}
                       <button
                         onClick={async e => { e.stopPropagation(); await cycleTaskStatus(t) }}
-                        className="shrink-0"
+                        className="shrink-0 mt-0.5 hover:scale-110 transition-transform"
                         title={`Status: ${t.status} — click to cycle`}
                       >
-                        <TaskStatusDot status={t.status} />
+                        <TaskStatusDot status={t.status} size="md" />
                       </button>
-                      <span className={`text-sm flex-1 min-w-0 truncate ${t.status === 'done' ? 'line-through text-muted-foreground' : ''}`}>
+                      {/* Title — wraps at 75% max-width */}
+                      <span className={`max-w-[75%] break-words text-sm leading-snug ${t.status === 'done' ? 'line-through text-muted-foreground' : ''}`}>
                         {t.title}
                       </span>
-                      {t.dueDate && (
-                        <span className={`text-xs shrink-0 ${
-                          isOverdue(t.dueDate) ? 'text-red-600 font-medium' :
-                          isDueToday(t.dueDate) ? 'text-amber-600 font-medium' :
-                          'text-muted-foreground'
-                        }`}>
-                          {fmtDate(t.dueDate)}
+                      {/* Priority dot + Due date — fixed-width columns so they never shift */}
+                      <div className="ml-auto flex items-center gap-2 shrink-0 mt-0.5">
+                        {/* Priority column — always w-4 wide */}
+                        <span className="w-4 flex items-center justify-center shrink-0">
+                          {t.priorityId && (() => {
+                            const opt = priorities.find(p => p.id === t.priorityId)
+                            return opt ? (
+                              <span
+                                className={`w-2 h-2 rounded-full ${dotClass(opt.color)}`}
+                                title={opt.label}
+                              />
+                            ) : null
+                          })()}
                         </span>
-                      )}
+                        {/* Due date column — always w-14 wide */}
+                        <span className="w-14 text-right shrink-0">
+                          {t.dueDate && (
+                            <span className={`text-xs whitespace-nowrap ${
+                              isOverdue(t.dueDate) ? 'text-red-600 font-medium' :
+                              isDueToday(t.dueDate) ? 'text-amber-600 font-medium' :
+                              'text-muted-foreground'
+                            }`}>
+                              {fmtDate(t.dueDate)}
+                            </span>
+                          )}
+                        </span>
+                      </div>
                     </div>
                   ))
                 )}
