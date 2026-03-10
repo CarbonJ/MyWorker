@@ -8,14 +8,12 @@ import { Input } from '@/components/ui/input'
 import { X, Moon, Sun } from 'lucide-react'
 import { getDueSoonTasks } from '@/db/tasks'
 import { loadGuiSettings, buttonStyle } from '@/lib/guiSettings'
-import ProjectList from '@/pages/ProjectList'
+import Prime from '@/pages/Prime'
 import ProjectDetail from '@/pages/ProjectDetail'
 import ProjectForm from '@/pages/ProjectForm'
 import ReportingView from '@/pages/ReportingView'
-import TasksView from '@/pages/TasksView'
 import ArchiveView from '@/pages/ArchiveView'
 import Settings from '@/pages/Settings'
-import AreaDetail from '@/pages/AreaDetail'
 
 function DueDateBanner() {
   const [count, setCount] = useState(0)
@@ -34,8 +32,8 @@ function DueDateBanner() {
 
   return (
     <a
-      href="/tasks?filter=due"
-      className="bg-amber-50 border-b border-amber-200 px-6 py-1.5 text-xs text-amber-800 flex items-center gap-2 hover:bg-amber-100 transition-colors cursor-pointer"
+      href="/?filter=due"
+      className="bg-amber-50 border-b border-amber-200 px-6 py-1.5 text-xs text-amber-800 flex items-center gap-2 hover:bg-amber-100 transition-colors cursor-pointer dark:bg-slate-700 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-600"
     >
       <span>⚠</span>
       <span>{count} task{count !== 1 ? 's' : ''} overdue or due today — click to view</span>
@@ -73,8 +71,7 @@ function NavBar({ isDark, onToggleDark }: { isDark: boolean; onToggleDark: () =>
     <nav className="border-b bg-background px-6 py-3 flex items-center gap-2">
       <img src="/myworker.png" alt="MyWorker" className="w-7 h-7 rounded-md" />
       <span className="font-bold text-lg mr-4">MyWorker</span>
-      <NavLink to="/" end className={linkClass} style={navStyle}>Projects</NavLink>
-      <NavLink to="/tasks" className={linkClass} style={navStyle}>Tasks</NavLink>
+      <NavLink to="/" end className={linkClass} style={navStyle}>Prime</NavLink>
       <NavLink to="/reporting" className={linkClass} style={navStyle}>Reporting</NavLink>
       <NavLink to="/archive" className={linkClass} style={navStyle}>Archive</NavLink>
       <NavLink to="/settings" className={linkClass} style={navStyle}>Settings</NavLink>
@@ -118,17 +115,9 @@ function AppInner() {
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       // Cmd+Shift+L / Ctrl+Shift+L → open Quick Add inbox task modal
-      // (Cmd+L is reserved by Safari for the address bar)
       if (e.key === 'L' && e.shiftKey && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
-        // Pre-populate area when on the Tasks screen with an area filter active
-        if (window.location.pathname.includes('/tasks')) {
-          const stored = localStorage.getItem('myworker:tasks-filter-area') ?? ''
-          const areaId = stored && stored !== 'all' && stored !== 'inbox' ? Number(stored) : null
-          setQuickTaskAreaId(areaId)
-        } else {
-          setQuickTaskAreaId(null)
-        }
+        setQuickTaskAreaId(null)
         setQuickTaskOpen(true)
         return
       }
@@ -149,15 +138,13 @@ function AppInner() {
       <DueDateBanner />
       <main className="flex-1 overflow-hidden">
         <Routes>
-          <Route path="/" element={<ProjectList />} />
+          <Route path="/" element={<Prime />} />
           <Route path="/projects/new" element={<ProjectForm />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />
           <Route path="/projects/:id/edit" element={<ProjectForm />} />
-          <Route path="/tasks" element={<TasksView />} />
           <Route path="/reporting" element={<ReportingView />} />
           <Route path="/archive" element={<ArchiveView />} />
           <Route path="/settings" element={<Settings />} />
-          <Route path="/areas/:id" element={<AreaDetail />} />
         </Routes>
       </main>
       <TaskModal
@@ -167,7 +154,6 @@ function AppInner() {
         onClose={() => setQuickTaskOpen(false)}
         onSaved={() => {
           setQuickTaskOpen(false)
-          // Notify any mounted page (e.g. TasksView) that it should reload
           window.dispatchEvent(new Event('myworker:task-saved'))
         }}
       />

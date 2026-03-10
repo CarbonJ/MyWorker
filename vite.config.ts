@@ -35,7 +35,7 @@ export default defineConfig({
         description: 'Project and task management for Risk Managers',
         theme_color: '#ffffff',
         background_color: '#ffffff',
-        display: 'browser',
+        display: 'standalone',
         icons: [
           {
             src: 'pwa-192x192.png',
@@ -46,6 +46,12 @@ export default defineConfig({
             src: 'pwa-512x512.png',
             sizes: '512x512',
             type: 'image/png',
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
           },
         ],
       },

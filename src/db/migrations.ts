@@ -321,6 +321,13 @@ const migrations: Migration[] = [
       ALTER TABLE tasks ADD COLUMN is_recurring INTEGER NOT NULL DEFAULT 0;
     `,
   },
+  {
+    version: 12,
+    up: `
+      CREATE INDEX IF NOT EXISTS idx_worklog_project_created
+      ON work_log_entries(project_id, created_at DESC);
+    `,
+  },
 ]
 
 export async function runMigrations(handle: DbHandle): Promise<void> {

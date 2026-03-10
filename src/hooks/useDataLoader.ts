@@ -28,7 +28,7 @@ import { useErrorHandler } from './useErrorHandler'
 export function useDataLoader<T>(
   loader: () => Promise<T>,
   errorContext: string,
-): { data: T | null; reload: () => Promise<void>; loading: boolean } {
+): { data: T | null; reload: () => Promise<void>; loading: boolean; patchData: (updater: (prev: T) => T) => void } {
   const { handleError } = useErrorHandler()
   const [data, setData] = useState<T | null>(null)
   const [loading, setLoading] = useState(true)
@@ -56,5 +56,9 @@ export function useDataLoader<T>(
     reload()
   }, [reload])
 
-  return { data, reload, loading }
+  const patchData = useCallback((updater: (prev: T) => T) => {
+    setData(prev => prev ? updater(prev) : prev)
+  }, [])
+
+  return { data, reload, loading, patchData }
 }

@@ -67,7 +67,7 @@ export function ProjectHeader({
   return (
     <div className="shrink-0 px-6 py-4 border-b bg-background">
       <button onClick={() => navigate('/')} className="text-sm text-muted-foreground hover:text-foreground mb-3 block">
-        ← Projects
+        ← Back
       </button>
 
       {isProjectOverdue && (

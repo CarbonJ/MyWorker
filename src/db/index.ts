@@ -136,21 +136,35 @@ async function _initDb(
   // Sanity-check: run SQLite's own integrity_check pragma, which reads every
   // database page and detects corruption that query-level checks can miss.
   // Returns 'ok' on a clean database; returns an error message otherwise.
-  try {
-    const icRows = await exec(sqlite, db, 'PRAGMA integrity_check(1)')
-    if ((icRows[0]?.integrity_check as string) !== 'ok') {
-      throw new Error(`integrity_check: ${icRows[0]?.integrity_check}`)
+  // Skipped if the check was run within the last 24 hours (stored in app_metadata).
+  const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
+  const lastCheckRows = await exec(sqlite, db, `SELECT value FROM app_metadata WHERE key = 'last_integrity_check'`)
+  const lastCheckTs = lastCheckRows[0]?.value ? Number(lastCheckRows[0].value) : 0
+  const shouldCheck = Date.now() - lastCheckTs > CHECK_INTERVAL_MS
+
+  if (shouldCheck) {
+    try {
+      const icRows = await exec(sqlite, db, 'PRAGMA integrity_check(1)')
+      if ((icRows[0]?.integrity_check as string) !== 'ok') {
+        throw new Error(`integrity_check: ${icRows[0]?.integrity_check}`)
+      }
+      // Record successful check time
+      await exec(sqlite, db,
+        `INSERT INTO app_metadata (key, value) VALUES ('last_integrity_check', ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+        [String(Date.now())],
+      )
+    } catch (err) {
+      if (_isRetry) throw err // don't loop
+      console.warn('[db] Integrity check failed — wiping IDB and reinitialising', err)
+      // Close DB and VFS before deleting the IDB — otherwise deleteDatabase is
+      // blocked by the open VFS connection and the old corrupt pages survive.
+      await sqlite.close(db)
+      await vfs.close()
+      instance = null
+      await deleteIdb()
+      return _initDb(dirHandle, true)
     }
-  } catch (err) {
-    if (_isRetry) throw err // don't loop
-    console.warn('[db] Integrity check failed — wiping IDB and reinitialising', err)
-    // Close DB and VFS before deleting the IDB — otherwise deleteDatabase is
-    // blocked by the open VFS connection and the old corrupt pages survive.
-    await sqlite.close(db)
-    await vfs.close()
-    instance = null
-    await deleteIdb()
-    return _initDb(dirHandle, true)
   }
 
   return instance
@@ -275,13 +289,27 @@ export async function query(
   return exec(sqlite, db, sql, params)
 }
 
+// Debounce handle for background OneDrive persist
+let persistTimer: ReturnType<typeof setTimeout> | null = null
+
+function schedulePersist(): void {
+  if (persistTimer) clearTimeout(persistTimer)
+  persistTimer = setTimeout(() => {
+    persistTimer = null
+    persistToUserFolder() // fire-and-forget; errors already caught inside
+  }, 1500)
+}
+
 /**
  * Convenience wrapper: run a single write statement and persist to OneDrive.
  *
  * Do NOT use run() inside a BEGIN/COMMIT transaction — it calls
- * persistToUserFolder() immediately, which would sync a partial (mid-transaction)
- * database snapshot to OneDrive. Instead use exec() directly and call
+ * schedulePersist() which would sync a partial (mid-transaction) database
+ * snapshot to OneDrive. Instead use exec() directly and call
  * persistToUserFolder() once after the COMMIT.
+ *
+ * The OneDrive persist is debounced (1.5s) and fire-and-forget so run()
+ * returns immediately after the IndexedDB write completes.
  */
 export async function run(
   sql: string,
@@ -289,7 +317,7 @@ export async function run(
 ): Promise<void> {
   const { sqlite, db } = getDb()
   await exec(sqlite, db, sql, params)
-  await persistToUserFolder()
+  schedulePersist()
 }
 
 /** Get the last inserted row ID via SQL (last_insert_rowid not in vendored API). */

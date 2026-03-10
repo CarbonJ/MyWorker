@@ -290,7 +290,7 @@ export default function ProjectForm() {
             type="date"
             value={dueDate}
             onChange={e => setDueDate(e.target.value)}
-            className="w-44"
+            className={dueDate ? 'w-44' : 'w-44 [&::-webkit-datetime-edit]:invisible focus:[&::-webkit-datetime-edit]:visible'}
           />
         </div>
 
