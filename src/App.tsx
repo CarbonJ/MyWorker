@@ -9,14 +9,11 @@ import { X, Moon, Sun } from 'lucide-react'
 import { getDueSoonTasks } from '@/db/tasks'
 import { loadGuiSettings, buttonStyle } from '@/lib/guiSettings'
 import Prime from '@/pages/Prime'
-import ProjectList from '@/pages/ProjectList'
 import ProjectDetail from '@/pages/ProjectDetail'
 import ProjectForm from '@/pages/ProjectForm'
 import ReportingView from '@/pages/ReportingView'
-import TasksView from '@/pages/TasksView'
 import ArchiveView from '@/pages/ArchiveView'
 import Settings from '@/pages/Settings'
-import AreaDetail from '@/pages/AreaDetail'
 
 function DueDateBanner() {
   const [count, setCount] = useState(0)
@@ -118,17 +115,9 @@ function AppInner() {
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       // Cmd+Shift+L / Ctrl+Shift+L → open Quick Add inbox task modal
-      // (Cmd+L is reserved by Safari for the address bar)
       if (e.key === 'L' && e.shiftKey && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
-        // Pre-populate area when on the Tasks screen with an area filter active
-        if (window.location.pathname.includes('/tasks')) {
-          const stored = localStorage.getItem('myworker:tasks-filter-area') ?? ''
-          const areaId = stored && stored !== 'all' && stored !== 'inbox' ? Number(stored) : null
-          setQuickTaskAreaId(areaId)
-        } else {
-          setQuickTaskAreaId(null)
-        }
+        setQuickTaskAreaId(null)
         setQuickTaskOpen(true)
         return
       }
@@ -150,15 +139,12 @@ function AppInner() {
       <main className="flex-1 overflow-hidden">
         <Routes>
           <Route path="/" element={<Prime />} />
-          <Route path="/projects" element={<ProjectList />} />
           <Route path="/projects/new" element={<ProjectForm />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />
           <Route path="/projects/:id/edit" element={<ProjectForm />} />
-          <Route path="/tasks" element={<TasksView />} />
           <Route path="/reporting" element={<ReportingView />} />
           <Route path="/archive" element={<ArchiveView />} />
           <Route path="/settings" element={<Settings />} />
-          <Route path="/areas/:id" element={<AreaDetail />} />
         </Routes>
       </main>
       <TaskModal
@@ -168,7 +154,6 @@ function AppInner() {
         onClose={() => setQuickTaskOpen(false)}
         onSaved={() => {
           setQuickTaskOpen(false)
-          // Notify any mounted page (e.g. TasksView) that it should reload
           window.dispatchEvent(new Event('myworker:task-saved'))
         }}
       />
