@@ -17,6 +17,18 @@ export async function getAllWorkLogEntries(): Promise<WorkLogEntry[]> {
   return rows.map(rowToEntry)
 }
 
+/** Returns the latest work log entry for each project (one row per project). */
+export async function getLatestWorkLogPerProject(): Promise<WorkLogEntry[]> {
+  const rows = await query(`
+    WITH ranked AS (
+      SELECT *, ROW_NUMBER() OVER (PARTITION BY project_id ORDER BY created_at DESC) AS rn
+      FROM work_log_entries
+    )
+    SELECT id, project_id, note, created_at FROM ranked WHERE rn = 1
+  `)
+  return rows.map(rowToEntry)
+}
+
 export async function getWorkLogByProject(projectId: number): Promise<WorkLogEntry[]> {
   const rows = await query(
     `SELECT * FROM work_log_entries

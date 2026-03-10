@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { getAllProjects } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
 import { getAllTasks, updateTask } from '@/db/tasks'
-import { getAllWorkLogEntries } from '@/db/workLog'
+import { getLatestWorkLogPerProject } from '@/db/workLog'
 import type { Project, DropdownOption, RagStatus, Task, WorkLogEntry, TaskStatus } from '@/types'
 import { RagBadge } from '@/components/RagBadge'
 import { Button } from '@/components/ui/button'
@@ -26,7 +26,7 @@ interface PageData {
   productAreas: DropdownOption[]
   projectStatuses: DropdownOption[]
   allTasks: Task[]
-  allWorkLog: WorkLogEntry[]
+  latestLogByProject: WorkLogEntry[]
 }
 
 /** Status indicator — sm for accordion sub-rows, md for general task panel. */
@@ -99,17 +99,17 @@ export default function Prime() {
   // Project modal for creating projects
   const [projectModalOpen, setProjectModalOpen] = useState(false)
 
-  const { data, reload } = useDataLoader<PageData>(
+  const { data, reload, patchData } = useDataLoader<PageData>(
     async () => {
-      const [projects, priorities, productAreas, projectStatuses, allTasks, allWorkLog] = await Promise.all([
+      const [projects, priorities, productAreas, projectStatuses, allTasks, latestLogByProject] = await Promise.all([
         getAllProjects(),
         getDropdownOptions('priority'),
         getDropdownOptions('product_area'),
         getDropdownOptions('project_status'),
         getAllTasks(),
-        getAllWorkLogEntries(),
+        getLatestWorkLogPerProject(),
       ])
-      return { projects, priorities, productAreas, projectStatuses, allTasks, allWorkLog }
+      return { projects, priorities, productAreas, projectStatuses, allTasks, latestLogByProject }
     },
     'Failed to load Prime view',
   )
@@ -119,7 +119,6 @@ export default function Prime() {
   const productAreas    = data?.productAreas    ?? []
   const projectStatuses = data?.projectStatuses ?? []
   const allTasks        = data?.allTasks        ?? []
-  const allWorkLog      = data?.allWorkLog      ?? []
 
   // Persist filter state
   useEffect(() => { localStorage.setItem('myworker:prime-rag',      ragFilter)      }, [ragFilter])
@@ -127,14 +126,14 @@ export default function Prime() {
   useEffect(() => { localStorage.setItem('myworker:prime-status',    statusFilter)   }, [statusFilter])
   useEffect(() => { localStorage.setItem('myworker:prime-area',      areaFilter)     }, [areaFilter])
 
-  /** Latest work log entry per project (entries are ordered newest-first from DB) */
-  const latestLogByProject = useMemo(() => {
+  /** Latest work log entry per project (one row per project from DB query) */
+  const latestLogByProjectMap = useMemo(() => {
     const map = new Map<number, WorkLogEntry>()
-    for (const entry of allWorkLog) {
-      if (!map.has(entry.projectId)) map.set(entry.projectId, entry)
+    for (const entry of (data?.latestLogByProject ?? [])) {
+      map.set(entry.projectId, entry)
     }
     return map
-  }, [allWorkLog])
+  }, [data?.latestLogByProject])
 
   /** Open/in-progress tasks grouped by projectId (excludes done) */
   const tasksByProject = useMemo(() => {
@@ -298,18 +297,18 @@ export default function Prime() {
   const cycleTaskStatus = async (t: Task) => {
     const next: TaskStatus = t.status === 'open' ? 'in_progress' : t.status === 'in_progress' ? 'done' : 'open'
     await updateTask({ id: t.id, status: next })
-    reload()
+    patchData(prev => ({ ...prev, allTasks: prev.allTasks.map(task => task.id === t.id ? { ...task, status: next } : task) }))
   }
 
   const savePriority = async (t: Task, priorityId: number | null) => {
     await updateTask({ id: t.id, priorityId })
-    reload()
+    patchData(prev => ({ ...prev, allTasks: prev.allTasks.map(task => task.id === t.id ? { ...task, priorityId } : task) }))
   }
 
   const saveDueDate = async (t: Task, dueDate: Date | undefined) => {
     const val = dueDate ? dueDate.toISOString().slice(0, 10) : null
     await updateTask({ id: t.id, dueDate: val })
-    reload()
+    patchData(prev => ({ ...prev, allTasks: prev.allTasks.map(task => task.id === t.id ? { ...task, dueDate: val } : task) }))
   }
 
   const { buttonColor, buttonOpacity } = loadGuiSettings()
@@ -522,7 +521,7 @@ export default function Prime() {
     const hasTasks   = projTasks.length > 0
     const hasOverdue = overdueProjectIds.has(p.id)
     const counts     = taskCountsByProject.get(p.id)
-    const latestLog  = latestLogByProject.get(p.id)
+    const latestLog  = latestLogByProjectMap.get(p.id)
 
     return (
       <tbody className="group/proj">
