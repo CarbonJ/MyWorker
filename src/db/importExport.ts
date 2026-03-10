@@ -138,8 +138,9 @@ export async function importFromJson(file: File): Promise<void> {
   const { sqlite, db } = getDb()
   await exec(sqlite, db, 'BEGIN')
   try {
-    // Clear existing data (CASCADE deletes handle related records)
+    // Clear existing data explicitly (CASCADE alone misses project_id=null tasks)
     await exec(sqlite, db, 'DELETE FROM dropdown_options')
+    await exec(sqlite, db, 'DELETE FROM tasks')
     await exec(sqlite, db, 'DELETE FROM projects')
 
     // Restore dropdown options first (projects reference them)

@@ -353,7 +353,7 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
                   value={startDate}
                   onChange={e => setStartDate(e.target.value)}
                   autoComplete="off"
-                  className={startDate ? 'pr-8' : ''}
+                  className={startDate ? 'pr-8' : '[&::-webkit-datetime-edit]:invisible focus:[&::-webkit-datetime-edit]:visible'}
                 />
                 {startDate && (
                   <button
@@ -376,7 +376,7 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
                   value={dueDate}
                   onChange={e => setDueDate(e.target.value)}
                   autoComplete="off"
-                  className={dueDate ? 'pr-8' : ''}
+                  className={dueDate ? 'pr-8' : '[&::-webkit-datetime-edit]:invisible focus:[&::-webkit-datetime-edit]:visible'}
                 />
                 {dueDate && (
                   <button

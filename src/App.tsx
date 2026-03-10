@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { X, Moon, Sun } from 'lucide-react'
 import { getDueSoonTasks } from '@/db/tasks'
 import { loadGuiSettings, buttonStyle } from '@/lib/guiSettings'
+import Prime from '@/pages/Prime'
 import ProjectList from '@/pages/ProjectList'
 import ProjectDetail from '@/pages/ProjectDetail'
 import ProjectForm from '@/pages/ProjectForm'
@@ -34,8 +35,8 @@ function DueDateBanner() {
 
   return (
     <a
-      href="/tasks?filter=due"
-      className="bg-amber-50 border-b border-amber-200 px-6 py-1.5 text-xs text-amber-800 flex items-center gap-2 hover:bg-amber-100 transition-colors cursor-pointer"
+      href="/?filter=due"
+      className="bg-amber-50 border-b border-amber-200 px-6 py-1.5 text-xs text-amber-800 flex items-center gap-2 hover:bg-amber-100 transition-colors cursor-pointer dark:bg-slate-700 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-600"
     >
       <span>⚠</span>
       <span>{count} task{count !== 1 ? 's' : ''} overdue or due today — click to view</span>
@@ -73,8 +74,7 @@ function NavBar({ isDark, onToggleDark }: { isDark: boolean; onToggleDark: () =>
     <nav className="border-b bg-background px-6 py-3 flex items-center gap-2">
       <img src="/myworker.png" alt="MyWorker" className="w-7 h-7 rounded-md" />
       <span className="font-bold text-lg mr-4">MyWorker</span>
-      <NavLink to="/" end className={linkClass} style={navStyle}>Projects</NavLink>
-      <NavLink to="/tasks" className={linkClass} style={navStyle}>Tasks</NavLink>
+      <NavLink to="/" end className={linkClass} style={navStyle}>Prime</NavLink>
       <NavLink to="/reporting" className={linkClass} style={navStyle}>Reporting</NavLink>
       <NavLink to="/archive" className={linkClass} style={navStyle}>Archive</NavLink>
       <NavLink to="/settings" className={linkClass} style={navStyle}>Settings</NavLink>
@@ -149,7 +149,8 @@ function AppInner() {
       <DueDateBanner />
       <main className="flex-1 overflow-hidden">
         <Routes>
-          <Route path="/" element={<ProjectList />} />
+          <Route path="/" element={<Prime />} />
+          <Route path="/projects" element={<ProjectList />} />
           <Route path="/projects/new" element={<ProjectForm />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />
           <Route path="/projects/:id/edit" element={<ProjectForm />} />
