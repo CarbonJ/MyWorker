@@ -20,7 +20,9 @@ REFACTOR.md
 REFACTOR_PREVIEW.txt
 TODO.md
 CLAUDE.md
+DEPLOY.md
 test-data.json
+default-data.json
 myworker-app-v*
 
 # Editor directories and files
