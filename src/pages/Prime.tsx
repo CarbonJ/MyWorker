@@ -104,6 +104,9 @@ export default function Prime() {
   const [editingTask, setEditingTask]   = useState<Task | null>(null)
   const [taskModalOpen, setTaskModalOpen] = useState(false)
 
+  // Controlled open state for task due-date popovers in the project rows
+  const [openDueDatePopover, setOpenDueDatePopover] = useState<number | null>(null)
+
   // Project modal for creating projects
   const [projectModalOpen, setProjectModalOpen] = useState(false)
 
@@ -146,17 +149,46 @@ export default function Prime() {
     return map
   }, [data?.latestLogByProject])
 
+  /** Project IDs that have at least one task matching the current search query */
+  const projectIdsWithMatchingTasks = useMemo(() => {
+    const ids = new Set<number>()
+    if (!query.trim()) return ids
+    const q = query.toLowerCase()
+    for (const t of allTasks) {
+      if (t.projectId === null) continue
+      if (
+        t.title.toLowerCase().includes(q) ||
+        t.description.toLowerCase().includes(q) ||
+        t.notes.toLowerCase().includes(q)
+      ) {
+        ids.add(t.projectId)
+      }
+    }
+    return ids
+  }, [allTasks, query])
+
   /** Open/in-progress tasks grouped by projectId */
   const tasksByProject = useMemo(() => {
     const map = new Map<number, Task[]>()
+    const today = new Date().toISOString().slice(0, 10)
+    const sevenDaysOut = new Date()
+    sevenDaysOut.setDate(sevenDaysOut.getDate() + 7)
+    const maxDate = sevenDaysOut.toISOString().slice(0, 10)
+    const q = query.trim().toLowerCase()
     for (const t of allTasks) {
       if (t.projectId === null || t.status === 'done') continue
+      if (showUpcoming && (!t.dueDate || t.dueDate < today || t.dueDate > maxDate)) continue
+      if (q && !(
+        t.title.toLowerCase().includes(q) ||
+        t.description.toLowerCase().includes(q) ||
+        t.notes.toLowerCase().includes(q)
+      )) continue
       const arr = map.get(t.projectId) ?? []
       arr.push(t)
       map.set(t.projectId, arr)
     }
     return map
-  }, [allTasks])
+  }, [allTasks, showUpcoming, query])
 
   /** Projects with at least one overdue open task */
   const overdueProjectIds = useMemo(() => {
@@ -186,6 +218,17 @@ export default function Prime() {
       setExpandedProjects(new Set(projectsWithDueTasks))
     }
   }, [dueFilter, allTasks, projectsWithDueTasks])
+
+  // Auto-expand projects that appear in the list only because of a task match
+  useEffect(() => {
+    if (projectIdsWithMatchingTasks.size > 0) {
+      setExpandedProjects(prev => {
+        const next = new Set(prev)
+        for (const id of projectIdsWithMatchingTasks) next.add(id)
+        return next
+      })
+    }
+  }, [projectIdsWithMatchingTasks])
 
   /** Open task counts per project */
   const taskCountsByProject = useMemo(() => {
@@ -273,7 +316,8 @@ export default function Prime() {
       const q = query.toLowerCase()
       list = list.filter(p =>
         p.workItem.toLowerCase().includes(q) ||
-        p.latestStatus.toLowerCase().includes(q)
+        p.latestStatus.toLowerCase().includes(q) ||
+        projectIdsWithMatchingTasks.has(p.id)
       )
     } else {
       if (ragFilters.length > 0)      list = list.filter(p => ragFilters.includes(p.ragStatus))
@@ -304,7 +348,7 @@ export default function Prime() {
     })
 
     return list
-  }, [projects, query, dueFilter, projectsWithDueTasks, ragFilters, priorityFilters, areaFilters, statusFilters, priorities, projectStatuses, projectSorts])
+  }, [projects, query, dueFilter, projectsWithDueTasks, projectIdsWithMatchingTasks, ragFilters, priorityFilters, areaFilters, statusFilters, priorities, projectStatuses, projectSorts])
 
   const toggleProject = (id: number) =>
     setExpandedProjects(prev => {
@@ -746,17 +790,18 @@ export default function Prime() {
           </td>
         </tr>
 
-        {/* TR2 — latest work log entry */}
+        {/* TR2 — latest work log entry (capped to work-item column to avoid horizontal scroll) */}
         <tr
           onClick={() => navigate(`/projects/${p.id}`)}
           className="group-hover/proj:bg-blue-50/40 dark:group-hover/proj:bg-blue-950/10 cursor-pointer transition-colors border-b border-border"
         >
           <td className="w-10" />
-          <td colSpan={5} className="px-3 pb-1.5 pt-0">
+          <td className="px-3 pb-1.5 pt-0 overflow-hidden max-w-0">
             <span className="text-xs italic text-muted-foreground/70 truncate block pl-0">
               {latestLog ? latestLog.note : '—'}
             </span>
           </td>
+          <td colSpan={4} />
         </tr>
 
         {/* Expanded task sub-rows */}
@@ -795,7 +840,10 @@ export default function Prime() {
                 </span>
               </td>
               <td className="px-3 py-1.5">
-                <Popover>
+                <Popover
+                  open={openDueDatePopover === t.id}
+                  onOpenChange={v => setOpenDueDatePopover(v ? t.id : null)}
+                >
                   <PopoverTrigger asChild>
                     <button
                       onClick={e => e.stopPropagation()}
@@ -819,13 +867,13 @@ export default function Prime() {
                     <Calendar
                       mode="single"
                       selected={taskDueDateObj}
-                      onSelect={d => saveDueDate(t, d)}
+                      onSelect={d => { saveDueDate(t, d); setOpenDueDatePopover(null) }}
                     />
                     {t.dueDate && (
                       <div className="border-t p-2">
                         <button
                           className="w-full text-xs text-muted-foreground hover:text-foreground py-1 transition-colors"
-                          onClick={() => saveDueDate(t, undefined)}
+                          onClick={() => { saveDueDate(t, undefined); setOpenDueDatePopover(null) }}
                         >
                           Clear date
                         </button>
@@ -926,6 +974,7 @@ export default function Prime() {
     const dueDateObj  = t.dueDate ? new Date(t.dueDate + 'T12:00:00') : undefined
     const today = new Date().toISOString().slice(0, 10)
     const completedToday = t.status === 'done' && t.updatedAt.slice(0, 10) === today
+    const [dueDateOpen, setDueDateOpen] = useState(false)
 
     return (
       <div
@@ -985,7 +1034,7 @@ export default function Prime() {
             </Popover>
 
             {/* Due date popover */}
-            <Popover>
+            <Popover open={dueDateOpen} onOpenChange={setDueDateOpen}>
               <PopoverTrigger asChild>
                 <button
                   onClick={e => e.stopPropagation()}
@@ -1009,13 +1058,13 @@ export default function Prime() {
                 <Calendar
                   mode="single"
                   selected={dueDateObj}
-                  onSelect={d => saveDueDate(t, d)}
+                  onSelect={d => { saveDueDate(t, d); setDueDateOpen(false) }}
                 />
                 {t.dueDate && (
                   <div className="border-t p-2">
                     <button
                       className="w-full text-xs text-muted-foreground hover:text-foreground py-1 transition-colors"
-                      onClick={() => saveDueDate(t, undefined)}
+                      onClick={() => { saveDueDate(t, undefined); setDueDateOpen(false) }}
                     >
                       Clear date
                     </button>

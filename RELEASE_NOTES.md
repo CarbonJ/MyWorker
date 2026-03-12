@@ -1,5 +1,20 @@
 # Release Notes
 
+## 2.1.2 — 2026-03-12
+
+### Defects Fixed
+
+- **Safari select lockup in Task Modal** — Status and Priority dropdowns in the New/Edit Task modal were non-functional in Safari (modal locked after opening the dropdown). Fixed by using `position="popper"` on all `SelectContent` components inside the dialog, avoiding the item-aligned portal conflict in Safari's Radix UI handling.
+- **Due date popover not closing after selection** — Clicking a due date in expanded project task rows (and general task rows) left the calendar popover open after selecting a date or clicking Clear. Fixed by converting both popovers to controlled open state so they explicitly close on selection.
+- **Work log entry causing horizontal scroll** — The latest work log text in each project row was spanning all columns (`colSpan={5}`), causing a horizontal scrollbar when entries were long. Fixed by scoping the cell to the Work Item column only, with `overflow-hidden`, so it truncates at the RAG column.
+
+### Improvements
+
+- **Upcoming filter now applies to project tasks** — The "Upcoming" toggle previously only filtered the General Tasks pane. It now also filters the expanded task rows within each project to show only tasks due within the next 7 days.
+- **Search includes tasks** — The global search bar now searches task titles, descriptions, and notes in addition to project names and status comments. Projects with matching tasks appear in the project list; their task rows are filtered to show only matches and auto-expanded.
+
+---
+
 ## 2.1.1 — 2026-03-11
 
 ### Defects Fixed

@@ -20,6 +20,8 @@ REFACTOR.md
 REFACTOR_PREVIEW.txt
 TODO.md
 CLAUDE.md
+test-data.json
+myworker-app-v*
 
 # Editor directories and files
 .vscode/*

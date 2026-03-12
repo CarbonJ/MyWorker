@@ -213,7 +213,7 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
                 <SelectTrigger>
                   <SelectValue placeholder="Select area" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper">
                   <SelectItem value="none">— Inbox (no area)</SelectItem>
                   {productAreas.map(a => (
                     <SelectItem key={a.id} value={a.id.toString()}>{a.label}</SelectItem>
@@ -319,7 +319,7 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper">
                   <SelectItem value="open">Open</SelectItem>
                   <SelectItem value="in_progress">In Progress</SelectItem>
                   <SelectItem value="done">Done</SelectItem>
@@ -333,7 +333,7 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
                 <SelectTrigger>
                   <SelectValue placeholder="Select priority" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper">
                   <SelectItem value="none">—</SelectItem>
                   {priorities.map(p => (
                     <SelectItem key={p.id} value={p.id.toString()}>{p.label}</SelectItem>
