@@ -156,13 +156,14 @@ export async function importFromJson(file: File): Promise<void> {
       await exec(sqlite, db,
         `INSERT INTO projects
            (id, work_item, work_desc, rag_status, priority_id, latest_status,
-            product_area_id, status_id, stakeholders, linked_jiras, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            product_area_id, status_id, due_date, stakeholders, linked_jiras, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           p.id as number, p.work_item as string, p.work_desc as string,
           p.rag_status as string, p.priority_id as number | null,
           p.latest_status as string, p.product_area_id as number | null,
           (p.status_id as number | null) ?? null,
+          (p.due_date as string | null) ?? null,
           p.stakeholders as string, p.linked_jiras as string,
           p.created_at as string, p.updated_at as string,
         ],
@@ -181,14 +182,17 @@ export async function importFromJson(file: File): Promise<void> {
     for (const t of data.tasks) {
       await exec(sqlite, db,
         `INSERT INTO tasks
-           (id, project_id, title, description, notes, status, owner,
-            start_date, due_date, priority_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, project_id, product_area_id, title, description, notes, status, owner,
+            start_date, due_date, priority_id, is_recurring, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          t.id as number, t.project_id as number, t.title as string,
-          t.description as string, t.notes as string, t.status as string,
-          t.owner as string, t.start_date as string | null,
-          t.due_date as string | null, t.priority_id as number | null,
+          t.id as number, (t.project_id as number | null) ?? null,
+          (t.product_area_id as number | null) ?? null,
+          t.title as string, t.description as string, t.notes as string,
+          t.status as string, t.owner as string,
+          t.start_date as string | null, t.due_date as string | null,
+          t.priority_id as number | null,
+          t.is_recurring ? 1 : 0,
           t.created_at as string, t.updated_at as string,
         ],
       )

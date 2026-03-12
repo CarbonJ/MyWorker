@@ -16,7 +16,9 @@ export function fmtDate(iso: string): string {
 
 /** Returns true if the given due date is strictly before today (overdue). */
 export function isOverdue(dueDate: string | null): boolean {
-  return !!dueDate && new Date(dueDate) < new Date(new Date().toDateString())
+  if (!dueDate) return false
+  const today = new Date().toISOString().slice(0, 10)
+  return dueDate < today
 }
 
 /** Returns true if the given due date is today. */

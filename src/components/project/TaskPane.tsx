@@ -10,7 +10,7 @@ import type { Task, TaskStatus, DropdownOption } from '@/types'
 import { updateTask } from '@/db/tasks'
 import { addWorkLogEntry } from '@/db/workLog'
 import { Button } from '@/components/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { MultiSelectFilter } from '@/components/ui/MultiSelectFilter'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
 import { Check, RefreshCw } from 'lucide-react'
@@ -20,8 +20,9 @@ import { useErrorHandler } from '@/hooks/useErrorHandler'
 import { RecurringCompleteDialog } from '@/components/RecurringCompleteDialog'
 
 
-type TaskSortField = 'status' | 'priority' | 'dueDate'
+export type TaskSortField = 'status' | 'priority' | 'dueDate'
 type SortDir = 'asc' | 'desc'
+export type SortEntry = { key: TaskSortField; dir: SortDir }
 
 function cycleStatus(current: TaskStatus): TaskStatus {
   if (current === 'open')        return 'in_progress'
@@ -44,12 +45,11 @@ function StatusCircle({ status }: { status: TaskStatus }) {
 interface Props {
   tasks: Task[]
   priorities: DropdownOption[]
-  filterStatus: string
-  filterPriority: string
-  sortField: TaskSortField
-  sortDir: SortDir
-  onFilterStatus: (v: string) => void
-  onFilterPriority: (v: string) => void
+  filterStatuses: string[]
+  filterPriorities: string[]
+  sorts: SortEntry[]
+  onFilterStatuses: (v: string[]) => void
+  onFilterPriorities: (v: string[]) => void
   onToggleSort: (field: TaskSortField) => void
   onAddTask: () => void
   onEditTask: (task: Task) => void
@@ -58,39 +58,63 @@ interface Props {
 
 export function TaskPane({
   tasks, priorities,
-  filterStatus, filterPriority, sortField, sortDir,
-  onFilterStatus, onFilterPriority, onToggleSort,
+  filterStatuses, filterPriorities, sorts,
+  onFilterStatuses, onFilterPriorities, onToggleSort,
   onAddTask, onEditTask, onReload,
 }: Props) {
   const { handleError } = useErrorHandler()
   const [recurringTask, setRecurringTask] = useState<Task | null>(null)
+  const today = new Date().toISOString().slice(0, 10)
 
   const visibleTasks = useMemo(() => {
     let list = [...tasks]
-    if (filterStatus === 'active') list = list.filter(t => t.status !== 'done')
-    else if (filterStatus !== 'all') list = list.filter(t => t.status === filterStatus)
-    if (filterPriority !== 'all') {
-      const pid = filterPriority === 'none' ? null : Number(filterPriority)
-      list = list.filter(t => t.priorityId === pid)
+
+    // Status filter — when empty = All
+    if (filterStatuses.length > 0) {
+      list = list.filter(t => {
+        // Special 'active' pseudo-status
+        if (filterStatuses.includes('active')) {
+          const isActive = t.status !== 'done' || t.updatedAt.slice(0, 10) === today
+          if (isActive) return true
+        }
+        // Literal status values
+        const literalStatuses = filterStatuses.filter(s => s !== 'active')
+        if (literalStatuses.length > 0 && literalStatuses.includes(t.status)) return true
+        return false
+      })
     }
+
+    // Priority filter — 'none' means no priority set
+    if (filterPriorities.length > 0) {
+      list = list.filter(t => {
+        if (filterPriorities.includes('none') && t.priorityId === null) return true
+        if (t.priorityId !== null && filterPriorities.includes(String(t.priorityId))) return true
+        return false
+      })
+    }
+
+    // Multi-sort: apply in order
     list.sort((a, b) => {
-      let cmp = 0
-      if (sortField === 'status') {
-        const order: Record<string, number> = { open: 0, in_progress: 1, done: 2 }
-        cmp = order[a.status] - order[b.status]
-      } else if (sortField === 'priority') {
-        const ai = priorities.findIndex(p => p.id === a.priorityId)
-        const bi = priorities.findIndex(p => p.id === b.priorityId)
-        cmp = (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
-      } else {
-        const ad = a.dueDate ?? '9999-99-99'
-        const bd = b.dueDate ?? '9999-99-99'
-        cmp = ad < bd ? -1 : ad > bd ? 1 : 0
+      for (const { key, dir } of sorts) {
+        let cmp = 0
+        if (key === 'status') {
+          const order: Record<string, number> = { open: 0, in_progress: 1, done: 2 }
+          cmp = order[a.status] - order[b.status]
+        } else if (key === 'priority') {
+          const ai = priorities.findIndex(p => p.id === a.priorityId)
+          const bi = priorities.findIndex(p => p.id === b.priorityId)
+          cmp = (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
+        } else {
+          const ad = a.dueDate ?? '9999-99-99'
+          const bd = b.dueDate ?? '9999-99-99'
+          cmp = ad < bd ? -1 : ad > bd ? 1 : 0
+        }
+        if (cmp !== 0) return dir === 'asc' ? cmp : -cmp
       }
-      return sortDir === 'asc' ? cmp : -cmp
+      return 0
     })
     return list
-  }, [tasks, filterStatus, filterPriority, sortField, sortDir, priorities])
+  }, [tasks, filterStatuses, filterPriorities, sorts, priorities, today])
 
   const handleCycleStatus = async (e: React.MouseEvent, task: Task) => {
     e.stopPropagation()
@@ -139,6 +163,32 @@ export function TaskPane({
     }
   }
 
+  // Sort indicator for column headers
+  const SortInd = ({ field }: { field: TaskSortField }) => {
+    const idx = sorts.findIndex(s => s.key === field)
+    if (idx === -1) return null
+    return (
+      <span className="ml-1 opacity-60 text-[10px]">
+        {sorts.length > 1 ? idx + 1 : ''}{sorts[idx].dir === 'asc' ? '↑' : '↓'}
+      </span>
+    )
+  }
+
+  const statusOptions = [
+    { value: 'active', label: 'Active' },
+    { value: 'open',   label: 'Open' },
+    { value: 'in_progress', label: 'In Progress' },
+    { value: 'done',   label: 'Done' },
+  ]
+  const priorityOptions = [
+    { value: 'none', label: 'No priority' },
+    ...priorities.map(p => ({
+      value: String(p.id),
+      label: p.label,
+      prefix: <span className={`w-2 h-2 rounded-full shrink-0 ${dotClass(p.color)}`} />,
+    })),
+  ]
+
   return (
     <div className="flex flex-col overflow-hidden min-w-0 h-full">
       {/* Header + filters + column labels */}
@@ -150,51 +200,46 @@ export function TaskPane({
           </Button>
         </div>
         <div className="flex items-center gap-2 px-4 pb-2">
-          <Select value={filterStatus} onValueChange={onFilterStatus}>
-            <SelectTrigger className="h-7 text-xs w-32"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="open">Open</SelectItem>
-              <SelectItem value="in_progress">In Progress</SelectItem>
-              <SelectItem value="done">Done</SelectItem>
-              <SelectItem value="all">All</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={filterPriority} onValueChange={onFilterPriority}>
-            <SelectTrigger className="h-7 text-xs w-32"><SelectValue placeholder="All priorities" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All priorities</SelectItem>
-              <SelectItem value="none">No priority</SelectItem>
-              {priorities.map(p => (
-                <SelectItem key={p.id} value={p.id.toString()}>{p.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <MultiSelectFilter
+            options={statusOptions}
+            value={filterStatuses}
+            onChange={onFilterStatuses}
+            placeholder="Status"
+            width="w-32"
+          />
+          <MultiSelectFilter
+            options={priorityOptions}
+            value={filterPriorities}
+            onChange={onFilterPriorities}
+            placeholder="All priorities"
+            width="w-32"
+          />
         </div>
         <div className="grid grid-cols-[1.5rem_1fr_auto_4.5rem] gap-2 px-4 pb-1 text-xs text-muted-foreground">
           <span />
           <span>Title</span>
           <button onClick={() => onToggleSort('priority')} className="hover:text-foreground tabular-nums text-left">
-            Priority{sortField === 'priority' ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+            Priority<SortInd field="priority" />
           </button>
           <button onClick={() => onToggleSort('dueDate')} className="hover:text-foreground tabular-nums text-right">
-            Due{sortField === 'dueDate' ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+            Due<SortInd field="dueDate" />
           </button>
         </div>
       </div>
 
       {/* Task rows */}
-      <div className="flex-1 overflow-y-auto divide-y divide-border">
+      <div className="flex-1 overflow-y-auto divide-y divide-border min-h-0">
         {visibleTasks.length === 0 && (
           <p className="px-4 py-6 text-sm text-muted-foreground text-center">No tasks.</p>
         )}
         {visibleTasks.map(task => {
           const isDone = task.status === 'done'
+          const completedToday = isDone && task.updatedAt.slice(0, 10) === today
           return (
             <div
               key={task.id}
               onClick={() => onEditTask(task)}
-              className={`grid grid-cols-[1.5rem_1fr_auto_4.5rem] gap-2 px-4 py-2 cursor-pointer hover:bg-accent transition-colors items-center ${isDone ? 'opacity-50' : ''}`}
+              className={`grid grid-cols-[1.5rem_1fr_auto_4.5rem] gap-2 px-4 py-2 cursor-pointer hover:bg-accent transition-colors items-center ${isDone && !completedToday ? 'opacity-50' : ''}`}
             >
               <button
                 onClick={e => handleCycleStatus(e, task)}

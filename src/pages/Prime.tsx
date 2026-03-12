@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { getAllProjects } from '@/db/projects'
+import { toast } from 'sonner'
+import { getAllProjects, updateProject } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
 import { getAllTasks, updateTask } from '@/db/tasks'
 import { getLatestWorkLogPerProject } from '@/db/workLog'
@@ -8,9 +9,10 @@ import type { Project, DropdownOption, RagStatus, Task, WorkLogEntry, TaskStatus
 import { RagBadge } from '@/components/RagBadge'
 import { Button } from '@/components/ui/button'
 import { useSearch } from '@/contexts/SearchContext'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { MultiSelectFilter } from '@/components/ui/MultiSelectFilter'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
+import { Check } from 'lucide-react'
 import { pillClass, dotClass, pillClassActive, RAG_ORDER } from '@/lib/colors'
 import { loadGuiSettings, buttonStyle } from '@/lib/guiSettings'
 import { fmtDate, isOverdue, isDueToday } from '@/lib/utils'
@@ -29,6 +31,20 @@ interface PageData {
   latestLogByProject: WorkLogEntry[]
 }
 
+type ProjectSortKey = 'workItem' | 'rag' | 'priority' | 'status' | 'statusComment'
+type ProjectSortEntry = { key: ProjectSortKey; dir: 'asc' | 'desc' }
+type GeneralSortKey = 'title' | 'priority' | 'due'
+type GeneralSortEntry = { key: GeneralSortKey; dir: 'asc' | 'desc' }
+
+function loadArr(key: string, fallback: string[]): string[] {
+  try { return JSON.parse(localStorage.getItem(key) ?? 'null') ?? fallback }
+  catch { return fallback }
+}
+function loadSorted<T>(key: string, fallback: T[]): T[] {
+  try { return JSON.parse(localStorage.getItem(key) ?? 'null') ?? fallback }
+  catch { return fallback }
+}
+
 /** Status indicator — sm for accordion sub-rows, md for general task panel. */
 function TaskStatusDot({ status, size = 'sm' }: { status: TaskStatus; size?: 'sm' | 'md' }) {
   const dim  = size === 'md' ? 'w-5 h-5 rounded-md' : 'w-3.5 h-3.5 rounded-md'
@@ -45,6 +61,12 @@ function TaskStatusDot({ status, size = 'sm' }: { status: TaskStatus; size?: 'sm
   return <span className={`${dim} border-2 border-slate-300 flex shrink-0`} />
 }
 
+const RAG_OPTIONS: { value: RagStatus; label: string; dotColor: string }[] = [
+  { value: 'Green', label: 'Green', dotColor: 'bg-green-500' },
+  { value: 'Amber', label: 'Amber', dotColor: 'bg-amber-400' },
+  { value: 'Red',   label: 'Red',   dotColor: 'bg-red-500' },
+]
+
 export default function Prime() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -54,43 +76,29 @@ export default function Prime() {
   const dueFilter = searchParams.get('filter') === 'due'
   const clearDueFilter = () => setSearchParams({})
 
-  // Filter state — all under prime-specific localStorage keys
-  const [ragFilter, setRagFilter]           = useState<RagStatus | 'All'>(() => (localStorage.getItem('myworker:prime-rag') as RagStatus | 'All') ?? 'All')
-  const [priorityFilter, setPriorityFilter] = useState<string>(() => localStorage.getItem('myworker:prime-priority') ?? 'All')
-  const [statusFilter, setStatusFilter]     = useState<string>(() => localStorage.getItem('myworker:prime-status') ?? 'All')
-  const [areaFilter, setAreaFilter]         = useState<string>(() => localStorage.getItem('myworker:prime-area') ?? 'All')
-  const [areaFilterButtons]                 = useState(() => localStorage.getItem('myworker:area-filter-buttons-projects') !== 'false')
+  // ── Project filter state (multi-select, empty = All) ──────────────────────
+  const [ragFilters,      setRagFilters]      = useState<RagStatus[]>(() => loadArr('myworker:prime-rag2', []) as RagStatus[])
+  const [priorityFilters, setPriorityFilters] = useState<string[]>(()   => loadArr('myworker:prime-priority2', []))
+  const [statusFilters,   setStatusFilters]   = useState<string[]>(()   => loadArr('myworker:prime-status2', []))
+  const [areaFilters,     setAreaFilters]     = useState<string[]>(()   => loadArr('myworker:prime-area2', []))
+  const [areaFilterButtons]                   = useState(() => localStorage.getItem('myworker:area-filter-buttons-projects') !== 'false')
 
-  // Accordion expand state for project task sub-rows
+  // ── Project sort (multi-sort stack) ───────────────────────────────────────
+  const [projectSorts, setProjectSorts] = useState<ProjectSortEntry[]>(() =>
+    loadSorted<ProjectSortEntry>('myworker:prime-proj-sorts2', [{ key: 'workItem', dir: 'asc' }])
+  )
+
+  // ── Accordion expand state ─────────────────────────────────────────────────
   const [expandedProjects, setExpandedProjects] = useState<Set<number>>(new Set())
 
-  // Left-panel project sort
-  type ProjectSortKey = 'workItem' | 'rag' | 'priority' | 'status' | 'statusComment'
-  const [projectSortKey, setProjectSortKey] = useState<ProjectSortKey>(() => (localStorage.getItem('myworker:prime-proj-sort-key') as ProjectSortKey) ?? 'workItem')
-  const [projectSortDir, setProjectSortDir] = useState<'asc' | 'desc'>(() => (localStorage.getItem('myworker:prime-proj-sort-dir') as 'asc' | 'desc') ?? 'asc')
-
-  const handleProjectSort = (col: ProjectSortKey) => {
-    if (projectSortKey === col) {
-      const next = projectSortDir === 'asc' ? 'desc' : 'asc'
-      setProjectSortDir(next)
-      localStorage.setItem('myworker:prime-proj-sort-dir', next)
-    } else {
-      setProjectSortKey(col)
-      setProjectSortDir('asc')
-      localStorage.setItem('myworker:prime-proj-sort-key', col)
-      localStorage.setItem('myworker:prime-proj-sort-dir', 'asc')
-    }
-  }
-
-  // Right-panel status filter + sort for general tasks
-  const [generalStatusFilter, setGeneralStatusFilter] = useState<string>('active')
-  const [generalSortKey, setGeneralSortKey]   = useState<'title' | 'priority' | 'due'>('due')
-  const [generalSortDir, setGeneralSortDir]   = useState<'asc' | 'desc'>('asc')
-
-  const handleGeneralSort = (col: 'title' | 'priority' | 'due') => {
-    if (generalSortKey === col) setGeneralSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setGeneralSortKey(col); setGeneralSortDir('asc') }
-  }
+  // ── Right pane: general tasks ──────────────────────────────────────────────
+  const [generalStatusFilters, setGeneralStatusFilters] = useState<string[]>(() =>
+    loadArr('myworker:prime-gen-status2', ['active'])
+  )
+  const [showUpcoming,   setShowUpcoming]   = useState(false)
+  const [generalSorts,   setGeneralSorts]   = useState<GeneralSortEntry[]>(() =>
+    loadSorted<GeneralSortEntry>('myworker:prime-gen-sorts2', [{ key: 'due', dir: 'asc' }])
+  )
 
   // Task modal for editing tasks
   const [editingTask, setEditingTask]   = useState<Task | null>(null)
@@ -120,13 +128,16 @@ export default function Prime() {
   const projectStatuses = data?.projectStatuses ?? []
   const allTasks        = data?.allTasks        ?? []
 
-  // Persist filter state
-  useEffect(() => { localStorage.setItem('myworker:prime-rag',      ragFilter)      }, [ragFilter])
-  useEffect(() => { localStorage.setItem('myworker:prime-priority',  priorityFilter) }, [priorityFilter])
-  useEffect(() => { localStorage.setItem('myworker:prime-status',    statusFilter)   }, [statusFilter])
-  useEffect(() => { localStorage.setItem('myworker:prime-area',      areaFilter)     }, [areaFilter])
+  // Persist filter/sort state
+  useEffect(() => { localStorage.setItem('myworker:prime-rag2',         JSON.stringify(ragFilters))      }, [ragFilters])
+  useEffect(() => { localStorage.setItem('myworker:prime-priority2',    JSON.stringify(priorityFilters)) }, [priorityFilters])
+  useEffect(() => { localStorage.setItem('myworker:prime-status2',      JSON.stringify(statusFilters))   }, [statusFilters])
+  useEffect(() => { localStorage.setItem('myworker:prime-area2',        JSON.stringify(areaFilters))     }, [areaFilters])
+  useEffect(() => { localStorage.setItem('myworker:prime-proj-sorts2',  JSON.stringify(projectSorts))    }, [projectSorts])
+  useEffect(() => { localStorage.setItem('myworker:prime-gen-status2',  JSON.stringify(generalStatusFilters)) }, [generalStatusFilters])
+  useEffect(() => { localStorage.setItem('myworker:prime-gen-sorts2',   JSON.stringify(generalSorts))    }, [generalSorts])
 
-  /** Latest work log entry per project (one row per project from DB query) */
+  /** Latest work log entry per project */
   const latestLogByProjectMap = useMemo(() => {
     const map = new Map<number, WorkLogEntry>()
     for (const entry of (data?.latestLogByProject ?? [])) {
@@ -135,7 +146,7 @@ export default function Prime() {
     return map
   }, [data?.latestLogByProject])
 
-  /** Open/in-progress tasks grouped by projectId (excludes done) */
+  /** Open/in-progress tasks grouped by projectId */
   const tasksByProject = useMemo(() => {
     const map = new Map<number, Task[]>()
     for (const t of allTasks) {
@@ -158,7 +169,7 @@ export default function Prime() {
     return ids
   }, [allTasks])
 
-  /** Projects with at least one due or overdue open task (for due filter) */
+  /** Projects with at least one due or overdue open task */
   const projectsWithDueTasks = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10)
     const ids = new Set<number>()
@@ -169,14 +180,12 @@ export default function Prime() {
     return ids
   }, [allTasks])
 
-  // Auto-expand projects when due filter becomes active
+  // Auto-expand projects with due/overdue tasks when the due filter is active
   useEffect(() => {
-    if (dueFilter) {
+    if (dueFilter && allTasks.length > 0) {
       setExpandedProjects(new Set(projectsWithDueTasks))
     }
-    // Only run when dueFilter changes, not when projectsWithDueTasks reference changes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dueFilter])
+  }, [dueFilter, allTasks, projectsWithDueTasks])
 
   /** Open task counts per project */
   const taskCountsByProject = useMemo(() => {
@@ -191,101 +200,111 @@ export default function Prime() {
     return map
   }, [allTasks])
 
-  /** General tasks (no project), filtered by search + area + status + due filter */
+  /** General tasks (no project), filtered and sorted */
   const generalTasks = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10)
     let list = allTasks.filter(t => t.projectId === null)
 
-    // Search filter — search title and notes
+
     if (query.trim()) {
       const q = query.toLowerCase()
       list = list.filter(t =>
         t.title.toLowerCase().includes(q) ||
         t.notes.toLowerCase().includes(q)
       )
-    }
-
-    // Due filter — only show due/overdue tasks
-    if (dueFilter) {
+    } else if (dueFilter) {
       list = list.filter(t => t.status !== 'done' && t.dueDate && t.dueDate <= today)
-    } else if (!query.trim()) {
-      // Only apply area/status filters when not searching
-      if (areaFilter !== 'All') {
-        const id = Number(areaFilter)
-        list = list.filter(t => t.productAreaId === id)
+    } else if (showUpcoming) {
+      const sevenDaysOut = new Date()
+      sevenDaysOut.setDate(sevenDaysOut.getDate() + 7)
+      const maxDate = sevenDaysOut.toISOString().slice(0, 10)
+      list = list.filter(t => t.status !== 'done' && t.dueDate && t.dueDate >= today && t.dueDate <= maxDate)
+    } else {
+      // Area filter — skipped when inbox is active (inbox tasks have no area by definition)
+      if (areaFilters.length > 0 && !generalStatusFilters.includes('inbox')) {
+        const ids = areaFilters.map(Number)
+        list = list.filter(t => t.productAreaId !== null && ids.includes(t.productAreaId))
       }
-      if (generalStatusFilter === 'active') list = list.filter(t => t.status !== 'done')
-      else if (generalStatusFilter !== 'all') list = list.filter(t => t.status === generalStatusFilter as TaskStatus)
+      // Status filter (multi-select; empty = all)
+      if (generalStatusFilters.length > 0) {
+        list = list.filter(t => {
+          for (const f of generalStatusFilters) {
+            if (f === 'active' && (t.status !== 'done' || t.updatedAt.slice(0, 10) === today)) return true
+            if (f === 'inbox' && t.productAreaId === null) return true
+            if (f === t.status) return true
+          }
+          return false
+        })
+      }
     }
 
+    // Multi-sort
     list.sort((a, b) => {
-      let av: string | number = ''
-      let bv: string | number = ''
-      if (generalSortKey === 'title') {
-        av = a.title.toLowerCase(); bv = b.title.toLowerCase()
-      } else if (generalSortKey === 'priority') {
-        av = priorities.find(p => p.id === a.priorityId)?.sortOrder ?? 999
-        bv = priorities.find(p => p.id === b.priorityId)?.sortOrder ?? 999
-      } else {
-        // due — nulls last regardless of direction
-        if (!a.dueDate && !b.dueDate) return 0
-        if (!a.dueDate) return 1
-        if (!b.dueDate) return -1
-        av = a.dueDate; bv = b.dueDate
+      for (const { key, dir } of generalSorts) {
+        let cmp = 0
+        if (key === 'title') {
+          const at = a.title.toLowerCase(), bt = b.title.toLowerCase()
+          cmp = at < bt ? -1 : at > bt ? 1 : 0
+        } else if (key === 'priority') {
+          const ai = priorities.find(p => p.id === a.priorityId)?.sortOrder ?? 999
+          const bi = priorities.find(p => p.id === b.priorityId)?.sortOrder ?? 999
+          cmp = ai - bi
+        } else { // due — nulls last regardless of direction
+          if (!a.dueDate && !b.dueDate) cmp = 0
+          else if (!a.dueDate) cmp = 1
+          else if (!b.dueDate) cmp = -1
+          else cmp = a.dueDate < b.dueDate ? -1 : a.dueDate > b.dueDate ? 1 : 0
+        }
+        if (cmp !== 0) return dir === 'asc' ? cmp : -cmp
       }
-      if (av < bv) return generalSortDir === 'asc' ? -1 : 1
-      if (av > bv) return generalSortDir === 'asc' ? 1 : -1
       return 0
     })
 
     return list
-  }, [allTasks, query, dueFilter, areaFilter, generalStatusFilter, generalSortKey, generalSortDir, priorities])
+  }, [allTasks, query, dueFilter, showUpcoming, areaFilters, generalStatusFilters, generalSorts, priorities])
 
   /** Filtered + sorted projects */
   const filteredProjects = useMemo(() => {
     let list = [...projects]
 
-    // Due filter takes priority — show only projects with due/overdue tasks
     if (dueFilter) {
       list = list.filter(p => projectsWithDueTasks.has(p.id))
     } else if (query.trim()) {
-      // Simple local filter when search active — full FTS search deferred to global
       const q = query.toLowerCase()
       list = list.filter(p =>
         p.workItem.toLowerCase().includes(q) ||
         p.latestStatus.toLowerCase().includes(q)
       )
     } else {
-      if (ragFilter !== 'All')      list = list.filter(p => p.ragStatus === ragFilter)
-      if (priorityFilter !== 'All') list = list.filter(p => String(p.priorityId ?? '') === priorityFilter)
-      if (areaFilter !== 'All')     list = list.filter(p => String(p.productAreaId ?? '') === areaFilter)
-      if (statusFilter !== 'All')   list = list.filter(p => String(p.statusId ?? '') === statusFilter)
+      if (ragFilters.length > 0)      list = list.filter(p => ragFilters.includes(p.ragStatus))
+      if (priorityFilters.length > 0) list = list.filter(p => priorityFilters.includes(String(p.priorityId ?? '')))
+      if (areaFilters.length > 0)     list = list.filter(p => areaFilters.includes(String(p.productAreaId ?? '')))
+      if (statusFilters.length > 0)   list = list.filter(p => statusFilters.includes(String(p.statusId ?? '')))
     }
 
+    // Multi-sort
     list.sort((a, b) => {
-      let av: string | number = ''
-      let bv: string | number = ''
-      switch (projectSortKey) {
-        case 'workItem':
-          av = a.workItem.toLowerCase(); bv = b.workItem.toLowerCase(); break
-        case 'rag':
-          av = RAG_ORDER[a.ragStatus]; bv = RAG_ORDER[b.ragStatus]; break
-        case 'priority':
-          av = priorities.find(o => o.id === a.priorityId)?.sortOrder ?? 999
-          bv = priorities.find(o => o.id === b.priorityId)?.sortOrder ?? 999; break
-        case 'status':
-          av = projectStatuses.find(o => o.id === a.statusId)?.sortOrder ?? 999
-          bv = projectStatuses.find(o => o.id === b.statusId)?.sortOrder ?? 999; break
-        case 'statusComment':
-          av = a.latestStatus.toLowerCase(); bv = b.latestStatus.toLowerCase(); break
+      for (const { key, dir } of projectSorts) {
+        let av: string | number = '', bv: string | number = ''
+        switch (key) {
+          case 'workItem':      av = a.workItem.toLowerCase();     bv = b.workItem.toLowerCase();     break
+          case 'rag':           av = RAG_ORDER[a.ragStatus];       bv = RAG_ORDER[b.ragStatus];       break
+          case 'priority':
+            av = priorities.find(o => o.id === a.priorityId)?.sortOrder ?? 999
+            bv = priorities.find(o => o.id === b.priorityId)?.sortOrder ?? 999; break
+          case 'status':
+            av = projectStatuses.find(o => o.id === a.statusId)?.sortOrder ?? 999
+            bv = projectStatuses.find(o => o.id === b.statusId)?.sortOrder ?? 999; break
+          case 'statusComment': av = a.latestStatus.toLowerCase(); bv = b.latestStatus.toLowerCase(); break
+        }
+        if (av < bv) return dir === 'asc' ? -1 : 1
+        if (av > bv) return dir === 'asc' ? 1 : -1
       }
-      if (av < bv) return projectSortDir === 'asc' ? -1 : 1
-      if (av > bv) return projectSortDir === 'asc' ? 1 : -1
       return 0
     })
 
     return list
-  }, [projects, query, dueFilter, projectsWithDueTasks, ragFilter, priorityFilter, areaFilter, statusFilter, priorities, productAreas, projectStatuses, projectSortKey, projectSortDir])
+  }, [projects, query, dueFilter, projectsWithDueTasks, ragFilters, priorityFilters, areaFilters, statusFilters, priorities, projectStatuses, projectSorts])
 
   const toggleProject = (id: number) =>
     setExpandedProjects(prev => {
@@ -293,6 +312,24 @@ export default function Prime() {
       n.has(id) ? n.delete(id) : n.add(id)
       return n
     })
+
+  const handleProjectSort = (col: ProjectSortKey) => {
+    setProjectSorts(prev => {
+      const existing = prev.find(s => s.key === col)
+      if (!existing) return [...prev, { key: col, dir: 'asc' }]
+      if (existing.dir === 'asc') return prev.map(s => s.key === col ? { ...s, dir: 'desc' as const } : s)
+      return prev.filter(s => s.key !== col)
+    })
+  }
+
+  const handleGeneralSort = (col: GeneralSortKey) => {
+    setGeneralSorts(prev => {
+      const existing = prev.find(s => s.key === col)
+      if (!existing) return [...prev, { key: col, dir: 'asc' }]
+      if (existing.dir === 'asc') return prev.map(s => s.key === col ? { ...s, dir: 'desc' as const } : s)
+      return prev.filter(s => s.key !== col)
+    })
+  }
 
   const cycleTaskStatus = async (t: Task) => {
     const next: TaskStatus = t.status === 'open' ? 'in_progress' : t.status === 'in_progress' ? 'done' : 'open'
@@ -311,13 +348,42 @@ export default function Prime() {
     patchData(prev => ({ ...prev, allTasks: prev.allTasks.map(task => task.id === t.id ? { ...task, dueDate: val } : task) }))
   }
 
+  const saveProjectField = async (projectId: number, patch: Partial<Project>) => {
+    try {
+      await updateProject({ id: projectId, ...patch } as Parameters<typeof updateProject>[0])
+      patchData(prev => ({
+        ...prev,
+        projects: prev.projects.map(p => p.id === projectId ? { ...p, ...patch } : p),
+      }))
+    } catch (err) {
+      toast.error(`Failed to update project: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
   const { buttonColor, buttonOpacity } = loadGuiSettings()
   const btnStyle = buttonStyle(buttonColor, buttonOpacity)
 
-  const hasActiveFilters = ragFilter !== 'All' || priorityFilter !== 'All' || areaFilter !== 'All' || statusFilter !== 'All'
+  const hasActiveFilters = ragFilters.length > 0 || priorityFilters.length > 0 || areaFilters.length > 0 || statusFilters.length > 0
 
   const projectsWithTasks = filteredProjects.filter(p => (tasksByProject.get(p.id)?.length ?? 0) > 0)
   const allExpanded = projectsWithTasks.length > 0 && projectsWithTasks.every(p => expandedProjects.has(p.id))
+
+  // Options for filter components
+  const ragOptions = RAG_OPTIONS.map(o => ({
+    value: o.value,
+    label: o.label,
+    prefix: <span className={`w-2 h-2 rounded-full shrink-0 ${o.dotColor}`} />,
+  }))
+  const priorityOptions = priorities.map(p => ({
+    value: String(p.id),
+    label: p.label,
+    prefix: <span className={`w-2 h-2 rounded-full shrink-0 ${dotClass(p.color)}`} />,
+  }))
+  const statusOptions = projectStatuses.map(s => ({
+    value: String(s.id),
+    label: s.label,
+    prefix: s.color ? <span className={`w-2 h-2 rounded-full shrink-0 ${dotClass(s.color)}`} /> : undefined,
+  }))
 
   return (
     <div className="flex flex-col h-[calc(100vh-57px)]">
@@ -339,48 +405,37 @@ export default function Prime() {
         )}
 
         {/* RAG filter */}
-        <Select value={ragFilter} onValueChange={v => setRagFilter(v as RagStatus | 'All')}>
-          <SelectTrigger className="h-8 text-xs w-32"><SelectValue placeholder="RAG" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="All">All RAG</SelectItem>
-            <SelectItem value="Red">Red</SelectItem>
-            <SelectItem value="Amber">Amber</SelectItem>
-            <SelectItem value="Green">Green</SelectItem>
-          </SelectContent>
-        </Select>
+        <MultiSelectFilter
+          options={ragOptions}
+          value={ragFilters}
+          onChange={v => setRagFilters(v as RagStatus[])}
+          placeholder="All RAG"
+          width="w-28"
+        />
 
         {/* Priority filter */}
-        <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-          <SelectTrigger className="h-8 text-xs w-36"><SelectValue placeholder="Priority" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="All">All Priorities</SelectItem>
-            {priorities.map(p => (
-              <SelectItem key={p.id} value={String(p.id)}>
-                <span className="inline-flex items-center gap-1.5">
-                  <span className={`w-1.5 h-1.5 rounded-full ${dotClass(p.color)}`} />
-                  {p.label}
-                </span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <MultiSelectFilter
+          options={priorityOptions}
+          value={priorityFilters}
+          onChange={setPriorityFilters}
+          placeholder="All Priorities"
+          width="w-36"
+        />
 
         {/* Status filter */}
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="h-8 text-xs w-36"><SelectValue placeholder="Status" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="All">All Statuses</SelectItem>
-            {projectStatuses.map(s => (
-              <SelectItem key={s.id} value={String(s.id)}>{s.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <MultiSelectFilter
+          options={statusOptions}
+          value={statusFilters}
+          onChange={setStatusFilters}
+          placeholder="All Statuses"
+          width="w-36"
+        />
 
         {hasActiveFilters && (
           <Button
             variant="ghost" size="sm"
             className="h-8 text-xs text-muted-foreground hover:text-foreground"
-            onClick={() => { setRagFilter('All'); setPriorityFilter('All'); setAreaFilter('All'); setStatusFilter('All') }}
+            onClick={() => { setRagFilters([]); setPriorityFilters([]); setAreaFilters([]); setStatusFilters([]) }}
           >
             ✕ Reset filters
           </Button>
@@ -411,17 +466,26 @@ export default function Prime() {
               { value: 'All', label: 'All Areas', color: '' },
               ...productAreas.map(a => ({ value: String(a.id), label: a.label, color: a.color })),
             ].map(opt => {
-              const anyActive = areaFilter !== 'All'
-              const isActive = areaFilter === opt.value
+              const isAll = opt.value === 'All'
+              const isActive = isAll ? areaFilters.length === 0 : areaFilters.includes(opt.value)
+              const anyActive = areaFilters.length > 0
               const coloredClass = isActive
                 ? (opt.color ? pillClassActive(opt.color) : 'bg-primary text-primary-foreground border-primary')
-                : anyActive
+                : anyActive && !isAll
                   ? 'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200'
                   : (opt.color ? pillClass(opt.color) : 'border-input bg-background hover:bg-accent hover:text-accent-foreground')
               return (
                 <button
                   key={opt.value}
-                  onClick={() => setAreaFilter(isActive && opt.value !== 'All' ? 'All' : opt.value)}
+                  onClick={() => {
+                    if (isAll) {
+                      setAreaFilters([])
+                    } else {
+                      setAreaFilters(prev =>
+                        prev.includes(opt.value) ? prev.filter(x => x !== opt.value) : [...prev, opt.value]
+                      )
+                    }
+                  }}
                   className={`h-7 px-2.5 text-xs rounded-full border transition-colors ${coloredClass}`}
                 >
                   {opt.label}
@@ -430,15 +494,13 @@ export default function Prime() {
             })}
           </div>
         ) : (
-          <Select value={areaFilter} onValueChange={setAreaFilter}>
-            <SelectTrigger className="h-8 text-xs w-40"><SelectValue placeholder="Area" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="All">All Areas</SelectItem>
-              {productAreas.map(a => (
-                <SelectItem key={a.id} value={String(a.id)}>{a.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <MultiSelectFilter
+            options={productAreas.map(a => ({ value: String(a.id), label: a.label }))}
+            value={areaFilters}
+            onChange={setAreaFilters}
+            placeholder="All Areas"
+            width="w-40"
+          />
         )}
       </div>
 
@@ -456,6 +518,7 @@ export default function Prime() {
         onClose={() => { setTaskModalOpen(false); setEditingTask(null) }}
         onSaved={() => reload()}
         projects={projects}
+        initialProductAreaId={!editingTask && areaFilters.length === 1 ? Number(areaFilters[0]) : undefined}
       />
 
       {/* Project modal */}
@@ -472,6 +535,16 @@ export default function Prime() {
 
   // ── Left pane — all projects ──────────────────────────────────────────────
   function LeftPane() {
+    const SortInd = ({ col }: { col: ProjectSortKey }) => {
+      const idx = projectSorts.findIndex(s => s.key === col)
+      if (idx === -1) return null
+      return (
+        <span className="ml-1 opacity-50">
+          {projectSorts.length > 1 ? idx + 1 : ''}{projectSorts[idx].dir === 'asc' ? '↑' : '↓'}
+        </span>
+      )
+    }
+
     return (
       <div className="flex flex-col h-full overflow-hidden">
         {/* Panel header */}
@@ -487,8 +560,6 @@ export default function Prime() {
                 <th className="w-10 px-2 py-1.5 shrink-0 border-b bg-background" />
                 {(() => {
                   const thBase = 'border-b bg-background text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider select-none cursor-pointer hover:text-foreground transition-colors'
-                  const SortInd = ({ col }: { col: typeof projectSortKey }) =>
-                    projectSortKey === col ? <span className="ml-1 opacity-50">{projectSortDir === 'asc' ? '↑' : '↓'}</span> : null
                   return (<>
                     <th className={`${thBase} px-3 py-1.5`} onClick={() => handleProjectSort('workItem')}>Work Item<SortInd col="workItem" /></th>
                     <th className={`${thBase} w-px px-2 py-1.5 whitespace-nowrap`} onClick={() => handleProjectSort('rag')}>RAG<SortInd col="rag" /></th>
@@ -564,32 +635,112 @@ export default function Prime() {
               )}
             </div>
           </td>
-          <td className="w-px px-2 py-1.5 whitespace-nowrap"><RagBadge status={p.ragStatus} /></td>
-          <td className="w-px px-2 py-1.5 whitespace-nowrap">
-            {p.priorityId ? (() => {
-              const opt = priorities.find(o => o.id === p.priorityId)
-              const c = opt?.color ?? ''
-              return (
-                <span className={`inline-flex items-center gap-1 px-1 py-0 rounded-full text-xs border ${pillClass(c)}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${dotClass(c)}`} />
-                  {opt?.label ?? '—'}
-                </span>
-              )
-            })() : <span className="text-muted-foreground text-xs">—</span>}
+
+          {/* RAG — inline editable */}
+          <td className="w-px px-2 py-1.5 whitespace-nowrap" onClick={e => e.stopPropagation()}>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="hover:opacity-75 transition-opacity" title="Click to change RAG">
+                  <RagBadge status={p.ragStatus} />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-32 p-1" onClick={e => e.stopPropagation()}>
+                {RAG_OPTIONS.map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => saveProjectField(p.id, { ragStatus: opt.value })}
+                    className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent transition-colors"
+                  >
+                    <Check className={`h-3 w-3 shrink-0 ${p.ragStatus === opt.value ? 'opacity-100' : 'opacity-0'}`} />
+                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${opt.dotColor}`} />
+                    {opt.label}
+                  </button>
+                ))}
+              </PopoverContent>
+            </Popover>
           </td>
-          <td className="w-px px-2 py-1.5 whitespace-nowrap">
-            {p.statusId ? (() => {
-              const opt = projectStatuses.find(s => s.id === p.statusId)
-              if (!opt) return <span className="text-muted-foreground text-xs">—</span>
-              const c = opt.color
-              return (
-                <span className={`inline-flex items-center gap-1 text-xs px-1 py-0 rounded-full border ${pillClass(c)}`}>
-                  {c && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass(c)}`} />}
-                  {opt.label}
-                </span>
-              )
-            })() : <span className="text-muted-foreground text-xs">—</span>}
+
+          {/* Priority — inline editable */}
+          <td className="w-px px-2 py-1.5 whitespace-nowrap" onClick={e => e.stopPropagation()}>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="hover:opacity-75 transition-opacity" title="Click to change priority">
+                  {p.priorityId ? (() => {
+                    const opt = priorities.find(o => o.id === p.priorityId)
+                    const c = opt?.color ?? ''
+                    return (
+                      <span className={`inline-flex items-center gap-1 px-1 py-0 rounded-full text-xs border ${pillClass(c)}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${dotClass(c)}`} />
+                        {opt?.label ?? '—'}
+                      </span>
+                    )
+                  })() : <span className="text-muted-foreground text-xs">—</span>}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-40 p-1" onClick={e => e.stopPropagation()}>
+                <button
+                  onClick={() => saveProjectField(p.id, { priorityId: null })}
+                  className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent transition-colors"
+                >
+                  <Check className={`h-3 w-3 shrink-0 ${p.priorityId === null ? 'opacity-100' : 'opacity-0'}`} />
+                  <span className="text-muted-foreground">— None</span>
+                </button>
+                {priorities.map(opt => (
+                  <button
+                    key={opt.id}
+                    onClick={() => saveProjectField(p.id, { priorityId: opt.id })}
+                    className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent transition-colors"
+                  >
+                    <Check className={`h-3 w-3 shrink-0 ${p.priorityId === opt.id ? 'opacity-100' : 'opacity-0'}`} />
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${dotClass(opt.color)}`} />
+                    {opt.label}
+                  </button>
+                ))}
+              </PopoverContent>
+            </Popover>
           </td>
+
+          {/* Status — inline editable */}
+          <td className="w-px px-2 py-1.5 whitespace-nowrap" onClick={e => e.stopPropagation()}>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="hover:opacity-75 transition-opacity" title="Click to change status">
+                  {p.statusId ? (() => {
+                    const opt = projectStatuses.find(s => s.id === p.statusId)
+                    if (!opt) return <span className="text-muted-foreground text-xs">—</span>
+                    const c = opt.color
+                    return (
+                      <span className={`inline-flex items-center gap-1 text-xs px-1 py-0 rounded-full border ${pillClass(c)}`}>
+                        {c && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass(c)}`} />}
+                        {opt.label}
+                      </span>
+                    )
+                  })() : <span className="text-muted-foreground text-xs">—</span>}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-44 p-1" onClick={e => e.stopPropagation()}>
+                <button
+                  onClick={() => saveProjectField(p.id, { statusId: null })}
+                  className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent transition-colors"
+                >
+                  <Check className={`h-3 w-3 shrink-0 ${p.statusId === null ? 'opacity-100' : 'opacity-0'}`} />
+                  <span className="text-muted-foreground">— None</span>
+                </button>
+                {projectStatuses.map(opt => (
+                  <button
+                    key={opt.id}
+                    onClick={() => saveProjectField(p.id, { statusId: opt.id })}
+                    className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent transition-colors"
+                  >
+                    <Check className={`h-3 w-3 shrink-0 ${p.statusId === opt.id ? 'opacity-100' : 'opacity-0'}`} />
+                    {opt.color && <span className={`w-2 h-2 rounded-full shrink-0 ${dotClass(opt.color)}`} />}
+                    {opt.label}
+                  </button>
+                ))}
+              </PopoverContent>
+            </Popover>
+          </td>
+
           <td className="px-3 py-1.5 max-w-[14rem]">
             <span className="text-xs text-muted-foreground line-clamp-2">{p.latestStatus || '—'}</span>
           </td>
@@ -692,21 +843,53 @@ export default function Prime() {
 
   // ── Right pane — general tasks ────────────────────────────────────────────
   function RightPane() {
+    const GenSortInd = ({ col }: { col: GeneralSortKey }) => {
+      const idx = generalSorts.findIndex(s => s.key === col)
+      if (idx === -1) return null
+      return (
+        <span className="opacity-50">
+          {generalSorts.length > 1 ? idx + 1 : ''}{generalSorts[idx].dir === 'asc' ? '↑' : '↓'}
+        </span>
+      )
+    }
+
+    const genStatusOptions = [
+      { value: 'active',      label: 'Active' },
+      { value: 'open',        label: 'Open' },
+      { value: 'in_progress', label: 'In Progress' },
+      { value: 'done',        label: 'Done' },
+      { value: 'inbox',       label: 'Inbox' },
+    ]
+
     return (
       <div className="flex flex-col h-full overflow-hidden">
         {/* Panel header */}
-        <div className="flex items-center gap-3 px-4 py-2 border-b bg-muted/30 shrink-0">
+        <div className="flex items-center gap-2 px-4 py-2 border-b bg-muted/30 shrink-0">
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">General Tasks</span>
-          <Select value={generalStatusFilter} onValueChange={setGeneralStatusFilter}>
-            <SelectTrigger className="h-7 text-xs w-32"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="open">Open</SelectItem>
-              <SelectItem value="in_progress">In Progress</SelectItem>
-              <SelectItem value="done">Done</SelectItem>
-            </SelectContent>
-          </Select>
+          <MultiSelectFilter
+            options={genStatusOptions}
+            value={generalStatusFilters}
+            onChange={next => {
+              // 'inbox' is mutually exclusive with status filters
+              const added = next.filter(x => !generalStatusFilters.includes(x))
+              if (added.includes('inbox')) setGeneralStatusFilters(['inbox'])
+              else setGeneralStatusFilters(next.filter(x => x !== 'inbox'))
+            }}
+            placeholder="Active"
+            width="w-28"
+          />
+          {/* Upcoming toggle */}
+          <button
+            onClick={() => setShowUpcoming(v => !v)}
+            className={`h-7 px-2.5 text-xs rounded-full border transition-colors ${
+              showUpcoming
+                ? 'bg-blue-100 border-blue-300 text-blue-800 hover:bg-blue-200'
+                : 'border-input bg-background hover:bg-accent hover:text-accent-foreground'
+            }`}
+            title="Show tasks due in the next 7 days"
+          >
+            Upcoming
+          </button>
           <span className="text-xs text-muted-foreground ml-auto">
             {generalTasks.length} task{generalTasks.length !== 1 ? 's' : ''}
           </span>
@@ -716,13 +899,13 @@ export default function Prime() {
         <div className="flex items-center gap-2 px-4 py-1 border-b bg-muted/20 shrink-0 text-xs font-semibold text-muted-foreground uppercase tracking-wider select-none">
           <span className="w-5 shrink-0" />
           <button onClick={() => handleGeneralSort('title')} className="flex-1 text-left hover:text-foreground transition-colors">
-            Task{generalSortKey === 'title' && <span className="ml-1 opacity-50">{generalSortDir === 'asc' ? '↑' : '↓'}</span>}
+            Task<span className="ml-1"><GenSortInd col="title" /></span>
           </button>
           <button onClick={() => handleGeneralSort('priority')} className="w-4 text-center shrink-0 hover:text-foreground transition-colors">
-            Pri{generalSortKey === 'priority' && <span className="ml-0.5 opacity-50">{generalSortDir === 'asc' ? '↑' : '↓'}</span>}
+            Pri<span className="ml-0.5"><GenSortInd col="priority" /></span>
           </button>
           <button onClick={() => handleGeneralSort('due')} className="w-14 text-right shrink-0 hover:text-foreground transition-colors">
-            Due{generalSortKey === 'due' && <span className="ml-1 opacity-50">{generalSortDir === 'asc' ? '↑' : '↓'}</span>}
+            Due<span className="ml-1"><GenSortInd col="due" /></span>
           </button>
         </div>
 
@@ -741,10 +924,12 @@ export default function Prime() {
   function GeneralTaskRow({ t }: { t: Task }) {
     const priorityOpt = priorities.find(p => p.id === t.priorityId)
     const dueDateObj  = t.dueDate ? new Date(t.dueDate + 'T12:00:00') : undefined
+    const today = new Date().toISOString().slice(0, 10)
+    const completedToday = t.status === 'done' && t.updatedAt.slice(0, 10) === today
 
     return (
       <div
-        className="px-4 py-2 hover:bg-accent/50 transition-colors cursor-pointer"
+        className={`px-4 py-2 hover:bg-accent/50 transition-colors cursor-pointer ${t.status === 'done' && !completedToday ? 'opacity-60' : ''}`}
         onClick={() => { setEditingTask(t); setTaskModalOpen(true) }}
       >
         {/* Line 1: status dot + title + priority dot + due date */}

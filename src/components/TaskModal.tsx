@@ -12,7 +12,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
-import { ChevronsUpDown, Check, X } from 'lucide-react'
+import { Calendar } from '@/components/ui/calendar'
+import { ChevronsUpDown, Check, X, CalendarIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Checkbox } from '@/components/ui/checkbox'
 
@@ -345,50 +346,62 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
           {/* Dates */}
           <div className="grid grid-cols-2 gap-4">
             <div className={fieldClass}>
-              <Label htmlFor="task-start">Start Date</Label>
-              <div className="relative">
-                <Input
-                  id="task-start"
-                  type="date"
-                  value={startDate}
-                  onChange={e => setStartDate(e.target.value)}
-                  autoComplete="off"
-                  className={startDate ? 'pr-8' : '[&::-webkit-datetime-edit]:invisible focus:[&::-webkit-datetime-edit]:visible'}
-                />
-                {startDate && (
-                  <button
-                    type="button"
-                    onClick={() => setStartDate('')}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    aria-label="Clear start date"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
+              <Label>Start Date</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button type="button" variant="outline" className="w-full justify-start text-left font-normal h-9">
+                    <CalendarIcon className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                    {startDate ? startDate : <span className="text-muted-foreground">Pick a date</span>}
+                    {startDate && (
+                      <span
+                        role="button"
+                        onClick={e => { e.stopPropagation(); setStartDate('') }}
+                        className="ml-auto text-muted-foreground hover:text-foreground"
+                        aria-label="Clear start date"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={startDate ? new Date(startDate + 'T12:00:00') : undefined}
+                    onSelect={d => setStartDate(d ? d.toISOString().slice(0, 10) : '')}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
             <div className={fieldClass}>
-              <Label htmlFor="task-due">Due Date</Label>
-              <div className="relative">
-                <Input
-                  id="task-due"
-                  type="date"
-                  value={dueDate}
-                  onChange={e => setDueDate(e.target.value)}
-                  autoComplete="off"
-                  className={dueDate ? 'pr-8' : '[&::-webkit-datetime-edit]:invisible focus:[&::-webkit-datetime-edit]:visible'}
-                />
-                {dueDate && (
-                  <button
-                    type="button"
-                    onClick={() => setDueDate('')}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    aria-label="Clear due date"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
+              <Label>Due Date</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button type="button" variant="outline" className="w-full justify-start text-left font-normal h-9">
+                    <CalendarIcon className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                    {dueDate ? dueDate : <span className="text-muted-foreground">Pick a date</span>}
+                    {dueDate && (
+                      <span
+                        role="button"
+                        onClick={e => { e.stopPropagation(); setDueDate('') }}
+                        className="ml-auto text-muted-foreground hover:text-foreground"
+                        aria-label="Clear due date"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={dueDate ? new Date(dueDate + 'T12:00:00') : undefined}
+                    onSelect={d => setDueDate(d ? d.toISOString().slice(0, 10) : '')}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
 

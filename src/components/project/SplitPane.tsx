@@ -34,7 +34,7 @@ export function SplitPane({ left, right, initialSplitPct = SPLIT_DEFAULT_PCT }: 
 
   return (
     <div ref={containerRef} className="flex flex-1 overflow-hidden">
-      <div style={{ width: `${splitPct}%` }} className="flex flex-col overflow-hidden min-w-0">
+      <div style={{ width: `${splitPct}%` }} className="flex flex-col overflow-hidden min-w-0 min-h-0">
         {left}
       </div>
       <div
@@ -43,7 +43,7 @@ export function SplitPane({ left, right, initialSplitPct = SPLIT_DEFAULT_PCT }: 
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
       />
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden min-h-0">
         {right}
       </div>
     </div>

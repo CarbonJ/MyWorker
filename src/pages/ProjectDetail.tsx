@@ -19,13 +19,24 @@ import { getDropdownOptions } from '@/db/dropdownOptions'
 import type { Project, Task, WorkLogEntry, DropdownOption } from '@/types'
 import { TaskModal } from '@/components/TaskModal'
 import { ProjectHeader } from '@/components/project/ProjectHeader'
-import { TaskPane } from '@/components/project/TaskPane'
+import { TaskPane, type SortEntry, type TaskSortField } from '@/components/project/TaskPane'
 import { WorkLogPane } from '@/components/project/WorkLogPane'
 import { SplitPane } from '@/components/project/SplitPane'
 import { useErrorHandler } from '@/hooks/useErrorHandler'
 
-type TaskSortField = 'status' | 'priority' | 'dueDate'
-type SortDir = 'asc' | 'desc'
+const LS_TASK_FILTER_STATUSES = 'myworker:pd-filter-statuses'
+const LS_TASK_FILTER_PRIORITIES = 'myworker:pd-filter-priorities'
+const LS_TASK_SORTS = 'myworker:pd-task-sorts'
+
+function loadArr(key: string, fallback: string[]): string[] {
+  try { return JSON.parse(localStorage.getItem(key) ?? 'null') ?? fallback }
+  catch { return fallback }
+}
+
+function loadSorts(key: string, fallback: SortEntry[]): SortEntry[] {
+  try { return JSON.parse(localStorage.getItem(key) ?? 'null') ?? fallback }
+  catch { return fallback }
+}
 
 export default function ProjectDetail() {
   const { id } = useParams()
@@ -42,11 +53,15 @@ export default function ProjectDetail() {
   const [projectStatuses,setProjectStatuses]= useState<DropdownOption[]>([])
 
   // ── Task list state (passed down to TaskPane) ─────────────────────────────
-  const [filterStatus,   setFilterStatus]   = useState<string>('active')
-  const [filterPriority, setFilterPriority] = useState<string>('all')
-  const [sortField,      setSortField]      = useState<TaskSortField>('dueDate')
-  const [sortDir,        setSortDir]        = useState<SortDir>('asc')
+  const [filterStatuses,   setFilterStatuses]   = useState<string[]>(() => loadArr(LS_TASK_FILTER_STATUSES, ['active']))
+  const [filterPriorities, setFilterPriorities] = useState<string[]>(() => loadArr(LS_TASK_FILTER_PRIORITIES, []))
+  const [sorts,            setSorts]            = useState<SortEntry[]>(() => loadSorts(LS_TASK_SORTS, [{ key: 'dueDate', dir: 'asc' }]))
   const initialFilterSet = useRef(false)
+
+  // Persist filter/sort state
+  useEffect(() => { localStorage.setItem(LS_TASK_FILTER_STATUSES,   JSON.stringify(filterStatuses)) },   [filterStatuses])
+  useEffect(() => { localStorage.setItem(LS_TASK_FILTER_PRIORITIES, JSON.stringify(filterPriorities)) }, [filterPriorities])
+  useEffect(() => { localStorage.setItem(LS_TASK_SORTS, JSON.stringify(sorts)) }, [sorts])
 
   // ── Task modal ────────────────────────────────────────────────────────────
   const [taskModalOpen, setTaskModalOpen] = useState(false)
@@ -74,7 +89,7 @@ export default function ProjectDetail() {
       if (!initialFilterSet.current) {
         initialFilterSet.current = true
         const doneOpt = statuses.find(s => s.label.toLowerCase() === 'done')
-        if (doneOpt && p.statusId === doneOpt.id) setFilterStatus('done')
+        if (doneOpt && p.statusId === doneOpt.id) setFilterStatuses(['done'])
       }
     } catch (err) {
       handleError(err, 'Failed to load project')
@@ -122,8 +137,12 @@ export default function ProjectDetail() {
   }
 
   const toggleSort = (field: TaskSortField) => {
-    if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setSortField(field); setSortDir('asc') }
+    setSorts(prev => {
+      const existing = prev.find(s => s.key === field)
+      if (!existing) return [...prev, { key: field, dir: 'asc' }]
+      if (existing.dir === 'asc') return prev.map(s => s.key === field ? { ...s, dir: 'desc' as const } : s)
+      return prev.filter(s => s.key !== field)
+    })
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -153,12 +172,11 @@ export default function ProjectDetail() {
           <TaskPane
             tasks={tasks}
             priorities={priorities}
-            filterStatus={filterStatus}
-            filterPriority={filterPriority}
-            sortField={sortField}
-            sortDir={sortDir}
-            onFilterStatus={setFilterStatus}
-            onFilterPriority={setFilterPriority}
+            filterStatuses={filterStatuses}
+            filterPriorities={filterPriorities}
+            sorts={sorts}
+            onFilterStatuses={setFilterStatuses}
+            onFilterPriorities={setFilterPriorities}
             onToggleSort={toggleSort}
             onAddTask={() => { setEditingTask(null); setTaskModalOpen(true) }}
             onEditTask={(task) => { setEditingTask(task); setTaskModalOpen(true) }}

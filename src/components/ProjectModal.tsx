@@ -9,6 +9,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Calendar } from '@/components/ui/calendar'
+import { CalendarIcon } from 'lucide-react'
 
 interface Props {
   project?: Project | null   // null/undefined = create mode, Project = edit mode
@@ -303,14 +306,34 @@ export function ProjectModal({ project, open, onClose, onSaved }: Props) {
 
           {/* Due Date */}
           <div className={fieldClass}>
-            <Label htmlFor="dueDate">Project Due Date <span className="text-muted-foreground font-normal">(optional)</span></Label>
-            <Input
-              id="dueDate"
-              type="date"
-              value={dueDate}
-              onChange={e => setDueDate(e.target.value)}
-              className={dueDate ? 'w-44' : 'w-44 [&::-webkit-datetime-edit]:invisible focus:[&::-webkit-datetime-edit]:visible'}
-            />
+            <Label>Project Due Date <span className="text-muted-foreground font-normal">(optional)</span></Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button type="button" variant="outline" className="w-44 justify-start text-left font-normal h-9">
+                  <CalendarIcon className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                  {dueDate ? dueDate : <span className="text-muted-foreground">Pick a date</span>}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={dueDate ? new Date(dueDate + 'T12:00:00') : undefined}
+                  onSelect={d => setDueDate(d ? d.toISOString().slice(0, 10) : '')}
+                  initialFocus
+                />
+                {dueDate && (
+                  <div className="border-t p-2">
+                    <button
+                      type="button"
+                      onClick={() => setDueDate('')}
+                      className="w-full text-xs text-muted-foreground hover:text-foreground py-1"
+                    >
+                      Clear date
+                    </button>
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Stakeholders */}
@@ -414,6 +437,7 @@ export function ProjectModal({ project, open, onClose, onSaved }: Props) {
               Delete Project
             </Button>
           )}
+          <p className="text-xs text-muted-foreground mr-auto">⌘↵ to save</p>
           <div className="flex gap-2 ml-auto">
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
