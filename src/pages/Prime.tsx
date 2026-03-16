@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { getAllProjects, updateProject } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
 import { getAllTasks, updateTask } from '@/db/tasks'
-import { getLatestWorkLogPerProject } from '@/db/workLog'
+import { getLatestWorkLogPerProject, addWorkLogEntry } from '@/db/workLog'
 import type { Project, DropdownOption, RagStatus, Task, WorkLogEntry, TaskStatus } from '@/types'
 import { RagBadge } from '@/components/RagBadge'
 import { Button } from '@/components/ui/button'
@@ -19,6 +19,7 @@ import { fmtDate, isOverdue, isDueToday } from '@/lib/utils'
 import { useDataLoader } from '@/hooks/useDataLoader'
 import { SplitPane } from '@/components/project/SplitPane'
 import { TaskModal } from '@/components/TaskModal'
+import { RecurringCompleteDialog } from '@/components/RecurringCompleteDialog'
 import { ProjectModal } from '@/components/ProjectModal'
 import { CalendarIcon, RotateCcw } from 'lucide-react'
 
@@ -103,6 +104,9 @@ export default function Prime() {
   // Task modal for editing tasks
   const [editingTask, setEditingTask]   = useState<Task | null>(null)
   const [taskModalOpen, setTaskModalOpen] = useState(false)
+
+  // Recurring task completion dialog
+  const [recurringTask, setRecurringTask] = useState<Task | null>(null)
 
   // Controlled open state for task due-date popovers in the project rows
   const [openDueDatePopover, setOpenDueDatePopover] = useState<number | null>(null)
@@ -377,8 +381,40 @@ export default function Prime() {
 
   const cycleTaskStatus = async (t: Task) => {
     const next: TaskStatus = t.status === 'open' ? 'in_progress' : t.status === 'in_progress' ? 'done' : 'open'
+    // Intercept in_progress → done for recurring tasks
+    if (t.status === 'in_progress' && t.isRecurring) {
+      setRecurringTask(t)
+      return
+    }
     await updateTask({ id: t.id, status: next })
+    if (next === 'done' && t.projectId) {
+      await addWorkLogEntry(t.projectId, `✓ Completed: ${t.title}`)
+    }
     patchData(prev => ({ ...prev, allTasks: prev.allTasks.map(task => task.id === t.id ? { ...task, status: next } : task) }))
+  }
+
+  const handleReschedule = async (newDueDate: string, note: string) => {
+    if (!recurringTask) return
+    try {
+      await updateTask({ id: recurringTask.id, status: 'open', dueDate: newDueDate })
+      if (recurringTask.projectId) {
+        const logNote = `✓ Completed: ${recurringTask.title}. Next due: ${fmtDate(newDueDate)}${note ? `. ${note}` : ''}`
+        await addWorkLogEntry(recurringTask.projectId, logNote)
+      }
+      reload()
+    } finally {
+      setRecurringTask(null)
+    }
+  }
+
+  const handleMarkDonePermanently = async () => {
+    if (!recurringTask) return
+    try {
+      await updateTask({ id: recurringTask.id, status: 'done', isRecurring: false })
+      reload()
+    } finally {
+      setRecurringTask(null)
+    }
   }
 
   const savePriority = async (t: Task, priorityId: number | null) => {
@@ -564,6 +600,16 @@ export default function Prime() {
         projects={projects}
         initialProductAreaId={!editingTask && areaFilters.length === 1 ? Number(areaFilters[0]) : undefined}
       />
+
+      {recurringTask && (
+        <RecurringCompleteDialog
+          task={recurringTask}
+          open={!!recurringTask}
+          onReschedule={handleReschedule}
+          onMarkDone={handleMarkDonePermanently}
+          onCancel={() => setRecurringTask(null)}
+        />
+      )}
 
       {/* Project modal */}
       <ProjectModal
