@@ -6,6 +6,9 @@ import {
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Separator } from '@/components/ui/separator'
+import { renderTemplate } from '@/lib/reportTemplate'
+import briefTemplateRaw from '@/templates/report-brief.md?raw'
+import detailedTemplateRaw from '@/templates/report-detailed.md?raw'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -18,64 +21,22 @@ interface Props {
   projectStatuses: DropdownOption[]
   allTasks: Task[]
   allWorkLog: WorkLogEntry[]
+  exportFormat: 'brief' | 'detailed'
+  onExportFormatChange: (fmt: 'brief' | 'detailed') => void
 }
 
-// ── Markdown generation ───────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-const RAG_EMOJI: Record<string, string> = { Red: '🔴', Amber: '🟡', Green: '🟢' }
-
-function fmtDate(iso: string): string {
-  const [y, m, d] = iso.split('-')
-  return `${m}/${d}/${y.slice(2)}`
+function template(format: 'brief' | 'detailed'): string {
+  return format === 'brief' ? briefTemplateRaw : detailedTemplateRaw
 }
 
-function buildProjectMd(
-  p: Project,
-  opts: {
-    priorities: DropdownOption[]
-    productAreas: DropdownOption[]
-    projectStatuses: DropdownOption[]
-    allTasks: Task[]
-    allWorkLog: WorkLogEntry[]
-  },
-): string {
-  const { priorities, productAreas, projectStatuses, allTasks, allWorkLog } = opts
-
-  const priority = priorities.find(o => o.id === p.priorityId)?.label ?? '—'
-  const area = productAreas.find(o => o.id === p.productAreaId)?.label ?? '—'
-  const status = projectStatuses.find(o => o.id === p.statusId)?.label ?? '—'
-  const rag = `${RAG_EMOJI[p.ragStatus] ?? ''} ${p.ragStatus}`
-
-  const latestLog = allWorkLog.find(e => e.projectId === p.id)
-  const logLine = latestLog
-    ? `**Latest Update (${fmtDate(latestLog.createdAt.slice(0, 10))}):** ${latestLog.note.replace(/\n/g, ' ')}`
-    : null
-
-  const openTasks = allTasks.filter(t => t.projectId === p.id && t.status !== 'done')
-  const taskLines = openTasks.map(t => {
-    const due = t.dueDate ? ` (Due: ${fmtDate(t.dueDate)})` : ''
-    return `- ${t.title}${due}`
-  })
-
-  const lines: string[] = []
-  lines.push(`## ${p.workItem}`)
-  lines.push(`**RAG:** ${rag} | **Priority:** ${priority} | **Area:** ${area} | **Status:** ${status}`)
-  lines.push('')
-  if (p.latestStatus) {
-    lines.push(`**Latest Status:** ${p.latestStatus}`)
-    lines.push('')
-  }
-  if (logLine) {
-    lines.push(logLine)
-    lines.push('')
-  }
-  if (openTasks.length > 0) {
-    lines.push(`**Open Tasks (${openTasks.length}):**`)
-    lines.push(...taskLines)
-    lines.push('')
-  }
-
-  return lines.join('\n')
+async function copyToClipboard(content: string, setCopied: (v: boolean) => void) {
+  try {
+    await navigator.clipboard.writeText(content)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  } catch { /* silent fail — download still works */ }
 }
 
 function downloadMd(content: string, filename: string) {
@@ -88,6 +49,7 @@ function downloadMd(content: string, filename: string) {
   URL.revokeObjectURL(url)
 }
 
+
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function ChecklistSection({
@@ -99,6 +61,7 @@ function ChecklistSection({
   onDeselectAll,
   onExport,
   exportLabel,
+  onCopy,
 }: {
   title: string
   items: { id: string; label: string }[]
@@ -108,6 +71,7 @@ function ChecklistSection({
   onDeselectAll: () => void
   onExport: () => void
   exportLabel: string
+  onCopy?: () => void
 }) {
   const allSelected = items.length > 0 && items.every(i => selected.has(i.id))
 
@@ -142,14 +106,26 @@ function ChecklistSection({
         ))}
       </div>
 
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={selected.size === 0}
-        onClick={onExport}
-      >
-        {exportLabel}
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={selected.size === 0}
+          onClick={onExport}
+        >
+          {exportLabel}
+        </Button>
+        {onCopy && (
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={selected.size === 0}
+            onClick={onCopy}
+          >
+            Copy
+          </Button>
+        )}
+      </div>
     </div>
   )
 }
@@ -158,26 +134,26 @@ function ChecklistSection({
 
 export function ReportingExportModal({
   open, onClose, projects, productAreas, priorities, projectStatuses, allTasks, allWorkLog,
+  exportFormat, onExportFormatChange,
 }: Props) {
-  // By-project selection
   const [selectedProjects, setSelectedProjects] = useState<Set<string>>(new Set())
-
-  // By-area selection
   const [selectedAreas, setSelectedAreas] = useState<Set<string>>(new Set())
+  const [clipboardCopied, setClipboardCopied] = useState(false)
+
+  const renderOpts = { priorities, productAreas, projectStatuses, allTasks, allWorkLog }
+  const tmpl = template(exportFormat)
+  const date = new Date().toISOString().slice(0, 10)
 
   const projectItems = useMemo(
     () => projects.map(p => ({ id: String(p.id), label: p.workItem })),
     [projects],
   )
-
   const areaItems = useMemo(
     () => productAreas.map(a => ({ id: String(a.id), label: a.label })),
     [productAreas],
   )
 
-  const mdOpts = { priorities, productAreas, projectStatuses, allTasks, allWorkLog }
-
-  // ── Handlers ──────────────────────────────────────────────────────────────
+  // ── Build functions ────────────────────────────────────────────────────────
 
   const toggle = (set: Set<string>, id: string): Set<string> => {
     const next = new Set(set)
@@ -185,47 +161,31 @@ export function ReportingExportModal({
     return next
   }
 
-  const exportByProject = (ids: Set<string>) => {
+  const buildByProject = (ids: Set<string>) => {
     const chosen = projects.filter(p => ids.has(String(p.id)))
-    const today = new Date().toLocaleDateString()
-    const md = `# Project Status Report\n_Generated ${today}_\n\n` +
-      chosen.map(p => buildProjectMd(p, mdOpts)).join('\n---\n\n')
-    downloadMd(md, `report-projects-${new Date().toISOString().slice(0, 10)}.md`)
+    return renderTemplate(tmpl, chosen, renderOpts)
   }
 
-  const exportByArea = (ids: Set<string>) => {
-    const today = new Date().toLocaleDateString()
-    const sections: string[] = [`# Project Status Report by Area\n_Generated ${today}_\n`]
-    const chosenAreas = productAreas.filter(a => ids.has(String(a.id)))
-    for (const area of chosenAreas) {
-      const areaProjects = projects.filter(p => p.productAreaId === area.id)
-      if (areaProjects.length === 0) continue
-      sections.push(`# ${area.label}\n`)
-      sections.push(areaProjects.map(p => buildProjectMd(p, mdOpts)).join('\n---\n\n'))
-    }
-    // Also include projects with no area if areas without products were selected
-    downloadMd(sections.join('\n'), `report-by-area-${new Date().toISOString().slice(0, 10)}.md`)
+  const buildByArea = (ids: Set<string>) => {
+    const chosenAreaIds = new Set(productAreas.filter(a => ids.has(String(a.id))).map(a => a.id))
+    const chosen = projects.filter(p => p.productAreaId !== null && chosenAreaIds.has(p.productAreaId))
+    return renderTemplate(tmpl, chosen, renderOpts)
   }
 
-  const exportAll = () => {
-    const today = new Date().toLocaleDateString()
-    let md = `# Full Project Status Report\n_Generated ${today}_\n\n`
-    // Group by area, then unassigned
-    const assigned = new Set<number>()
-    for (const area of productAreas) {
-      const areaProjects = projects.filter(p => p.productAreaId === area.id)
-      if (areaProjects.length === 0) continue
-      md += `# ${area.label}\n\n`
-      md += areaProjects.map(p => { assigned.add(p.id); return buildProjectMd(p, mdOpts) }).join('\n---\n\n')
-      md += '\n\n'
-    }
-    const unassigned = projects.filter(p => !assigned.has(p.id))
-    if (unassigned.length > 0) {
-      md += `# (No Area)\n\n`
-      md += unassigned.map(p => buildProjectMd(p, mdOpts)).join('\n---\n\n')
-    }
-    downloadMd(md, `report-all-${new Date().toISOString().slice(0, 10)}.md`)
-  }
+  const buildAll = () => renderTemplate(tmpl, projects, renderOpts)
+
+  // ── Export / copy handlers ─────────────────────────────────────────────────
+
+  const exportByProject = () =>
+    downloadMd(buildByProject(selectedProjects), `report-projects-${exportFormat}-${date}.md`)
+  const exportByArea = () =>
+    downloadMd(buildByArea(selectedAreas), `report-by-area-${exportFormat}-${date}.md`)
+  const exportAll = () =>
+    downloadMd(buildAll(), `report-all-${exportFormat}-${date}.md`)
+
+  const copyByProject = () => copyToClipboard(buildByProject(selectedProjects), setClipboardCopied)
+  const copyByArea    = () => copyToClipboard(buildByArea(selectedAreas), setClipboardCopied)
+  const copyAll       = () => copyToClipboard(buildAll(), setClipboardCopied)
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
@@ -238,6 +198,21 @@ export function ReportingExportModal({
         </DialogHeader>
 
         <div className="space-y-6">
+          {/* Format toggle */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Format:</span>
+            <div className="flex rounded-md border overflow-hidden">
+              {(['brief', 'detailed'] as const).map(fmt => (
+                <button key={fmt} type="button"
+                  className={`px-3 py-1 text-xs capitalize ${exportFormat === fmt ? 'bg-foreground text-background' : 'bg-background text-muted-foreground hover:text-foreground'}`}
+                  onClick={() => onExportFormatChange(fmt)}
+                >
+                  {fmt === 'brief' ? 'Brief (one-liner)' : 'Detailed'}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* By Project */}
           <ChecklistSection
             title="By Project"
@@ -246,8 +221,9 @@ export function ReportingExportModal({
             onToggle={id => setSelectedProjects(toggle(selectedProjects, id))}
             onSelectAll={() => setSelectedProjects(new Set(projectItems.map(i => i.id)))}
             onDeselectAll={() => setSelectedProjects(new Set())}
-            onExport={() => exportByProject(selectedProjects)}
+            onExport={exportByProject}
             exportLabel={`Export ${selectedProjects.size} project${selectedProjects.size !== 1 ? 's' : ''}…`}
+            onCopy={copyByProject}
           />
 
           <Separator />
@@ -260,12 +236,14 @@ export function ReportingExportModal({
             onToggle={id => setSelectedAreas(toggle(selectedAreas, id))}
             onSelectAll={() => setSelectedAreas(new Set(areaItems.map(i => i.id)))}
             onDeselectAll={() => setSelectedAreas(new Set())}
-            onExport={() => exportByArea(selectedAreas)}
+            onExport={exportByArea}
             exportLabel={`Export ${selectedAreas.size} area${selectedAreas.size !== 1 ? 's' : ''}…`}
+            onCopy={copyByArea}
           />
         </div>
 
         <DialogFooter className="mt-2">
+          <Button variant="ghost" onClick={copyAll}>{clipboardCopied ? '✓ Copied' : 'Copy All'}</Button>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button onClick={exportAll}>Export All</Button>
         </DialogFooter>

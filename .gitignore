@@ -32,6 +32,7 @@ myworker-app-v*
 .DS_Store
 myworker-app.zip
 storageTesting/
+prior_builds/
 *.suo
 *.ntvs*
 *.njsproj

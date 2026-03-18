@@ -1,5 +1,7 @@
 import { useState, useMemo, useRef, useLayoutEffect } from 'react'
 import type { ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Clock } from 'lucide-react'
 import { useSearch } from '@/contexts/SearchContext'
 import { getAllProjects } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
@@ -13,9 +15,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RAG_ORDER, pillClass, dotClass } from '@/lib/colors'
 import { loadGuiSettings, buttonStyle } from '@/lib/guiSettings'
 import { useDataLoader } from '@/hooks/useDataLoader'
-import { fmtDate } from '@/lib/utils'
+import { fmtDate, isOverdue } from '@/lib/utils'
 
-type SortKey = 'ragStatus' | 'workItem' | 'productArea' | 'priority' | 'latestStatus' | 'projectStatus' | 'openTasks'
+type SortKey = 'staleness' | 'ragStatus' | 'workItem' | 'productArea' | 'priority' | 'latestStatus' | 'projectStatus' | 'openTasks'
 type SortDir = 'asc' | 'desc'
 
 interface PageData {
@@ -56,7 +58,25 @@ function ExpandableText({ children, textKey }: { children: ReactNode; textKey: s
   )
 }
 
+function stalenessColor(days: number): string {
+  if (days < 7)  return 'text-green-600 dark:text-green-400'
+  if (days < 30) return 'text-amber-600 dark:text-amber-500'
+  return 'text-red-600 dark:text-red-400'
+}
+
+function StatCard({ label, value, valueClass = 'text-foreground' }: {
+  label: string; value: number; valueClass?: string
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center bg-accent/40 rounded-lg px-4 py-2 min-w-[72px]">
+      <span className={`text-xl font-bold tabular-nums ${valueClass}`}>{value}</span>
+      <span className="text-[10px] text-muted-foreground uppercase tracking-wide mt-0.5 text-center">{label}</span>
+    </div>
+  )
+}
+
 export default function ReportingView() {
+  const navigate = useNavigate()
   const { query } = useSearch()
   const [sortKey, setSortKey] = useState<SortKey>('ragStatus')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
@@ -67,6 +87,20 @@ export default function ReportingView() {
 
   // Export modal
   const [exportOpen, setExportOpen] = useState(false)
+
+  // Metrics panel
+  const [metricsOpen, setMetricsOpen] = useState(
+    () => localStorage.getItem('myworker:reportingMetricsOpen') !== 'false'
+  )
+  const [exportFormat, setExportFormat] = useState<'brief' | 'detailed'>('detailed')
+
+  const toggleMetrics = () => {
+    setMetricsOpen(v => {
+      const next = !v
+      localStorage.setItem('myworker:reportingMetricsOpen', String(next))
+      return next
+    })
+  }
 
   const { buttonColor, buttonOpacity } = loadGuiSettings()
   const btnStyle = buttonStyle(buttonColor, buttonOpacity)
@@ -125,6 +159,137 @@ export default function ReportingView() {
     return map
   }, [allTasks])
 
+  // ── Metrics (single pass) ────────────────────────────────────────────────────
+
+  const metrics = useMemo(() => {
+    const today = Date.now()
+
+    // Staleness map: projectId → days since last log entry
+    const stalenessMap = new Map<number, number>()
+    for (const entry of allWorkLog) {
+      if (!stalenessMap.has(entry.projectId)) {
+        stalenessMap.set(entry.projectId, Math.floor((today - new Date(entry.createdAt).getTime()) / 86_400_000))
+      }
+    }
+
+    // RAG counts
+    const ragCounts = { Red: 0, Amber: 0, Green: 0 }
+    for (const p of projects) ragCounts[p.ragStatus]++
+
+    // Stale: no log in 14+ days (or no log at all)
+    const staleCount = projects.filter(p => (stalenessMap.get(p.id) ?? Infinity) >= 14).length
+
+    // Overdue tasks
+    const overdueTaskCount = allTasks.filter(t => t.status !== 'done' && isOverdue(t.dueDate)).length
+
+    // Area bars
+    const areaCounts = new Map<number, number>()
+    for (const p of projects) {
+      if (p.productAreaId !== null)
+        areaCounts.set(p.productAreaId, (areaCounts.get(p.productAreaId) ?? 0) + 1)
+    }
+    const noAreaCount = projects.filter(p => p.productAreaId === null).length
+    const maxAreaCount = Math.max(...[...areaCounts.values(), noAreaCount].filter(Boolean), 1)
+    const areaBarData = [
+      ...productAreas
+        .map(a => ({ label: a.label, count: areaCounts.get(a.id) ?? 0, pct: (areaCounts.get(a.id) ?? 0) / maxAreaCount * 100 }))
+        .filter(d => d.count > 0),
+      ...(noAreaCount > 0 ? [{ label: 'No Area', count: noAreaCount, pct: noAreaCount / maxAreaCount * 100 }] : []),
+    ]
+
+    // Attention: stale 14d+, Red first then most stale
+    const attentionProjects = projects
+      .filter(p => (stalenessMap.get(p.id) ?? Infinity) >= 14)
+      .sort((a, b) => {
+        const rd = RAG_ORDER[a.ragStatus] - RAG_ORDER[b.ragStatus]
+        if (rd !== 0) return rd
+        return (stalenessMap.get(b.id) ?? Infinity) - (stalenessMap.get(a.id) ?? Infinity)
+      })
+      .slice(0, 8)
+
+    // ── New widgets ─────────────────────────────────────────────────────────
+
+    // 1. Red × Overdue compound risk
+    const overdueTaskProjectIds = new Set<number>()
+    for (const t of allTasks) {
+      if (t.status !== 'done' && isOverdue(t.dueDate) && t.projectId !== null)
+        overdueTaskProjectIds.add(t.projectId)
+    }
+    const redOverdueProjects = projects.filter(p => p.ragStatus === 'Red' && overdueTaskProjectIds.has(p.id))
+
+    // 3. Priority distribution bar
+    const priorityCounts = new Map<number, number>()
+    for (const p of projects) {
+      if (p.priorityId !== null)
+        priorityCounts.set(p.priorityId, (priorityCounts.get(p.priorityId) ?? 0) + 1)
+    }
+    const noPriorityCount = projects.filter(p => p.priorityId === null).length
+    const maxPriorityCount = Math.max(...[...priorityCounts.values(), noPriorityCount].filter(Boolean), 1)
+    const priorityBarData = [
+      ...priorities
+        .map(pr => ({ label: pr.label, count: priorityCounts.get(pr.id) ?? 0, pct: (priorityCounts.get(pr.id) ?? 0) / maxPriorityCount * 100 }))
+        .filter(d => d.count > 0),
+      ...(noPriorityCount > 0 ? [{ label: 'No Priority', count: noPriorityCount, pct: noPriorityCount / maxPriorityCount * 100 }] : []),
+    ]
+
+    // 4. Most active projects (last 14d)
+    const fourteenDaysAgo = today - 14 * 86_400_000
+    const activityCounts = new Map<number, number>()
+    for (const entry of allWorkLog) {
+      if (new Date(entry.createdAt).getTime() > fourteenDaysAgo)
+        activityCounts.set(entry.projectId, (activityCounts.get(entry.projectId) ?? 0) + 1)
+    }
+    const mostActiveProjects = [...activityCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([id, count]) => ({ project: projects.find(p => p.id === id)!, count }))
+      .filter(x => x.project)
+
+    // 5. RAG health by area
+    const ragByAreaMap = new Map<number, { Red: number; Amber: number; Green: number }>()
+    for (const p of projects) {
+      if (p.productAreaId === null) continue
+      const cur = ragByAreaMap.get(p.productAreaId) ?? { Red: 0, Amber: 0, Green: 0 }
+      cur[p.ragStatus]++
+      ragByAreaMap.set(p.productAreaId, cur)
+    }
+    const ragByAreaData = productAreas
+      .filter(a => ragByAreaMap.has(a.id))
+      .map(a => {
+        const counts = ragByAreaMap.get(a.id)!
+        const total = counts.Red + counts.Amber + counts.Green
+        return { label: a.label, ...counts, total }
+      })
+
+    // 8. Projects with no open tasks
+    const projectsWithOpenTasks = new Set<number>()
+    for (const t of allTasks) {
+      if (t.projectId !== null && t.status !== 'done') projectsWithOpenTasks.add(t.projectId)
+    }
+    const noOpenTasksProjects = projects.filter(p => !projectsWithOpenTasks.has(p.id))
+
+    // 9. Activity pulse (this week vs last week)
+    const sevenDaysAgo = today - 7 * 86_400_000
+    let activityThisWeek = 0
+    let activityLastWeek = 0
+    for (const entry of allWorkLog) {
+      const t = new Date(entry.createdAt).getTime()
+      if (t > sevenDaysAgo) activityThisWeek++
+      else if (t > fourteenDaysAgo) activityLastWeek++
+    }
+
+    // 10. Projects with no due date
+    const noDueDateCount = projects.filter(p => !p.dueDate).length
+
+    return {
+      stalenessMap, ragCounts, staleCount, overdueTaskCount, areaBarData, attentionProjects,
+      redOverdueProjects, priorityBarData, mostActiveProjects,
+      ragByAreaData, noOpenTasksProjects,
+      activityPulse: { thisWeek: activityThisWeek, lastWeek: activityLastWeek },
+      noDueDateCount,
+    }
+  }, [projects, allWorkLog, allTasks, productAreas, priorities])
+
   // ── Filtered + sorted list ───────────────────────────────────────────────────
 
   const sorted = useMemo(() => {
@@ -145,6 +310,7 @@ export default function ReportingView() {
       let av: string | number = ''
       let bv: string | number = ''
       switch (sortKey) {
+        case 'staleness':     av = metrics.stalenessMap.get(a.id) ?? Infinity; bv = metrics.stalenessMap.get(b.id) ?? Infinity; break
         case 'ragStatus':     av = RAG_ORDER[a.ragStatus]; bv = RAG_ORDER[b.ragStatus]; break
         case 'workItem':      av = a.workItem.toLowerCase(); bv = b.workItem.toLowerCase(); break
         case 'productArea':   av = labelFor(productAreas, a.productAreaId).toLowerCase(); bv = labelFor(productAreas, b.productAreaId).toLowerCase(); break
@@ -161,13 +327,19 @@ export default function ReportingView() {
       if (av > bv) return sortDir === 'asc' ? 1 : -1
       return 0
     })
-  }, [projects, sortKey, sortDir, ragFilter, areaFilter, query, priorities, productAreas, projectStatuses, taskCountsByProject])
+  }, [projects, sortKey, sortDir, ragFilter, areaFilter, query, priorities, productAreas, projectStatuses, taskCountsByProject, metrics])
 
   const SortIcon = ({ col }: { col: SortKey }) =>
     <span className="ml-1 opacity-50">{sortKey === col ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span>
 
   const thClass = 'px-3 py-1.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground whitespace-nowrap'
   const filtersActive = ragFilter !== 'All' || areaFilter !== 'All'
+
+  // RAG bar widths
+  const total = projects.length || 1
+  const ragRedPct   = metrics.ragCounts.Red   / total * 100
+  const ragAmberPct = metrics.ragCounts.Amber / total * 100
+  const ragGreenPct = metrics.ragCounts.Green / total * 100
 
   return (
     <div className="flex flex-col h-[calc(100vh-57px)]">
@@ -214,6 +386,9 @@ export default function ReportingView() {
         )}
 
         <div className="ml-auto flex items-center gap-2">
+          <button onClick={toggleMetrics} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+            {metricsOpen ? '⌃ Hide insights' : '⌄ Show insights'}
+          </button>
           <Button variant="outline" size="sm" className="h-8 text-xs" style={btnStyle} onClick={() => setExportOpen(true)}>
             Export…
           </Button>
@@ -226,11 +401,232 @@ export default function ReportingView() {
         </div>
       </div>
 
+      {/* ── Metrics Panel ────────────────────────────────────────────────── */}
+      {metricsOpen && (
+        <div className="shrink-0 max-h-[44vh] overflow-auto border-b-2 border-b-border/60 px-6 py-4 space-y-4 bg-accent/10">
+
+          {/* Row 1 — Stat cards + distribution charts */}
+          <div className="flex gap-6 flex-wrap items-start">
+            {/* Stat cards */}
+            <div className="flex gap-3 flex-wrap">
+              <StatCard label="Projects" value={projects.length} />
+              <StatCard label="Red" value={metrics.ragCounts.Red} valueClass="text-red-600" />
+              <StatCard label="Amber" value={metrics.ragCounts.Amber} valueClass="text-amber-600" />
+              <StatCard label="Green" value={metrics.ragCounts.Green} valueClass="text-green-600" />
+              <StatCard label="Stale 14d+" value={metrics.staleCount} valueClass={metrics.staleCount > 0 ? 'text-amber-600' : 'text-muted-foreground'} />
+              <StatCard label="Overdue tasks" value={metrics.overdueTaskCount} valueClass={metrics.overdueTaskCount > 0 ? 'text-red-600' : 'text-muted-foreground'} />
+              <StatCard label="No due date" value={metrics.noDueDateCount} valueClass="text-muted-foreground" />
+            </div>
+
+            {/* Divider */}
+            <div className="self-stretch w-px bg-border" />
+
+            {/* Distribution charts */}
+            <div className="flex gap-8 flex-wrap items-start">
+              {/* RAG bar */}
+              {projects.length > 0 && (
+                <div className="space-y-1 min-w-[160px]">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold">RAG distribution</p>
+                  <div className="flex h-3 rounded overflow-hidden w-48">
+                    {ragRedPct   > 0 && <div className="bg-red-500"   style={{ width: `${ragRedPct}%` }} />}
+                    {ragAmberPct > 0 && <div className="bg-amber-400" style={{ width: `${ragAmberPct}%` }} />}
+                    {ragGreenPct > 0 && <div className="bg-green-500" style={{ width: `${ragGreenPct}%` }} />}
+                  </div>
+                  <div className="flex gap-3 text-[10px] text-muted-foreground">
+                    {metrics.ragCounts.Red   > 0 && <span className="text-red-600">{metrics.ragCounts.Red} Red</span>}
+                    {metrics.ragCounts.Amber > 0 && <span className="text-amber-600">{metrics.ragCounts.Amber} Amber</span>}
+                    {metrics.ragCounts.Green > 0 && <span className="text-green-600">{metrics.ragCounts.Green} Green</span>}
+                  </div>
+                </div>
+              )}
+
+              {/* Area bars */}
+              {metrics.areaBarData.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold">By area</p>
+                  <div className="space-y-1">
+                    {metrics.areaBarData.map(d => (
+                      <div key={d.label} className="flex items-center gap-2">
+                        <span className="text-[10px] text-muted-foreground w-24 truncate">{d.label}</span>
+                        <div className="h-2 rounded bg-blue-500/70" style={{ width: `${Math.max(d.pct, 4)}%`, minWidth: '4px', maxWidth: '120px' }} />
+                        <span className="text-[10px] text-muted-foreground tabular-nums">{d.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Priority distribution bars */}
+              {metrics.priorityBarData.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold">By priority</p>
+                  <div className="space-y-1">
+                    {metrics.priorityBarData.map(d => (
+                      <div key={d.label} className="flex items-center gap-2">
+                        <span className="text-[10px] text-muted-foreground w-24 truncate">{d.label}</span>
+                        <div className="h-2 rounded bg-violet-500/70" style={{ width: `${Math.max(d.pct, 4)}%`, minWidth: '4px', maxWidth: '120px' }} />
+                        <span className="text-[10px] text-muted-foreground tabular-nums">{d.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* RAG health by area */}
+              {metrics.ragByAreaData.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold">RAG by area</p>
+                  <div className="space-y-1">
+                    {metrics.ragByAreaData.map(d => (
+                      <div key={d.label} className="flex items-center gap-2">
+                        <span className="text-[10px] text-muted-foreground w-24 truncate">{d.label}</span>
+                        <div className="flex h-2 rounded overflow-hidden w-20">
+                          {d.Red   > 0 && <div className="bg-red-500"   style={{ width: `${d.Red   / d.total * 100}%` }} />}
+                          {d.Amber > 0 && <div className="bg-amber-400" style={{ width: `${d.Amber / d.total * 100}%` }} />}
+                          {d.Green > 0 && <div className="bg-green-500" style={{ width: `${d.Green / d.total * 100}%` }} />}
+                        </div>
+                        <span className="text-[10px] text-muted-foreground tabular-nums">{d.total}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Row 3 — Risk signals */}
+          <div className="flex gap-0 flex-wrap items-start divide-x divide-border">
+
+            {/* Red × Overdue compound risk */}
+            {metrics.redOverdueProjects.length > 0 && (
+              <div
+                className="space-y-1 cursor-pointer group pr-6"
+                onClick={() => setRagFilter('Red')}
+                title="Click to filter table to Red projects"
+              >
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold">Red + overdue tasks</p>
+                <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-1.5 group-hover:bg-red-500/20 transition-colors">
+                  <span className="text-red-600 font-bold text-base tabular-nums">{metrics.redOverdueProjects.length}</span>
+                  <span className="text-[11px] text-red-700 dark:text-red-400">
+                    Red project{metrics.redOverdueProjects.length !== 1 ? 's' : ''} with overdue tasks
+                  </span>
+                </div>
+                <div className="flex gap-1 flex-wrap mt-0.5">
+                  {metrics.redOverdueProjects.map(p => (
+                    <button
+                      key={p.id}
+                      onClick={e => { e.stopPropagation(); navigate(`/projects/${p.id}`) }}
+                      className="text-[10px] text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-full px-2 py-0.5 hover:bg-red-500/20 transition-colors"
+                    >
+                      {p.workItem}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Most active projects */}
+            {metrics.mostActiveProjects.length > 0 && (
+              <div className="space-y-1 px-6">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold">Most active (14d)</p>
+                <div className="space-y-1">
+                  {metrics.mostActiveProjects.map(({ project: p, count }) => (
+                    <div key={p.id} className="flex items-center gap-2">
+                      <button
+                        onClick={() => navigate(`/projects/${p.id}`)}
+                        className="text-[10px] text-muted-foreground hover:text-foreground transition-colors w-32 truncate text-left"
+                        title={p.workItem}
+                      >
+                        {p.workItem}
+                      </button>
+                      <div className="h-2 rounded bg-emerald-500/70" style={{ width: `${count / (metrics.mostActiveProjects[0]?.count || 1) * 80}px`, minWidth: '4px' }} />
+                      <span className="text-[10px] text-muted-foreground tabular-nums">{count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Activity pulse */}
+            <div className="space-y-1 px-6">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold">Activity pulse</p>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-base font-bold tabular-nums">{metrics.activityPulse.thisWeek}</span>
+                <span className="text-[10px] text-muted-foreground">log entries this week</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-muted-foreground tabular-nums">{metrics.activityPulse.lastWeek} last week</span>
+                {metrics.activityPulse.thisWeek > metrics.activityPulse.lastWeek && (
+                  <span className="text-[10px] text-green-600">↑</span>
+                )}
+                {metrics.activityPulse.thisWeek < metrics.activityPulse.lastWeek && (
+                  <span className="text-[10px] text-amber-600">↓</span>
+                )}
+                {metrics.activityPulse.thisWeek === metrics.activityPulse.lastWeek && metrics.activityPulse.thisWeek > 0 && (
+                  <span className="text-[10px] text-muted-foreground">→</span>
+                )}
+              </div>
+            </div>
+
+            {/* Projects with no open tasks */}
+            {metrics.noOpenTasksProjects.length > 0 && (
+              <div className="space-y-1 pl-6">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold">No open tasks</p>
+                <p className="text-base font-bold tabular-nums">{metrics.noOpenTasksProjects.length}</p>
+                <p className="text-[10px] text-muted-foreground">project{metrics.noOpenTasksProjects.length !== 1 ? 's' : ''} with no tracked work</p>
+                <div className="flex gap-1 flex-wrap max-w-[200px]">
+                  {metrics.noOpenTasksProjects.slice(0, 4).map(p => (
+                    <button
+                      key={p.id}
+                      onClick={() => navigate(`/projects/${p.id}`)}
+                      className="text-[10px] text-muted-foreground bg-accent/60 border rounded-full px-2 py-0.5 hover:bg-accent transition-colors truncate max-w-[96px]"
+                      title={p.workItem}
+                    >
+                      {p.workItem}
+                    </button>
+                  ))}
+                  {metrics.noOpenTasksProjects.length > 4 && (
+                    <span className="text-[10px] text-muted-foreground/60 py-0.5">+{metrics.noOpenTasksProjects.length - 4}</span>
+                  )}
+                </div>
+              </div>
+            )}
+
+          </div>
+
+          {/* Row 4 — Attention list */}
+          {metrics.attentionProjects.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold">Needs attention (stale 14d+)</p>
+              <div className="flex gap-2 flex-wrap">
+                {metrics.attentionProjects.map(p => {
+                  const days = metrics.stalenessMap.get(p.id)
+                  const ragDot = p.ragStatus === 'Red' ? '🔴' : p.ragStatus === 'Amber' ? '🟡' : '🟢'
+                  const ageLabel = days === undefined ? 'no log' : `${days}d ago`
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => navigate(`/projects/${p.id}`)}
+                      className="inline-flex items-center gap-1 text-[11px] bg-accent/60 border rounded-full px-2.5 py-0.5 hover:bg-accent hover:border-foreground/20 transition-colors cursor-pointer"
+                    >
+                      <span>{ragDot}</span>
+                      <span className="font-medium">{p.workItem}</span>
+                      <span className="text-muted-foreground">· {ageLabel}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Table ───────────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 min-h-0 overflow-auto">
         <table className="w-full text-sm">
           <thead className="sticky top-0 bg-background border-b z-10">
             <tr>
+              <th className={thClass} onClick={() => handleSort('staleness')} title="Days since last work log entry"><Clock className="inline w-3.5 h-3.5 mb-0.5" /><SortIcon col="staleness" /></th>
               <th className={thClass} onClick={() => handleSort('ragStatus')}>RAG<SortIcon col="ragStatus" /></th>
               <th className={thClass} onClick={() => handleSort('workItem')}>Work Item<SortIcon col="workItem" /></th>
               <th className={thClass} onClick={() => handleSort('productArea')}>Product Area<SortIcon col="productArea" /></th>
@@ -244,7 +640,7 @@ export default function ReportingView() {
           <tbody className="divide-y divide-border">
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">
+                <td colSpan={9} className="px-4 py-12 text-center text-muted-foreground">
                   No projects found.
                 </td>
               </tr>
@@ -255,8 +651,22 @@ export default function ReportingView() {
               const counts      = taskCountsByProject.get(p.id)
               const latestLog   = latestLogByProject.get(p.id)
 
+              const staleDays = metrics.stalenessMap.get(p.id)
+
               return (
                 <tr key={p.id} className="hover:bg-accent/50">
+                  {/* Staleness */}
+                  <td className="w-px px-3 py-1 whitespace-nowrap text-center">
+                    {staleDays !== undefined ? (
+                      <span className={`text-xs font-medium tabular-nums ${stalenessColor(staleDays)}`}
+                            title={`Last log: ${staleDays}d ago`}>
+                        {staleDays}d
+                      </span>
+                    ) : (
+                      <Clock className="inline w-3.5 h-3.5 text-red-500" title="No log entries" />
+                    )}
+                  </td>
+
                   {/* RAG */}
                   <td className="px-3 py-1"><RagBadge status={p.ragStatus} /></td>
 
@@ -279,7 +689,7 @@ export default function ReportingView() {
                   </td>
 
                   {/* Project Status */}
-                  <td className="px-3 py-1">
+                  <td className="w-px px-3 py-1 whitespace-nowrap">
                     {statusOpt ? (
                       <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${pillClass(statusOpt.color)}`}>
                         {statusOpt.color && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass(statusOpt.color)}`} />}
@@ -316,7 +726,7 @@ export default function ReportingView() {
                     {latestLog ? (
                       <ExpandableText textKey={latestLog.note}>
                         <span className="text-xs text-muted-foreground">
-                          <span className="text-foreground/60 font-medium mr-1.5 shrink-0">
+                          <span className={`font-medium mr-1.5 shrink-0 ${stalenessColor(metrics.stalenessMap.get(p.id) ?? Infinity)}`}>
                             {fmtDate(latestLog.createdAt.slice(0, 10))}
                           </span>
                           <span>{latestLog.note}</span>
@@ -343,6 +753,8 @@ export default function ReportingView() {
         projectStatuses={projectStatuses}
         allTasks={allTasks}
         allWorkLog={allWorkLog}
+        exportFormat={exportFormat}
+        onExportFormatChange={setExportFormat}
       />
     </div>
   )
