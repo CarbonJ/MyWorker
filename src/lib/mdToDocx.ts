@@ -9,7 +9,6 @@ import {
   HeadingLevel,
   WidthType,
   BorderStyle,
-  AlignmentType,
 } from 'docx'
 
 // ── Block node types ──────────────────────────────────────────────────────────

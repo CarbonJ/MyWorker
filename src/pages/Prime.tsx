@@ -627,10 +627,11 @@ export default function Prime() {
   function LeftPane() {
     const SortInd = ({ col }: { col: ProjectSortKey }) => {
       const idx = projectSorts.findIndex(s => s.key === col)
-      if (idx === -1) return null
+      if (idx === -1) return <span className="ml-1 opacity-30">↕</span>
+      const { dir } = projectSorts[idx]
       return (
-        <span className="ml-1 opacity-50">
-          {projectSorts.length > 1 ? idx + 1 : ''}{projectSorts[idx].dir === 'asc' ? '↑' : '↓'}
+        <span className={`ml-1 ${dir === 'asc' ? 'text-blue-700 dark:text-blue-400' : 'text-green-700 dark:text-green-500'}`}>
+          {projectSorts.length > 1 ? <sup className="text-[9px] mr-px">{idx + 1}</sup> : null}{dir === 'asc' ? '↑' : '↓'}
         </span>
       )
     }
@@ -939,10 +940,11 @@ export default function Prime() {
   function RightPane() {
     const GenSortInd = ({ col }: { col: GeneralSortKey }) => {
       const idx = generalSorts.findIndex(s => s.key === col)
-      if (idx === -1) return null
+      if (idx === -1) return <span className="opacity-30">↕</span>
+      const { dir } = generalSorts[idx]
       return (
-        <span className="opacity-50">
-          {generalSorts.length > 1 ? idx + 1 : ''}{generalSorts[idx].dir === 'asc' ? '↑' : '↓'}
+        <span className={dir === 'asc' ? 'text-blue-700 dark:text-blue-400' : 'text-green-700 dark:text-green-500'}>
+          {generalSorts.length > 1 ? <sup className="text-[9px] mr-px">{idx + 1}</sup> : null}{dir === 'asc' ? '↑' : '↓'}
         </span>
       )
     }

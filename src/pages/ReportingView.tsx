@@ -11,14 +11,14 @@ import type { Project, DropdownOption, RagStatus, Task, WorkLogEntry } from '@/t
 import { RagBadge } from '@/components/RagBadge'
 import { ReportingExportModal } from '@/components/ReportingExportModal'
 import { Button } from '@/components/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { MultiSelectFilter } from '@/components/ui/MultiSelectFilter'
 import { RAG_ORDER, pillClass, dotClass } from '@/lib/colors'
 import { loadGuiSettings, buttonStyle } from '@/lib/guiSettings'
 import { useDataLoader } from '@/hooks/useDataLoader'
 import { fmtDate, isOverdue } from '@/lib/utils'
 
 type SortKey = 'staleness' | 'ragStatus' | 'workItem' | 'productArea' | 'priority' | 'latestStatus' | 'projectStatus' | 'openTasks'
-type SortDir = 'asc' | 'desc'
+type SortEntry = { key: SortKey; dir: 'asc' | 'desc' }
 
 interface PageData {
   projects: Project[]
@@ -58,6 +58,12 @@ function ExpandableText({ children, textKey }: { children: ReactNode; textKey: s
   )
 }
 
+const RAG_FILTER_OPTIONS: { value: RagStatus; label: string; dotColor: string }[] = [
+  { value: 'Green', label: 'Green', dotColor: 'bg-green-500' },
+  { value: 'Amber', label: 'Amber', dotColor: 'bg-amber-400' },
+  { value: 'Red',   label: 'Red',   dotColor: 'bg-red-500' },
+]
+
 function stalenessColor(days: number): string {
   if (days < 7)  return 'text-green-600 dark:text-green-400'
   if (days < 30) return 'text-amber-600 dark:text-amber-500'
@@ -78,12 +84,16 @@ function StatCard({ label, value, valueClass = 'text-foreground' }: {
 export default function ReportingView() {
   const navigate = useNavigate()
   const { query } = useSearch()
-  const [sortKey, setSortKey] = useState<SortKey>('ragStatus')
-  const [sortDir, setSortDir] = useState<SortDir>('asc')
+  const [sorts, setSorts] = useState<SortEntry[]>(() => {
+    try { return JSON.parse(localStorage.getItem('myworker:reporting-sorts') ?? 'null') ?? [{ key: 'ragStatus', dir: 'asc' }] }
+    catch { return [{ key: 'ragStatus', dir: 'asc' }] }
+  })
 
-  // Filters
-  const [ragFilter,  setRagFilter]  = useState<RagStatus | 'All'>('All')
-  const [areaFilter, setAreaFilter] = useState<string>('All')
+  // Filters (empty array = All)
+  const [ragFilters,      setRagFilters]      = useState<RagStatus[]>([])
+  const [areaFilters,     setAreaFilters]     = useState<string[]>([])
+  const [statusFilters,   setStatusFilters]   = useState<string[]>([])
+  const [filterInsights,  setFilterInsights]  = useState(false)
 
   // Export modal
   const [exportOpen, setExportOpen] = useState(false)
@@ -131,8 +141,16 @@ export default function ReportingView() {
     opts.find(o => o.id === id)?.label ?? '—'
 
   const handleSort = (key: SortKey) => {
-    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setSortKey(key); setSortDir('asc') }
+    setSorts(prev => {
+      const next = (() => {
+        const existing = prev.find(s => s.key === key)
+        if (!existing) return [...prev, { key, dir: 'asc' as const }]
+        if (existing.dir === 'asc') return prev.map(s => s.key === key ? { ...s, dir: 'desc' as const } : s)
+        return prev.filter(s => s.key !== key)
+      })()
+      localStorage.setItem('myworker:reporting-sorts', JSON.stringify(next))
+      return next
+    })
   }
 
   // ── Derived lookups ──────────────────────────────────────────────────────────
@@ -159,36 +177,89 @@ export default function ReportingView() {
     return map
   }, [allTasks])
 
+  // ── Staleness map (independent of project filtering) ─────────────────────────
+
+  const stalenessMap = useMemo(() => {
+    const today = Date.now()
+    const map = new Map<number, number>()
+    for (const entry of allWorkLog) {
+      if (!map.has(entry.projectId)) {
+        map.set(entry.projectId, Math.max(0, Math.floor((today - new Date(entry.createdAt).getTime()) / 86_400_000)))
+      }
+    }
+    return map
+  }, [allWorkLog])
+
+  // ── Filtered + sorted list ───────────────────────────────────────────────────
+
+  const sorted = useMemo(() => {
+    let list = [...projects]
+
+    if (ragFilters.length > 0)    list = list.filter(p => ragFilters.includes(p.ragStatus))
+    if (areaFilters.length > 0)   list = list.filter(p => areaFilters.includes(String(p.productAreaId ?? '')))
+    if (statusFilters.length > 0) list = list.filter(p => statusFilters.includes(String(p.statusId ?? '')))
+
+    if (query.trim()) {
+      const q = query.trim().toLowerCase()
+      list = list.filter(p =>
+        p.workItem.toLowerCase().includes(q) ||
+        p.latestStatus.toLowerCase().includes(q)
+      )
+    }
+
+    return list.sort((a, b) => {
+      for (const { key, dir } of sorts) {
+        let av: string | number = ''
+        let bv: string | number = ''
+        switch (key) {
+          case 'staleness':     av = stalenessMap.get(a.id) ?? Infinity; bv = stalenessMap.get(b.id) ?? Infinity; break
+          case 'ragStatus':     av = RAG_ORDER[a.ragStatus]; bv = RAG_ORDER[b.ragStatus]; break
+          case 'workItem':      av = a.workItem.toLowerCase(); bv = b.workItem.toLowerCase(); break
+          case 'productArea':   av = labelFor(productAreas, a.productAreaId).toLowerCase(); bv = labelFor(productAreas, b.productAreaId).toLowerCase(); break
+          case 'priority':      av = labelFor(priorities, a.priorityId).toLowerCase(); bv = labelFor(priorities, b.priorityId).toLowerCase(); break
+          case 'latestStatus':  av = a.latestStatus.toLowerCase(); bv = b.latestStatus.toLowerCase(); break
+          case 'projectStatus': av = labelFor(projectStatuses, a.statusId).toLowerCase(); bv = labelFor(projectStatuses, b.statusId).toLowerCase(); break
+          case 'openTasks': {
+            const ac = taskCountsByProject.get(a.id); av = ac ? ac.open + ac.inProgress : 0
+            const bc = taskCountsByProject.get(b.id); bv = bc ? bc.open + bc.inProgress : 0
+            break
+          }
+        }
+        if (av < bv) return dir === 'asc' ? -1 : 1
+        if (av > bv) return dir === 'asc' ? 1 : -1
+      }
+      return 0
+    })
+  }, [projects, sorts, ragFilters, areaFilters, statusFilters, query, priorities, productAreas, projectStatuses, taskCountsByProject, stalenessMap])
+
   // ── Metrics (single pass) ────────────────────────────────────────────────────
 
   const metrics = useMemo(() => {
     const today = Date.now()
 
-    // Staleness map: projectId → days since last log entry
-    const stalenessMap = new Map<number, number>()
-    for (const entry of allWorkLog) {
-      if (!stalenessMap.has(entry.projectId)) {
-        stalenessMap.set(entry.projectId, Math.floor((today - new Date(entry.createdAt).getTime()) / 86_400_000))
-      }
-    }
+    // When filterInsights is on, scope all metrics to the filtered project set
+    const ps = filterInsights ? sorted : projects
+    const projectIds = filterInsights ? new Set(ps.map(p => p.id)) : null
+    const scopedTasks   = projectIds ? allTasks.filter(t => t.projectId !== null && projectIds.has(t.projectId!)) : allTasks
+    const scopedWorkLog = projectIds ? allWorkLog.filter(e => projectIds.has(e.projectId)) : allWorkLog
 
     // RAG counts
     const ragCounts = { Red: 0, Amber: 0, Green: 0 }
-    for (const p of projects) ragCounts[p.ragStatus]++
+    for (const p of ps) ragCounts[p.ragStatus]++
 
     // Stale: no log in 14+ days (or no log at all)
-    const staleCount = projects.filter(p => (stalenessMap.get(p.id) ?? Infinity) >= 14).length
+    const staleCount = ps.filter(p => (stalenessMap.get(p.id) ?? Infinity) >= 14).length
 
     // Overdue tasks
-    const overdueTaskCount = allTasks.filter(t => t.status !== 'done' && isOverdue(t.dueDate)).length
+    const overdueTaskCount = scopedTasks.filter(t => t.status !== 'done' && isOverdue(t.dueDate)).length
 
     // Area bars
     const areaCounts = new Map<number, number>()
-    for (const p of projects) {
+    for (const p of ps) {
       if (p.productAreaId !== null)
         areaCounts.set(p.productAreaId, (areaCounts.get(p.productAreaId) ?? 0) + 1)
     }
-    const noAreaCount = projects.filter(p => p.productAreaId === null).length
+    const noAreaCount = ps.filter(p => p.productAreaId === null).length
     const maxAreaCount = Math.max(...[...areaCounts.values(), noAreaCount].filter(Boolean), 1)
     const areaBarData = [
       ...productAreas
@@ -198,7 +269,7 @@ export default function ReportingView() {
     ]
 
     // Attention: stale 14d+, Red first then most stale
-    const attentionProjects = projects
+    const attentionProjects = ps
       .filter(p => (stalenessMap.get(p.id) ?? Infinity) >= 14)
       .sort((a, b) => {
         const rd = RAG_ORDER[a.ragStatus] - RAG_ORDER[b.ragStatus]
@@ -207,23 +278,21 @@ export default function ReportingView() {
       })
       .slice(0, 8)
 
-    // ── New widgets ─────────────────────────────────────────────────────────
-
     // 1. Red × Overdue compound risk
     const overdueTaskProjectIds = new Set<number>()
-    for (const t of allTasks) {
+    for (const t of scopedTasks) {
       if (t.status !== 'done' && isOverdue(t.dueDate) && t.projectId !== null)
         overdueTaskProjectIds.add(t.projectId)
     }
-    const redOverdueProjects = projects.filter(p => p.ragStatus === 'Red' && overdueTaskProjectIds.has(p.id))
+    const redOverdueProjects = ps.filter(p => p.ragStatus === 'Red' && overdueTaskProjectIds.has(p.id))
 
     // 3. Priority distribution bar
     const priorityCounts = new Map<number, number>()
-    for (const p of projects) {
+    for (const p of ps) {
       if (p.priorityId !== null)
         priorityCounts.set(p.priorityId, (priorityCounts.get(p.priorityId) ?? 0) + 1)
     }
-    const noPriorityCount = projects.filter(p => p.priorityId === null).length
+    const noPriorityCount = ps.filter(p => p.priorityId === null).length
     const maxPriorityCount = Math.max(...[...priorityCounts.values(), noPriorityCount].filter(Boolean), 1)
     const priorityBarData = [
       ...priorities
@@ -235,19 +304,19 @@ export default function ReportingView() {
     // 4. Most active projects (last 14d)
     const fourteenDaysAgo = today - 14 * 86_400_000
     const activityCounts = new Map<number, number>()
-    for (const entry of allWorkLog) {
+    for (const entry of scopedWorkLog) {
       if (new Date(entry.createdAt).getTime() > fourteenDaysAgo)
         activityCounts.set(entry.projectId, (activityCounts.get(entry.projectId) ?? 0) + 1)
     }
     const mostActiveProjects = [...activityCounts.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
-      .map(([id, count]) => ({ project: projects.find(p => p.id === id)!, count }))
+      .map(([id, count]) => ({ project: ps.find(p => p.id === id)!, count }))
       .filter(x => x.project)
 
     // 5. RAG health by area
     const ragByAreaMap = new Map<number, { Red: number; Amber: number; Green: number }>()
-    for (const p of projects) {
+    for (const p of ps) {
       if (p.productAreaId === null) continue
       const cur = ragByAreaMap.get(p.productAreaId) ?? { Red: 0, Amber: 0, Green: 0 }
       cur[p.ragStatus]++
@@ -263,80 +332,49 @@ export default function ReportingView() {
 
     // 8. Projects with no open tasks
     const projectsWithOpenTasks = new Set<number>()
-    for (const t of allTasks) {
+    for (const t of scopedTasks) {
       if (t.projectId !== null && t.status !== 'done') projectsWithOpenTasks.add(t.projectId)
     }
-    const noOpenTasksProjects = projects.filter(p => !projectsWithOpenTasks.has(p.id))
+    const noOpenTasksProjects = ps.filter(p => !projectsWithOpenTasks.has(p.id))
 
     // 9. Activity pulse (this week vs last week)
     const sevenDaysAgo = today - 7 * 86_400_000
     let activityThisWeek = 0
     let activityLastWeek = 0
-    for (const entry of allWorkLog) {
+    for (const entry of scopedWorkLog) {
       const t = new Date(entry.createdAt).getTime()
       if (t > sevenDaysAgo) activityThisWeek++
       else if (t > fourteenDaysAgo) activityLastWeek++
     }
 
     // 10. Projects with no due date
-    const noDueDateCount = projects.filter(p => !p.dueDate).length
+    const noDueDateCount = ps.filter(p => !p.dueDate).length
 
     return {
-      stalenessMap, ragCounts, staleCount, overdueTaskCount, areaBarData, attentionProjects,
+      ragCounts, staleCount, overdueTaskCount, areaBarData, attentionProjects,
       redOverdueProjects, priorityBarData, mostActiveProjects,
       ragByAreaData, noOpenTasksProjects,
       activityPulse: { thisWeek: activityThisWeek, lastWeek: activityLastWeek },
       noDueDateCount,
     }
-  }, [projects, allWorkLog, allTasks, productAreas, priorities])
+  }, [projects, sorted, filterInsights, allWorkLog, allTasks, productAreas, priorities, stalenessMap])
 
-  // ── Filtered + sorted list ───────────────────────────────────────────────────
-
-  const sorted = useMemo(() => {
-    let list = [...projects]
-
-    if (ragFilter !== 'All') list = list.filter(p => p.ragStatus === ragFilter)
-    if (areaFilter !== 'All') list = list.filter(p => String(p.productAreaId ?? '') === areaFilter)
-
-    if (query.trim()) {
-      const q = query.trim().toLowerCase()
-      list = list.filter(p =>
-        p.workItem.toLowerCase().includes(q) ||
-        p.latestStatus.toLowerCase().includes(q)
-      )
-    }
-
-    return list.sort((a, b) => {
-      let av: string | number = ''
-      let bv: string | number = ''
-      switch (sortKey) {
-        case 'staleness':     av = metrics.stalenessMap.get(a.id) ?? Infinity; bv = metrics.stalenessMap.get(b.id) ?? Infinity; break
-        case 'ragStatus':     av = RAG_ORDER[a.ragStatus]; bv = RAG_ORDER[b.ragStatus]; break
-        case 'workItem':      av = a.workItem.toLowerCase(); bv = b.workItem.toLowerCase(); break
-        case 'productArea':   av = labelFor(productAreas, a.productAreaId).toLowerCase(); bv = labelFor(productAreas, b.productAreaId).toLowerCase(); break
-        case 'priority':      av = labelFor(priorities, a.priorityId).toLowerCase(); bv = labelFor(priorities, b.priorityId).toLowerCase(); break
-        case 'latestStatus':  av = a.latestStatus.toLowerCase(); bv = b.latestStatus.toLowerCase(); break
-        case 'projectStatus': av = labelFor(projectStatuses, a.statusId).toLowerCase(); bv = labelFor(projectStatuses, b.statusId).toLowerCase(); break
-        case 'openTasks': {
-          const ac = taskCountsByProject.get(a.id); av = ac ? ac.open + ac.inProgress : 0
-          const bc = taskCountsByProject.get(b.id); bv = bc ? bc.open + bc.inProgress : 0
-          break
-        }
-      }
-      if (av < bv) return sortDir === 'asc' ? -1 : 1
-      if (av > bv) return sortDir === 'asc' ? 1 : -1
-      return 0
-    })
-  }, [projects, sortKey, sortDir, ragFilter, areaFilter, query, priorities, productAreas, projectStatuses, taskCountsByProject, metrics])
-
-  const SortIcon = ({ col }: { col: SortKey }) =>
-    <span className="ml-1 opacity-50">{sortKey === col ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span>
+  const SortIcon = ({ col }: { col: SortKey }) => {
+    const idx = sorts.findIndex(s => s.key === col)
+    if (idx === -1) return <span className="ml-1 opacity-30">↕</span>
+    const { dir } = sorts[idx]
+    return (
+      <span className={`ml-1 ${dir === 'asc' ? 'text-blue-700 dark:text-blue-400' : 'text-green-700 dark:text-green-500'}`}>
+        {sorts.length > 1 ? <sup className="text-[9px] mr-px">{idx + 1}</sup> : null}{dir === 'asc' ? '↑' : '↓'}
+      </span>
+    )
+  }
 
   const thClass = 'px-3 py-1.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground whitespace-nowrap'
-  const filtersActive = ragFilter !== 'All' || areaFilter !== 'All'
+  const filtersActive = ragFilters.length > 0 || areaFilters.length > 0 || statusFilters.length > 0
 
-  // RAG bar widths
-  const total = projects.length || 1
+  // RAG bar widths (derived from metrics so they reflect filterInsights scoping)
+  const total = (metrics.ragCounts.Red + metrics.ragCounts.Amber + metrics.ragCounts.Green) || 1
   const ragRedPct   = metrics.ragCounts.Red   / total * 100
   const ragAmberPct = metrics.ragCounts.Amber / total * 100
   const ragGreenPct = metrics.ragCounts.Green / total * 100
@@ -352,26 +390,39 @@ export default function ReportingView() {
         </div>
 
         {/* RAG filter */}
-        <Select value={ragFilter} onValueChange={v => setRagFilter(v as RagStatus | 'All')}>
-          <SelectTrigger className="h-8 text-xs w-32"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="All">All RAG</SelectItem>
-            <SelectItem value="Red">Red</SelectItem>
-            <SelectItem value="Amber">Amber</SelectItem>
-            <SelectItem value="Green">Green</SelectItem>
-          </SelectContent>
-        </Select>
+        <MultiSelectFilter
+          options={RAG_FILTER_OPTIONS.map(o => ({
+            value: o.value,
+            label: o.label,
+            prefix: <span className={`w-2 h-2 rounded-full shrink-0 ${o.dotColor}`} />,
+          }))}
+          value={ragFilters}
+          onChange={v => setRagFilters(v as RagStatus[])}
+          placeholder="All RAG"
+          width="w-32"
+        />
 
         {/* Product Area filter */}
-        <Select value={areaFilter} onValueChange={setAreaFilter}>
-          <SelectTrigger className="h-8 text-xs w-40"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="All">All Areas</SelectItem>
-            {productAreas.map(a => (
-              <SelectItem key={a.id} value={String(a.id)}>{a.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <MultiSelectFilter
+          options={productAreas.map(a => ({ value: String(a.id), label: a.label }))}
+          value={areaFilters}
+          onChange={setAreaFilters}
+          placeholder="All Areas"
+          width="w-40"
+        />
+
+        {/* Status filter */}
+        <MultiSelectFilter
+          options={projectStatuses.map(s => ({
+            value: String(s.id),
+            label: s.label,
+            prefix: s.color ? <span className={`w-2 h-2 rounded-full shrink-0 ${dotClass(s.color)}`} /> : undefined,
+          }))}
+          value={statusFilters}
+          onChange={setStatusFilters}
+          placeholder="All Statuses"
+          width="w-40"
+        />
 
         {/* Reset filters */}
         {filtersActive && (
@@ -379,7 +430,7 @@ export default function ReportingView() {
             variant="ghost"
             size="sm"
             className="h-8 text-xs text-muted-foreground hover:text-foreground"
-            onClick={() => { setRagFilter('All'); setAreaFilter('All') }}
+            onClick={() => { setRagFilters([]); setAreaFilters([]); setStatusFilters([]) }}
           >
             ✕ Reset filters
           </Button>
@@ -389,6 +440,15 @@ export default function ReportingView() {
           <button onClick={toggleMetrics} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
             {metricsOpen ? '⌃ Hide insights' : '⌄ Show insights'}
           </button>
+          <label className="flex items-center gap-1.5 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              className="h-3.5 w-3.5 accent-primary cursor-pointer"
+              checked={filterInsights}
+              onChange={e => setFilterInsights(e.target.checked)}
+            />
+            <span className="text-xs text-muted-foreground">Filter insights</span>
+          </label>
           <Button variant="outline" size="sm" className="h-8 text-xs" style={btnStyle} onClick={() => setExportOpen(true)}>
             Export…
           </Button>
@@ -600,7 +660,7 @@ export default function ReportingView() {
               <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold">Needs attention (stale 14d+)</p>
               <div className="flex gap-2 flex-wrap">
                 {metrics.attentionProjects.map(p => {
-                  const days = metrics.stalenessMap.get(p.id)
+                  const days = stalenessMap.get(p.id)
                   const ragDot = p.ragStatus === 'Red' ? '🔴' : p.ragStatus === 'Amber' ? '🟡' : '🟢'
                   const ageLabel = days === undefined ? 'no log' : `${days}d ago`
                   return (
@@ -651,7 +711,7 @@ export default function ReportingView() {
               const counts      = taskCountsByProject.get(p.id)
               const latestLog   = latestLogByProject.get(p.id)
 
-              const staleDays = metrics.stalenessMap.get(p.id)
+              const staleDays = stalenessMap.get(p.id)
 
               return (
                 <tr key={p.id} className="hover:bg-accent/50">
@@ -663,7 +723,7 @@ export default function ReportingView() {
                         {staleDays}d
                       </span>
                     ) : (
-                      <Clock className="inline w-3.5 h-3.5 text-red-500" title="No log entries" />
+                      <span title="No log entries"><Clock className="inline w-3.5 h-3.5 text-red-500" /></span>
                     )}
                   </td>
 
@@ -712,7 +772,7 @@ export default function ReportingView() {
                   </td>
 
                   {/* Latest Status */}
-                  <td className="px-3 py-1 max-w-[16rem]">
+                  <td className="px-3 py-1 max-w-[24rem]">
                     {p.latestStatus
                       ? <ExpandableText textKey={p.latestStatus}>
                           <span className="text-xs text-muted-foreground">{p.latestStatus}</span>
@@ -726,7 +786,7 @@ export default function ReportingView() {
                     {latestLog ? (
                       <ExpandableText textKey={latestLog.note}>
                         <span className="text-xs text-muted-foreground">
-                          <span className={`font-medium mr-1.5 shrink-0 ${stalenessColor(metrics.stalenessMap.get(p.id) ?? Infinity)}`}>
+                          <span className="font-medium mr-1.5 shrink-0">
                             {fmtDate(latestLog.createdAt.slice(0, 10))}
                           </span>
                           <span>{latestLog.note}</span>
