@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
+import { MarkdownField } from '@/components/MarkdownField'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
@@ -134,17 +134,6 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
     } catch (err) {
       toast.error(`Failed to delete task: ${err instanceof Error ? err.message : String(err)}`)
     }
-  }
-
-  /** Insert 2 spaces at cursor on Tab instead of moving focus */
-  const handleTabKey = (e: React.KeyboardEvent<HTMLTextAreaElement>, value: string, setter: (v: string) => void) => {
-    if (e.key !== 'Tab') return
-    e.preventDefault()
-    const el = e.currentTarget
-    const start = el.selectionStart
-    const end = el.selectionEnd
-    setter(value.substring(0, start) + '  ' + value.substring(end))
-    requestAnimationFrame(() => el.setSelectionRange(start + 2, start + 2))
   }
 
   const selectedProject = projects.find(p => p.id === selectedProjectId)
@@ -284,32 +273,24 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
           </div>
 
           {/* Description */}
-          <div className={fieldClass}>
-            <Label htmlFor="task-desc">Description</Label>
-            <Textarea
-              id="task-desc"
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              onKeyDown={e => handleTabKey(e, description, setDescription)}
-              placeholder="What needs to be done? (supports Markdown)"
-              rows={2}
-              className="break-words"
-            />
-          </div>
+          <MarkdownField
+            id="task-desc"
+            label="Description"
+            value={description}
+            onChange={setDescription}
+            placeholder="What needs to be done?"
+            rows={2}
+          />
 
           {/* Notes */}
-          <div className={fieldClass}>
-            <Label htmlFor="task-notes">Notes</Label>
-            <Textarea
-              id="task-notes"
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              onKeyDown={e => handleTabKey(e, notes, setNotes)}
-              placeholder="Additional notes, links, context… (supports Markdown)"
-              rows={2}
-              className="break-words"
-            />
-          </div>
+          <MarkdownField
+            id="task-notes"
+            label="Notes"
+            value={notes}
+            onChange={setNotes}
+            placeholder="Additional notes, links, context…"
+            rows={2}
+          />
 
           {/* Status + Priority */}
           <div className="grid grid-cols-2 gap-4">
@@ -371,6 +352,24 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
                     onSelect={d => setStartDate(d ? d.toISOString().slice(0, 10) : '')}
                     initialFocus
                   />
+                  <div className="border-t px-3 py-2 flex gap-2">
+                    <button
+                      type="button"
+                      className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center"
+                      onClick={() => setStartDate(new Date().toISOString().slice(0, 10))}
+                    >
+                      Today
+                    </button>
+                    {startDate && (
+                      <button
+                        type="button"
+                        className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center"
+                        onClick={() => setStartDate('')}
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
                 </PopoverContent>
               </Popover>
             </div>
@@ -400,6 +399,24 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
                     onSelect={d => setDueDate(d ? d.toISOString().slice(0, 10) : '')}
                     initialFocus
                   />
+                  <div className="border-t px-3 py-2 flex gap-2">
+                    <button
+                      type="button"
+                      className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center"
+                      onClick={() => setDueDate(new Date().toISOString().slice(0, 10))}
+                    >
+                      Today
+                    </button>
+                    {dueDate && (
+                      <button
+                        type="button"
+                        className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center"
+                        onClick={() => setDueDate('')}
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
                 </PopoverContent>
               </Popover>
             </div>
@@ -425,7 +442,7 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
               Delete
             </Button>
           )}
-          <p className="text-xs text-muted-foreground mr-auto">⌘↵ to save</p>
+          <p className="text-xs text-muted-foreground mr-auto">⌘/Ctrl+↵ to save</p>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Task'}

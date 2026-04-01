@@ -230,7 +230,11 @@ export function TaskPane({
       {/* Task rows */}
       <div className="flex-1 overflow-y-auto divide-y divide-border min-h-0">
         {visibleTasks.length === 0 && (
-          <p className="px-4 py-6 text-sm text-muted-foreground text-center">No tasks.</p>
+          <p className="px-4 py-6 text-sm text-muted-foreground text-center">
+            {tasks.length === 0
+              ? 'No tasks yet. Use "+ Add Task" to get started.'
+              : 'No tasks match the current filters.'}
+          </p>
         )}
         {visibleTasks.map(task => {
           const isDone = task.status === 'done'

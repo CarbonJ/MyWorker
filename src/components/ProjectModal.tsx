@@ -437,7 +437,7 @@ export function ProjectModal({ project, open, onClose, onSaved }: Props) {
               Delete Project
             </Button>
           )}
-          <p className="text-xs text-muted-foreground mr-auto">⌘↵ to save</p>
+          <p className="text-xs text-muted-foreground mr-auto">⌘/Ctrl+↵ to save</p>
           <div className="flex gap-2 ml-auto">
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel

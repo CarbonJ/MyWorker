@@ -4,15 +4,17 @@
  * Shows the chronological list of work log entries (newest first) and
  * an inline form to add new entries. Each entry has a pencil icon that
  * switches it to edit mode; the created_at timestamp is preserved on save.
+ * Entries can also be deleted via the trash icon.
  */
 
 import { useState } from 'react'
 import { toast } from 'sonner'
 import type { WorkLogEntry } from '@/types'
-import { updateWorkLogEntry } from '@/db/workLog'
+import { updateWorkLogEntry, deleteWorkLogEntry } from '@/db/workLog'
 import { WorkLogEntryForm } from '@/components/WorkLogEntry'
 import { MarkdownContent } from '@/components/MarkdownContent'
-import { Pencil, Check, X } from 'lucide-react'
+import { MarkdownField } from '@/components/MarkdownField'
+import { Pencil, Trash2 } from 'lucide-react'
 import { loadGuiSettings, altRowStyle } from '@/lib/guiSettings'
 
 interface Props {
@@ -48,6 +50,16 @@ export function WorkLogPane({ projectId, workLog, onSaved }: Props) {
     }
   }
 
+  const handleDelete = async (entry: WorkLogEntry) => {
+    if (!confirm('Delete this work log entry? This cannot be undone.')) return
+    try {
+      await deleteWorkLogEntry(entry.id)
+      onSaved()
+    } catch (err) {
+      toast.error(`Failed to delete entry: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden min-h-0">
       <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
@@ -61,51 +73,61 @@ export function WorkLogPane({ projectId, workLog, onSaved }: Props) {
 
       <div className="flex-1 overflow-y-auto divide-y divide-border min-h-0">
         {workLog.length === 0 && (
-          <p className="px-4 py-6 text-sm text-muted-foreground text-center">No entries yet.</p>
+          <p className="px-4 py-6 text-sm text-muted-foreground text-center">No entries yet. Add one above to get started.</p>
         )}
         {workLog.map((entry, index) => (
           <div key={entry.id} className="px-4 py-3" style={altRowStyle(rowColor, rowOpacity, index)}>
             <div className="flex items-center gap-1.5 mb-1">
               <p className="text-xs text-muted-foreground">
-                {new Date(entry.createdAt + 'Z').toLocaleString()}
+                {new Date(entry.createdAt.replace(' ', 'T').replace(/([^Z])$/, '$1Z')).toLocaleString()}
               </p>
               {editingId !== entry.id && (
-                <button
-                  onClick={() => startEdit(entry)}
-                  className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors"
-                  title="Edit entry"
-                >
-                  <Pencil className="h-3 w-3" />
-                </button>
+                <>
+                  <button
+                    onClick={() => startEdit(entry)}
+                    className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors"
+                    title="Edit entry"
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(entry)}
+                    className="text-muted-foreground hover:text-destructive p-0.5 rounded transition-colors"
+                    title="Delete entry"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </>
               )}
             </div>
 
             {editingId === entry.id ? (
               <div className="space-y-2">
-                <textarea
+                <MarkdownField
+                  id={`worklog-edit-${entry.id}`}
                   value={editDraft}
-                  onChange={e => setEditDraft(e.target.value)}
+                  onChange={setEditDraft}
+                  rows={3}
+                  initialFocused
                   onKeyDown={e => {
                     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') saveEdit(entry.id)
                     if (e.key === 'Escape') cancelEdit()
                   }}
-                  className="w-full text-sm border rounded-md px-3 py-2 resize-y min-h-[80px] focus:outline-none focus:ring-2 focus:ring-ring bg-background"
-                  autoFocus
                 />
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => saveEdit(entry.id)}
                     className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-primary text-primary-foreground hover:bg-primary/90"
                   >
-                    <Check className="h-3 w-3" /> Save
+                    Save
                   </button>
                   <button
                     onClick={cancelEdit}
                     className="flex items-center gap-1 text-xs px-2 py-1 rounded border hover:bg-accent text-muted-foreground"
                   >
-                    <X className="h-3 w-3" /> Cancel
+                    Cancel
                   </button>
-                  <span className="text-xs text-muted-foreground">Ctrl+Enter to save · Esc to cancel</span>
+                  <span className="text-xs text-muted-foreground">⌘/Ctrl+↵ to save · Esc to cancel</span>
                 </div>
               </div>
             ) : (
