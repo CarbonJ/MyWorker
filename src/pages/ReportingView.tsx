@@ -561,7 +561,7 @@ export default function ReportingView() {
             {metrics.redOverdueProjects.length > 0 && (
               <div
                 className="space-y-1 cursor-pointer group pr-6"
-                onClick={() => setRagFilter('Red')}
+                onClick={() => setRagFilters(['Red'])}
                 title="Click to filter table to Red projects"
               >
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold">Red + overdue tasks</p>
