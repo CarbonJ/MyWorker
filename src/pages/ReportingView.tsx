@@ -247,8 +247,12 @@ export default function ReportingView() {
     const ragCounts = { Red: 0, Amber: 0, Green: 0 }
     for (const p of ps) ragCounts[p.ragStatus]++
 
-    // Stale: no log in 14+ days (or no log at all)
-    const staleCount = ps.filter(p => (stalenessMap.get(p.id) ?? Infinity) >= 14).length
+    // Effective staleness: days since last log entry, or days since project creation if no log
+    const effectiveStaleness = (p: { id: number; createdAt: string }) =>
+      stalenessMap.get(p.id) ?? Math.max(0, Math.floor((today - new Date(p.createdAt).getTime()) / 86_400_000))
+
+    // Stale: no log in 14+ days (or no log at all and project itself is 14+ days old)
+    const staleCount = ps.filter(p => effectiveStaleness(p) >= 14).length
 
     // Overdue tasks
     const overdueTaskCount = scopedTasks.filter(t => t.status !== 'done' && isOverdue(t.dueDate)).length
@@ -270,11 +274,11 @@ export default function ReportingView() {
 
     // Attention: stale 14d+, Red first then most stale
     const attentionProjects = ps
-      .filter(p => (stalenessMap.get(p.id) ?? Infinity) >= 14)
+      .filter(p => effectiveStaleness(p) >= 14)
       .sort((a, b) => {
         const rd = RAG_ORDER[a.ragStatus] - RAG_ORDER[b.ragStatus]
         if (rd !== 0) return rd
-        return (stalenessMap.get(b.id) ?? Infinity) - (stalenessMap.get(a.id) ?? Infinity)
+        return effectiveStaleness(b) - effectiveStaleness(a)
       })
       .slice(0, 8)
 
@@ -660,9 +664,10 @@ export default function ReportingView() {
               <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold">Needs attention (stale 14d+)</p>
               <div className="flex gap-2 flex-wrap">
                 {metrics.attentionProjects.map(p => {
-                  const days = stalenessMap.get(p.id)
+                  const logDays = stalenessMap.get(p.id)
+                  const days = logDays ?? Math.max(0, Math.floor((Date.now() - new Date(p.createdAt).getTime()) / 86_400_000))
                   const ragDot = p.ragStatus === 'Red' ? '🔴' : p.ragStatus === 'Amber' ? '🟡' : '🟢'
-                  const ageLabel = days === undefined ? 'no log' : `${days}d ago`
+                  const ageLabel = logDays === undefined ? `no log · ${days}d old` : `${days}d ago`
                   return (
                     <button
                       key={p.id}
