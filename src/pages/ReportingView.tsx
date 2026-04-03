@@ -714,7 +714,7 @@ export default function ReportingView() {
               const staleDays = stalenessMap.get(p.id)
 
               return (
-                <tr key={p.id} className="hover:bg-accent/50">
+                <tr key={p.id} className="hover:bg-accent/50 cursor-pointer" onClick={() => navigate(`/projects/${p.id}`)}>
                   {/* Staleness */}
                   <td className="w-px px-3 py-1 whitespace-nowrap text-center">
                     {staleDays !== undefined ? (
