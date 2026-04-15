@@ -328,6 +328,64 @@ const migrations: Migration[] = [
       ON work_log_entries(project_id, created_at DESC);
     `,
   },
+  {
+    version: 13,
+    up: `
+      -- Add tags column to projects and tasks
+      ALTER TABLE projects ADD COLUMN tags TEXT NOT NULL DEFAULT '';
+      ALTER TABLE tasks    ADD COLUMN tags TEXT NOT NULL DEFAULT '';
+
+      -- Rebuild project FTS triggers to include tags
+      DROP TRIGGER IF EXISTS fts_projects_insert;
+      DROP TRIGGER IF EXISTS fts_projects_update;
+
+      CREATE TRIGGER fts_projects_insert
+        AFTER INSERT ON projects
+        BEGIN
+          INSERT INTO fts_index(content, source_type, source_id, project_id)
+          VALUES (
+            NEW.work_item || ' ' || NEW.work_desc || ' ' || NEW.latest_status || ' ' || NEW.stakeholders || ' ' || NEW.tags,
+            'project', NEW.id, NEW.id
+          );
+        END;
+
+      CREATE TRIGGER fts_projects_update
+        AFTER UPDATE ON projects
+        BEGIN
+          DELETE FROM fts_index WHERE source_type = 'project' AND source_id = OLD.id;
+          INSERT INTO fts_index(content, source_type, source_id, project_id)
+          VALUES (
+            NEW.work_item || ' ' || NEW.work_desc || ' ' || NEW.latest_status || ' ' || NEW.stakeholders || ' ' || NEW.tags,
+            'project', NEW.id, NEW.id
+          );
+        END;
+
+      -- Rebuild task FTS triggers to include tags
+      DROP TRIGGER IF EXISTS fts_tasks_insert;
+      DROP TRIGGER IF EXISTS fts_tasks_update;
+
+      CREATE TRIGGER fts_tasks_insert
+        AFTER INSERT ON tasks
+        BEGIN
+          INSERT INTO fts_index(content, source_type, source_id, project_id)
+          VALUES (
+            NEW.title || ' ' || NEW.description || ' ' || NEW.notes || ' ' || NEW.owner || ' ' || NEW.tags,
+            'task', NEW.id, NEW.project_id
+          );
+        END;
+
+      CREATE TRIGGER fts_tasks_update
+        AFTER UPDATE ON tasks
+        BEGIN
+          DELETE FROM fts_index WHERE source_type = 'task' AND source_id = OLD.id;
+          INSERT INTO fts_index(content, source_type, source_id, project_id)
+          VALUES (
+            NEW.title || ' ' || NEW.description || ' ' || NEW.notes || ' ' || NEW.owner || ' ' || NEW.tags,
+            'task', NEW.id, NEW.project_id
+          );
+        END;
+    `,
+  },
 ]
 
 export async function runMigrations(handle: DbHandle): Promise<void> {

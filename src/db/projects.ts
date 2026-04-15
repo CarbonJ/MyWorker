@@ -1,6 +1,21 @@
 import { query, run, lastInsertId } from './index'
 import type { Project, RagStatus, JiraLink, Stakeholder } from '@/types'
 
+function parseTags(raw: string): string[] {
+  if (!raw || raw.trim() === '') return []
+  try {
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) return parsed as string[]
+    return []
+  } catch {
+    return []
+  }
+}
+
+function stringifyTags(tags: string[]): string {
+  return tags.length === 0 ? '' : JSON.stringify(tags)
+}
+
 // Subquery: finds the id(s) of any project_status option labelled "done"
 const DONE_SUBQ = `SELECT id FROM dropdown_options WHERE type='project_status' AND lower(label)='done'`
 
@@ -47,6 +62,7 @@ function rowToProject(row: Record<string, unknown>): Project {
     statusId: row.status_id as number | null,
     stakeholders: parseStakeholders(row.stakeholders as string),
     linkedJiras: parseLinkedJiras(row.linked_jiras as string),
+    tags: parseTags(row.tags as string),
     dueDate: (row.due_date as string | null) ?? null,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
@@ -94,14 +110,15 @@ export interface CreateProjectInput {
   statusId?: number | null
   stakeholders?: Stakeholder[]
   linkedJiras?: JiraLink[]
+  tags?: string[]
   dueDate?: string | null
 }
 
 export async function createProject(input: CreateProjectInput): Promise<number> {
   await run(
     `INSERT INTO projects
-      (work_item, work_desc, rag_status, priority_id, latest_status, product_area_id, status_id, stakeholders, linked_jiras, due_date)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (work_item, work_desc, rag_status, priority_id, latest_status, product_area_id, status_id, stakeholders, linked_jiras, tags, due_date)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.workItem,
       input.workDescription ?? '',
@@ -112,6 +129,7 @@ export async function createProject(input: CreateProjectInput): Promise<number> 
       input.statusId ?? null,
       stringifyStakeholders(input.stakeholders ?? []),
       stringifyLinkedJiras(input.linkedJiras ?? []),
+      stringifyTags(input.tags ?? []),
       input.dueDate ?? null,
     ],
   )
@@ -137,6 +155,7 @@ export async function updateProject(input: UpdateProjectInput): Promise<void> {
       status_id       = ?,
       stakeholders    = ?,
       linked_jiras    = ?,
+      tags            = ?,
       due_date        = ?
      WHERE id = ?`,
     [
@@ -151,6 +170,7 @@ export async function updateProject(input: UpdateProjectInput): Promise<void> {
       input.linkedJiras !== undefined
         ? stringifyLinkedJiras(input.linkedJiras)
         : stringifyLinkedJiras(current.linkedJiras),
+      stringifyTags(input.tags !== undefined ? input.tags : current.tags),
       input.dueDate !== undefined ? input.dueDate : current.dueDate,
       input.id,
     ],
@@ -194,4 +214,20 @@ export async function getAllStakeholderNames(): Promise<string[]> {
     for (const s of parsed) if (s.name.trim()) nameSet.add(s.name.trim())
   }
   return [...nameSet].sort((a, b) => a.localeCompare(b))
+}
+
+/** Returns a sorted, deduplicated list of all tag names across projects and tasks — used for autocomplete and filter options. */
+export async function getAllTagNames(): Promise<string[]> {
+  const [projectRows, taskRows] = await Promise.all([
+    query(`SELECT tags FROM projects WHERE tags != '' AND tags IS NOT NULL`),
+    query(`SELECT tags FROM tasks WHERE tags != '' AND tags IS NOT NULL`),
+  ])
+  const tagSet = new Set<string>()
+  for (const row of [...projectRows, ...taskRows]) {
+    for (const tag of parseTags(row.tags as string)) {
+      const trimmed = tag.trim()
+      if (trimmed) tagSet.add(trimmed)
+    }
+  }
+  return [...tagSet].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
 }

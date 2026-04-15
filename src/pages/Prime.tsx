@@ -82,6 +82,7 @@ export default function Prime() {
   const [priorityFilters, setPriorityFilters] = useState<string[]>(()   => loadArr('myworker:prime-priority2', []))
   const [statusFilters,   setStatusFilters]   = useState<string[]>(()   => loadArr('myworker:prime-status2', []))
   const [areaFilters,     setAreaFilters]     = useState<string[]>(()   => loadArr('myworker:prime-area2', []))
+  const [tagFilters,      setTagFilters]      = useState<string[]>(()   => loadArr('myworker:prime-tags2', []))
   const [areaFilterButtons]                   = useState(() => localStorage.getItem('myworker:area-filter-buttons-projects') !== 'false')
 
   // ── Project sort (multi-sort stack) ───────────────────────────────────────
@@ -140,6 +141,7 @@ export default function Prime() {
   useEffect(() => { localStorage.setItem('myworker:prime-priority2',    JSON.stringify(priorityFilters)) }, [priorityFilters])
   useEffect(() => { localStorage.setItem('myworker:prime-status2',      JSON.stringify(statusFilters))   }, [statusFilters])
   useEffect(() => { localStorage.setItem('myworker:prime-area2',        JSON.stringify(areaFilters))     }, [areaFilters])
+  useEffect(() => { localStorage.setItem('myworker:prime-tags2',        JSON.stringify(tagFilters))      }, [tagFilters])
   useEffect(() => { localStorage.setItem('myworker:prime-proj-sorts2',  JSON.stringify(projectSorts))    }, [projectSorts])
   useEffect(() => { localStorage.setItem('myworker:prime-gen-status2',  JSON.stringify(generalStatusFilters)) }, [generalStatusFilters])
   useEffect(() => { localStorage.setItem('myworker:prime-gen-sorts2',   JSON.stringify(generalSorts))    }, [generalSorts])
@@ -283,6 +285,10 @@ export default function Prime() {
           return false
         })
       }
+      // Tag filter
+      if (tagFilters.length > 0) {
+        list = list.filter(t => tagFilters.some(tf => t.tags.some(tag => tag.toLowerCase() === tf.toLowerCase())))
+      }
     }
 
     // Multi-sort
@@ -308,7 +314,7 @@ export default function Prime() {
     })
 
     return list
-  }, [allTasks, query, dueFilter, showUpcoming, areaFilters, generalStatusFilters, generalSorts, priorities])
+  }, [allTasks, query, dueFilter, showUpcoming, areaFilters, generalStatusFilters, tagFilters, generalSorts, priorities])
 
   /** Filtered + sorted projects */
   const filteredProjects = useMemo(() => {
@@ -328,6 +334,13 @@ export default function Prime() {
       if (priorityFilters.length > 0) list = list.filter(p => priorityFilters.includes(String(p.priorityId ?? '')))
       if (areaFilters.length > 0)     list = list.filter(p => areaFilters.includes(String(p.productAreaId ?? '')))
       if (statusFilters.length > 0)   list = list.filter(p => statusFilters.includes(String(p.statusId ?? '')))
+      if (tagFilters.length > 0)      list = list.filter(p => {
+        const projectTasks = tasksByProject.get(p.id) ?? []
+        return tagFilters.some(tf =>
+          p.tags.some(t => t.toLowerCase() === tf.toLowerCase()) ||
+          projectTasks.some(task => task.tags.some(t => t.toLowerCase() === tf.toLowerCase()))
+        )
+      })
     }
 
     // Multi-sort
@@ -352,7 +365,7 @@ export default function Prime() {
     })
 
     return list
-  }, [projects, query, dueFilter, projectsWithDueTasks, projectIdsWithMatchingTasks, ragFilters, priorityFilters, areaFilters, statusFilters, priorities, projectStatuses, projectSorts])
+  }, [projects, query, dueFilter, projectsWithDueTasks, projectIdsWithMatchingTasks, ragFilters, priorityFilters, areaFilters, statusFilters, tagFilters, priorities, projectStatuses, projectSorts, tasksByProject])
 
   const toggleProject = (id: number) =>
     setExpandedProjects(prev => {
@@ -443,7 +456,15 @@ export default function Prime() {
   const { buttonColor, buttonOpacity } = loadGuiSettings()
   const btnStyle = buttonStyle(buttonColor, buttonOpacity)
 
-  const hasActiveFilters = ragFilters.length > 0 || priorityFilters.length > 0 || areaFilters.length > 0 || statusFilters.length > 0
+  const hasActiveFilters = ragFilters.length > 0 || priorityFilters.length > 0 || areaFilters.length > 0 || statusFilters.length > 0 || tagFilters.length > 0
+
+  // All unique tags from projects + tasks — for the tags filter dropdown
+  const allProjectTags = useMemo(() => {
+    const tagSet = new Set<string>()
+    for (const p of projects) for (const t of p.tags) tagSet.add(t)
+    for (const t of allTasks)  for (const tag of t.tags) tagSet.add(tag)
+    return [...tagSet].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+  }, [projects, allTasks])
 
   const projectsWithTasks = filteredProjects.filter(p => (tasksByProject.get(p.id)?.length ?? 0) > 0)
   const allExpanded = projectsWithTasks.length > 0 && projectsWithTasks.every(p => expandedProjects.has(p.id))
@@ -511,11 +532,21 @@ export default function Prime() {
           width="w-36"
         />
 
+        {/* Tags filter */}
+        <MultiSelectFilter
+          options={allProjectTags.map(t => ({ value: t, label: t }))}
+          value={tagFilters}
+          onChange={setTagFilters}
+          placeholder="All Tags"
+          width="w-32"
+          searchable
+        />
+
         {hasActiveFilters && (
           <Button
             variant="ghost" size="sm"
             className="h-8 text-xs text-muted-foreground hover:text-foreground"
-            onClick={() => { setRagFilters([]); setPriorityFilters([]); setAreaFilters([]); setStatusFilters([]) }}
+            onClick={() => { setRagFilters([]); setPriorityFilters([]); setAreaFilters([]); setStatusFilters([]); setTagFilters([]) }}
           >
             ✕ Reset filters
           </Button>
@@ -721,6 +752,23 @@ export default function Prime() {
                       {counts.open > 0 && counts.inProgress > 0 && <span> · </span>}
                       {counts.inProgress > 0 && <span className="text-blue-600">{counts.inProgress} active</span>}
                     </span>
+                  )}
+                </span>
+              )}
+              {p.tags.length > 0 && (
+                <span className="flex flex-wrap gap-0.5 font-normal" onClick={e => e.stopPropagation()}>
+                  {p.tags.slice(0, 3).map((tag, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setTagFilters(prev => prev.includes(tag) ? prev : [...prev, tag])}
+                      className="inline-flex items-center px-1.5 py-0 rounded-full text-[10px] font-medium bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200 transition-colors"
+                      title={`Filter by tag: ${tag}`}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                  {p.tags.length > 3 && (
+                    <span className="text-[10px] text-muted-foreground self-center">+{p.tags.length - 3}</span>
                   )}
                 </span>
               )}

@@ -22,6 +22,7 @@ export interface Project {
   statusId: number | null
   stakeholders: Stakeholder[]
   linkedJiras: JiraLink[]
+  tags: string[]
   dueDate: string | null
   createdAt: string
   updatedAt: string
@@ -46,6 +47,7 @@ export interface Task {
   status: TaskStatus
   priorityId: number | null
   owner: string
+  tags: string[]
   startDate: string | null
   dueDate: string | null
   createdAt: string

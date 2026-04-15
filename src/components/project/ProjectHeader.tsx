@@ -30,20 +30,13 @@ interface Props {
   onSaveField: (patch: Partial<Omit<Project, 'id'>>) => void
   onMarkComplete: () => void
   onReopen: () => void
-}
-
-function safeUrl(url: string): string | null {
-  try {
-    const parsed = new URL(url)
-    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return url
-  } catch { /* invalid URL */ }
-  return null
+  compact?: boolean
 }
 
 
 export function ProjectHeader({
   project, projectId, priorities, productAreas, projectStatuses, tasks,
-  isArchived, onSaveField, onMarkComplete, onReopen,
+  isArchived, onSaveField, onMarkComplete, onReopen, compact = false,
 }: Props) {
   const navigate = useNavigate()
   const [descExpanded, setDescExpanded] = useState(false)
@@ -72,6 +65,44 @@ export function ProjectHeader({
     { value: 'Amber', label: 'Amber', color: 'bg-amber-400' },
     { value: 'Red',   label: 'Red',   color: 'bg-red-500' },
   ]
+
+  if (compact) {
+    const priorityOpt = priorities.find(o => o.id === project.priorityId)
+    return (
+      <div className="shrink-0 px-4 py-2 border-b bg-background flex items-center gap-3 min-h-0">
+        <button onClick={() => navigate('/')} className="text-sm text-muted-foreground hover:text-foreground shrink-0">
+          ← Back
+        </button>
+        <div className="w-px h-4 bg-border shrink-0" />
+        <RagBadge status={project.ragStatus} />
+        <h1 className="text-sm font-semibold truncate flex-1 min-w-0">{project.workItem}</h1>
+        {priorityOpt && (
+          <span className={`text-xs inline-flex items-center gap-1 px-2 py-0.5 rounded-full border shrink-0 ${pillClass(priorityOpt.color)}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${dotClass(priorityOpt.color)}`} />
+            {priorityOpt.label}
+          </span>
+        )}
+        {project.latestStatus && (
+          <span className="text-xs text-muted-foreground truncate max-w-[24rem] shrink-0">{project.latestStatus}</span>
+        )}
+        {project.tags.length > 0 && (
+          <div className="flex gap-1 shrink-0 overflow-hidden max-w-[20rem]">
+            {project.tags.slice(0, 3).map((tag, i) => (
+              <span key={i} className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-600 border border-gray-200 whitespace-nowrap">
+                {tag}
+              </span>
+            ))}
+            {project.tags.length > 3 && (
+              <span className="text-[10px] text-muted-foreground self-center">+{project.tags.length - 3}</span>
+            )}
+          </div>
+        )}
+        <Button variant="outline" size="sm" onClick={() => navigate(`/projects/${projectId}/edit`)} className="shrink-0 h-7 text-xs">
+          Edit
+        </Button>
+      </div>
+    )
+  }
 
   return (
     <div className="shrink-0 px-6 py-4 border-b bg-background">
@@ -270,24 +301,13 @@ export function ProjectHeader({
             </div>
           )}
 
-          {project.linkedJiras.length > 0 && (
-            <div className="text-muted-foreground">
-              <span className="font-medium text-foreground">JIRAs: </span>
-              <span className="inline-flex flex-wrap gap-x-2 gap-y-0.5">
-                {project.linkedJiras.map((jira, i) => {
-                  const href = safeUrl(jira.url)
-                  return href ? (
-                    <a key={i} href={href} target="_blank" rel="noopener noreferrer"
-                      className="text-blue-600 underline underline-offset-2 hover:text-blue-800">
-                      {jira.label || jira.url}
-                    </a>
-                  ) : (
-                    <span key={i} className="text-muted-foreground text-xs" title="Invalid URL">
-                      {jira.label || jira.url}
-                    </span>
-                  )
-                })}
-              </span>
+          {project.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {project.tags.map((tag, i) => (
+                <span key={i} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                  {tag}
+                </span>
+              ))}
             </div>
           )}
         </div>

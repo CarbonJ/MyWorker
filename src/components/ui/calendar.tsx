@@ -8,19 +8,19 @@ function Calendar({ className, classNames, showOutsideDays = true, ...props }: C
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
-      className={cn('p-3', className)}
+      className={cn('p-3 w-[17rem]', className)}
       classNames={{
         months: 'flex flex-col sm:flex-row gap-2',
         month: 'flex flex-col gap-4',
-        month_caption: 'flex justify-center pt-1 relative items-center w-full',
+        month_caption: 'flex justify-center pt-2 pb-2 relative items-center w-full',
         caption_label: 'text-sm font-medium',
         nav: 'flex items-center gap-1',
         button_previous: cn(
-          'absolute left-1 h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100',
+          'absolute left-0 h-9 w-9 bg-transparent p-0 opacity-50 hover:opacity-100',
           'inline-flex items-center justify-center rounded-md border border-input hover:bg-accent',
         ),
         button_next: cn(
-          'absolute right-1 h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100',
+          'absolute right-0 h-9 w-9 bg-transparent p-0 opacity-50 hover:opacity-100',
           'inline-flex items-center justify-center rounded-md border border-input hover:bg-accent',
         ),
         month_grid: 'w-full border-collapse space-y-1',

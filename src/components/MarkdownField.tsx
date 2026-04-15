@@ -22,6 +22,21 @@ export function MarkdownField({ id, label, value, onChange, placeholder, rows = 
   const [focused, setFocused] = useState(initialFocused)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
+  const applyInlineFormat = (el: HTMLTextAreaElement, marker: string) => {
+    const start = el.selectionStart
+    const end = el.selectionEnd
+    const selected = value.substring(start, end)
+    const wrapped = `${marker}${selected}${marker}`
+    onChange(value.substring(0, start) + wrapped + value.substring(end))
+    requestAnimationFrame(() => {
+      if (selected.length > 0) {
+        el.setSelectionRange(start, start + wrapped.length)
+      } else {
+        el.setSelectionRange(start + marker.length, start + marker.length)
+      }
+    })
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Tab') {
       e.preventDefault()
@@ -30,6 +45,16 @@ export function MarkdownField({ id, label, value, onChange, placeholder, rows = 
       const end = el.selectionEnd
       onChange(value.substring(0, start) + '  ' + value.substring(end))
       requestAnimationFrame(() => el.setSelectionRange(start + 2, start + 2))
+      return
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
+      e.preventDefault()
+      applyInlineFormat(e.currentTarget, '**')
+      return
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key === 'i') {
+      e.preventDefault()
+      applyInlineFormat(e.currentTarget, '_')
       return
     }
     onKeyDown?.(e)

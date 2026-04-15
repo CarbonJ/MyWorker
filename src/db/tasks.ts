@@ -1,6 +1,21 @@
 import { query, run, lastInsertId } from './index'
 import type { Task, TaskStatus } from '@/types'
 
+function parseTags(raw: string): string[] {
+  if (!raw || raw.trim() === '') return []
+  try {
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) return parsed as string[]
+    return []
+  } catch {
+    return []
+  }
+}
+
+function stringifyTags(tags: string[]): string {
+  return tags.length === 0 ? '' : JSON.stringify(tags)
+}
+
 function rowToTask(row: Record<string, unknown>): Task {
   return {
     id: row.id as number,
@@ -12,6 +27,7 @@ function rowToTask(row: Record<string, unknown>): Task {
     status: row.status as TaskStatus,
     priorityId: row.priority_id as number | null,
     owner: row.owner as string,
+    tags: parseTags(row.tags as string),
     startDate: row.start_date as string | null,
     dueDate: row.due_date as string | null,
     createdAt: row.created_at as string,
@@ -60,6 +76,7 @@ export interface CreateTaskInput {
   notes?: string
   status?: TaskStatus
   priorityId?: number | null
+  tags?: string[]
   startDate?: string | null
   dueDate?: string | null
   isRecurring?: boolean
@@ -79,8 +96,8 @@ export async function getAllTasks(): Promise<Task[]> {
 export async function createTask(input: CreateTaskInput): Promise<number> {
   await run(
     `INSERT INTO tasks
-      (project_id, product_area_id, title, description, notes, status, priority_id, start_date, due_date, is_recurring)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (project_id, product_area_id, title, description, notes, status, priority_id, tags, start_date, due_date, is_recurring)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.projectId ?? null,
       // Only persist direct area when there is no project; otherwise it is inherited from the project
@@ -90,6 +107,7 @@ export async function createTask(input: CreateTaskInput): Promise<number> {
       input.notes ?? '',
       input.status ?? 'open',
       input.priorityId ?? null,
+      stringifyTags(input.tags ?? []),
       input.startDate ?? null,
       input.dueDate ?? null,
       input.isRecurring ? 1 : 0,
@@ -121,6 +139,7 @@ export async function updateTask(input: UpdateTaskInput): Promise<void> {
       notes           = ?,
       status          = ?,
       priority_id     = ?,
+      tags            = ?,
       start_date      = ?,
       due_date        = ?,
       is_recurring    = ?
@@ -133,6 +152,7 @@ export async function updateTask(input: UpdateTaskInput): Promise<void> {
       input.notes ?? current.notes,
       input.status ?? current.status,
       input.priorityId !== undefined ? input.priorityId : current.priorityId,
+      stringifyTags(input.tags !== undefined ? input.tags : current.tags),
       input.startDate !== undefined ? input.startDate : current.startDate,
       input.dueDate !== undefined ? input.dueDate : current.dueDate,
       input.isRecurring !== undefined ? (input.isRecurring ? 1 : 0) : (current.isRecurring ? 1 : 0),

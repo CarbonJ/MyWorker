@@ -4,6 +4,7 @@
  * treated as "All". Each option shows a checkbox on the right.
  */
 
+import { useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Check, ChevronDown } from 'lucide-react'
 
@@ -21,9 +22,13 @@ interface Props {
   placeholder: string
   /** Width class for trigger button, e.g. "w-32" */
   width?: string
+  /** When true, renders a search input at the top of the dropdown to filter options */
+  searchable?: boolean
 }
 
-export function MultiSelectFilter({ options, value, onChange, placeholder, width = 'w-32' }: Props) {
+export function MultiSelectFilter({ options, value, onChange, placeholder, width = 'w-32', searchable = false }: Props) {
+  const [search, setSearch] = useState('')
+
   const toggle = (v: string) => {
     onChange(value.includes(v) ? value.filter(x => x !== v) : [...value, v])
   }
@@ -35,8 +40,12 @@ export function MultiSelectFilter({ options, value, onChange, placeholder, width
         ? (options.find(o => o.value === value[0])?.label ?? value[0])
         : `${value.length} selected`
 
+  const visibleOptions = searchable && search.trim()
+    ? options.filter(o => o.label.toLowerCase().includes(search.toLowerCase()))
+    : options
+
   return (
-    <Popover>
+    <Popover onOpenChange={open => { if (!open) setSearch('') }}>
       <PopoverTrigger asChild>
         <button
           className={`inline-flex items-center justify-between gap-1 h-8 px-2.5 rounded-md border border-input bg-background text-xs font-normal hover:bg-accent hover:text-accent-foreground transition-colors ${width} ${value.length > 0 ? 'border-primary/60 text-primary' : ''}`}
@@ -45,8 +54,22 @@ export function MultiSelectFilter({ options, value, onChange, placeholder, width
           <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-48 p-1" align="start">
-        {options.map(opt => {
+      <PopoverContent className="w-52 p-1" align="start">
+        {searchable && (
+          <div className="px-1 pb-1">
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search…"
+              className="w-full h-7 px-2 text-xs rounded border border-input bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+              autoFocus
+            />
+          </div>
+        )}
+        {visibleOptions.length === 0 && (
+          <p className="px-2 py-2 text-xs text-muted-foreground text-center">No options</p>
+        )}
+        {visibleOptions.map(opt => {
           const checked = value.includes(opt.value)
           return (
             <div

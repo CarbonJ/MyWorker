@@ -93,6 +93,7 @@ export default function ReportingView() {
   const [ragFilters,      setRagFilters]      = useState<RagStatus[]>([])
   const [areaFilters,     setAreaFilters]     = useState<string[]>([])
   const [statusFilters,   setStatusFilters]   = useState<string[]>([])
+  const [tagFilters,      setTagFilters]      = useState<string[]>([])
   const [filterInsights,  setFilterInsights]  = useState(false)
 
   // Export modal
@@ -198,6 +199,22 @@ export default function ReportingView() {
     if (ragFilters.length > 0)    list = list.filter(p => ragFilters.includes(p.ragStatus))
     if (areaFilters.length > 0)   list = list.filter(p => areaFilters.includes(String(p.productAreaId ?? '')))
     if (statusFilters.length > 0) list = list.filter(p => statusFilters.includes(String(p.statusId ?? '')))
+    if (tagFilters.length > 0) {
+      const tasksByProject = new Map<number, Task[]>()
+      for (const t of allTasks) {
+        if (t.projectId === null) continue
+        const arr = tasksByProject.get(t.projectId) ?? []
+        arr.push(t)
+        tasksByProject.set(t.projectId, arr)
+      }
+      list = list.filter(p => {
+        const tasks = tasksByProject.get(p.id) ?? []
+        return tagFilters.some(tf =>
+          p.tags.some(t => t.toLowerCase() === tf.toLowerCase()) ||
+          tasks.some(task => task.tags.some(t => t.toLowerCase() === tf.toLowerCase()))
+        )
+      })
+    }
 
     if (query.trim()) {
       const q = query.trim().toLowerCase()
@@ -230,7 +247,7 @@ export default function ReportingView() {
       }
       return 0
     })
-  }, [projects, sorts, ragFilters, areaFilters, statusFilters, query, priorities, productAreas, projectStatuses, taskCountsByProject, stalenessMap])
+  }, [projects, sorts, ragFilters, areaFilters, statusFilters, tagFilters, query, priorities, productAreas, projectStatuses, taskCountsByProject, stalenessMap, allTasks])
 
   // ── Metrics (single pass) ────────────────────────────────────────────────────
 
@@ -374,8 +391,46 @@ export default function ReportingView() {
     )
   }
 
-  const thClass = 'px-3 py-1.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground whitespace-nowrap'
-  const filtersActive = ragFilters.length > 0 || areaFilters.length > 0 || statusFilters.length > 0
+  const thClass = 'relative px-3 py-1.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground whitespace-nowrap'
+  const filtersActive = ragFilters.length > 0 || areaFilters.length > 0 || statusFilters.length > 0 || tagFilters.length > 0
+
+  // ── Column resizing ────────────────────────────────────────────────────────
+  const COL_KEYS = ['staleness', 'ragStatus', 'workItem', 'productArea', 'priority', 'projectStatus', 'openTasks', 'latestStatus', 'latestUpdate'] as const
+  type ColKey = typeof COL_KEYS[number]
+  const DEFAULT_COL_WIDTHS: Record<ColKey, number> = {
+    staleness: 60, ragStatus: 70, workItem: 220, productArea: 130,
+    priority: 110, projectStatus: 110, openTasks: 90, latestStatus: 240, latestUpdate: 200,
+  }
+  const [colWidths, setColWidths] = useState<Record<ColKey, number>>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('myworker:reporting-col-widths') ?? 'null')
+      return saved ? { ...DEFAULT_COL_WIDTHS, ...saved } : DEFAULT_COL_WIDTHS
+    } catch { return DEFAULT_COL_WIDTHS }
+  })
+  const colResizeDrag = useRef<{ col: ColKey; startX: number; startWidth: number } | null>(null)
+
+  const startColResize = (e: React.MouseEvent, col: ColKey) => {
+    e.preventDefault()
+    e.stopPropagation()
+    colResizeDrag.current = { col, startX: e.clientX, startWidth: colWidths[col] }
+    const onMove = (ev: MouseEvent) => {
+      if (!colResizeDrag.current) return
+      const delta = ev.clientX - colResizeDrag.current.startX
+      const newWidth = Math.max(40, colResizeDrag.current.startWidth + delta)
+      setColWidths(prev => {
+        const next = { ...prev, [colResizeDrag.current!.col]: newWidth }
+        localStorage.setItem('myworker:reporting-col-widths', JSON.stringify(next))
+        return next
+      })
+    }
+    const onUp = () => {
+      colResizeDrag.current = null
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }
 
   // RAG bar widths (derived from metrics so they reflect filterInsights scoping)
   const total = (metrics.ragCounts.Red + metrics.ragCounts.Amber + metrics.ragCounts.Green) || 1
@@ -428,13 +483,31 @@ export default function ReportingView() {
           width="w-40"
         />
 
+        {/* Tags filter — includes tags from both projects and tasks */}
+        {(() => {
+          const tagSet = new Set<string>()
+          for (const p of projects) for (const t of p.tags) tagSet.add(t)
+          for (const t of allTasks)  for (const tag of t.tags) tagSet.add(tag)
+          const allTags = [...tagSet].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+          return (
+            <MultiSelectFilter
+              options={allTags.map(t => ({ value: t, label: t }))}
+              value={tagFilters}
+              onChange={setTagFilters}
+              placeholder="All Tags"
+              width="w-32"
+              searchable
+            />
+          )
+        })()}
+
         {/* Reset filters */}
         {filtersActive && (
           <Button
             variant="ghost"
             size="sm"
             className="h-8 text-xs text-muted-foreground hover:text-foreground"
-            onClick={() => { setRagFilters([]); setAreaFilters([]); setStatusFilters([]) }}
+            onClick={() => { setRagFilters([]); setAreaFilters([]); setStatusFilters([]); setTagFilters([]) }}
           >
             ✕ Reset filters
           </Button>
@@ -688,18 +761,40 @@ export default function ReportingView() {
 
       {/* ── Table ───────────────────────────────────────────────────────── */}
       <div className="flex-1 min-h-0 overflow-auto">
-        <table className="w-full text-sm">
+        <table className="text-sm table-fixed" style={{ width: COL_KEYS.reduce((sum, k) => sum + colWidths[k], 0) }}>
+          <colgroup>
+            {COL_KEYS.map(k => <col key={k} style={{ width: colWidths[k] }} />)}
+          </colgroup>
           <thead className="sticky top-0 bg-background border-b z-10">
             <tr>
-              <th className={thClass} onClick={() => handleSort('staleness')} title="Days since last work log entry"><Clock className="inline w-3.5 h-3.5 mb-0.5" /><SortIcon col="staleness" /></th>
-              <th className={thClass} onClick={() => handleSort('ragStatus')}>RAG<SortIcon col="ragStatus" /></th>
-              <th className={thClass} onClick={() => handleSort('workItem')}>Work Item<SortIcon col="workItem" /></th>
-              <th className={thClass} onClick={() => handleSort('productArea')}>Product Area<SortIcon col="productArea" /></th>
-              <th className={thClass} onClick={() => handleSort('priority')}>Priority<SortIcon col="priority" /></th>
-              <th className={thClass} onClick={() => handleSort('projectStatus')}>Status<SortIcon col="projectStatus" /></th>
-              <th className={thClass} onClick={() => handleSort('openTasks')}>Tasks<SortIcon col="openTasks" /></th>
-              <th className={thClass} onClick={() => handleSort('latestStatus')}>Latest Status<SortIcon col="latestStatus" /></th>
-              <th className={thClass}>Latest Update</th>
+              <th className={thClass} onClick={() => handleSort('staleness')} title="Days since last work log entry">
+                <Clock className="inline w-3.5 h-3.5 mb-0.5" /><SortIcon col="staleness" />
+                <div className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-primary/40 z-10" onMouseDown={e => startColResize(e, 'staleness')} />
+              </th>
+              <th className={thClass} onClick={() => handleSort('ragStatus')}>RAG<SortIcon col="ragStatus" />
+                <div className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-primary/40 z-10" onMouseDown={e => startColResize(e, 'ragStatus')} />
+              </th>
+              <th className={thClass} onClick={() => handleSort('workItem')}>Work Item<SortIcon col="workItem" />
+                <div className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-primary/40 z-10" onMouseDown={e => startColResize(e, 'workItem')} />
+              </th>
+              <th className={thClass} onClick={() => handleSort('productArea')}>Product Area<SortIcon col="productArea" />
+                <div className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-primary/40 z-10" onMouseDown={e => startColResize(e, 'productArea')} />
+              </th>
+              <th className={thClass} onClick={() => handleSort('priority')}>Priority<SortIcon col="priority" />
+                <div className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-primary/40 z-10" onMouseDown={e => startColResize(e, 'priority')} />
+              </th>
+              <th className={thClass} onClick={() => handleSort('projectStatus')}>Status<SortIcon col="projectStatus" />
+                <div className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-primary/40 z-10" onMouseDown={e => startColResize(e, 'projectStatus')} />
+              </th>
+              <th className={thClass} onClick={() => handleSort('openTasks')}>Tasks<SortIcon col="openTasks" />
+                <div className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-primary/40 z-10" onMouseDown={e => startColResize(e, 'openTasks')} />
+              </th>
+              <th className={thClass} onClick={() => handleSort('latestStatus')}>Latest Status<SortIcon col="latestStatus" />
+                <div className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-primary/40 z-10" onMouseDown={e => startColResize(e, 'latestStatus')} />
+              </th>
+              <th className={thClass}>Latest Update
+                <div className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-primary/40 z-10" onMouseDown={e => startColResize(e, 'latestUpdate')} />
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -736,7 +831,9 @@ export default function ReportingView() {
                   <td className="px-3 py-1"><RagBadge status={p.ragStatus} /></td>
 
                   {/* Work Item */}
-                  <td className={`px-3 py-1 font-medium${p.workItem.length <= 65 ? ' whitespace-nowrap' : ''}`}>{p.workItem}</td>
+                  <td className="px-3 py-1 font-medium">
+                    <span className="text-primary underline-offset-2 hover:underline">{p.workItem}</span>
+                  </td>
 
                   {/* Product Area */}
                   <td className="px-3 py-1 text-muted-foreground whitespace-nowrap">
@@ -777,7 +874,7 @@ export default function ReportingView() {
                   </td>
 
                   {/* Latest Status */}
-                  <td className="px-3 py-1 max-w-[24rem]">
+                  <td className="px-3 py-1 overflow-hidden">
                     {p.latestStatus
                       ? <ExpandableText textKey={p.latestStatus}>
                           <span className="text-xs text-muted-foreground">{p.latestStatus}</span>
@@ -787,7 +884,7 @@ export default function ReportingView() {
                   </td>
 
                   {/* Latest Work Log */}
-                  <td className="px-3 py-1 max-w-[20rem]">
+                  <td className="px-3 py-1 overflow-hidden">
                     {latestLog ? (
                       <ExpandableText textKey={latestLog.note}>
                         <span className="text-xs text-muted-foreground">

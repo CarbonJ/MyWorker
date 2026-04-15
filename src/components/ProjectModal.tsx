@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef } from 'react'
 import { toast } from 'sonner'
-import { createProject, updateProject, deleteProject, getAllStakeholderNames } from '@/db/projects'
+import { createProject, updateProject, deleteProject, getAllStakeholderNames, getAllTagNames } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
-import type { Project, DropdownOption, RagStatus, JiraLink, Stakeholder } from '@/types'
+import type { Project, DropdownOption, RagStatus, Stakeholder } from '@/types'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
 import { CalendarIcon } from 'lucide-react'
+import { TagInput } from '@/components/TagInput'
 
 interface Props {
   project?: Project | null   // null/undefined = create mode, Project = edit mode
@@ -37,10 +38,10 @@ export function ProjectModal({ project, open, onClose, onSaved }: Props) {
   const [productAreaId, setProductAreaId] = useState<string>('')
   const [statusId, setStatusId] = useState<string>('')
   const [stakeholders, setStakeholders] = useState<Stakeholder[]>([])
-  const [linkedJiras, setLinkedJiras] = useState<JiraLink[]>([])
-  const [jiraErrors, setJiraErrors] = useState<string[]>([])
+  const [tags, setTags] = useState<string[]>([])
   const [dueDate, setDueDate] = useState<string>('')
   const [knownStakeholders, setKnownStakeholders] = useState<string[]>([])
+  const [knownTags, setKnownTags] = useState<string[]>([])
 
   const formRef = useRef<HTMLFormElement>(null)
 
@@ -52,11 +53,13 @@ export function ProjectModal({ project, open, onClose, onSaved }: Props) {
       getDropdownOptions('product_area'),
       getDropdownOptions('project_status'),
       getAllStakeholderNames(),
-    ]).then(([pris, areas, statuses, names]) => {
+      getAllTagNames(),
+    ]).then(([pris, areas, statuses, names, tagNames]) => {
       setPriorities(pris)
       setProductAreas(areas)
       setProjectStatuses(statuses)
       setKnownStakeholders(names)
+      setKnownTags(tagNames)
     })
   }, [open])
 
@@ -71,7 +74,7 @@ export function ProjectModal({ project, open, onClose, onSaved }: Props) {
       setProductAreaId(project.productAreaId?.toString() ?? '')
       setStatusId(project.statusId?.toString() ?? '')
       setStakeholders(project.stakeholders ?? [])
-      setLinkedJiras(project.linkedJiras)
+      setTags(project.tags ?? [])
       setDueDate(project.dueDate ?? '')
     } else {
       // Reset for create mode
@@ -83,8 +86,7 @@ export function ProjectModal({ project, open, onClose, onSaved }: Props) {
       setProductAreaId('')
       setStatusId('')
       setStakeholders([])
-      setLinkedJiras([])
-      setJiraErrors([])
+      setTags([])
       setDueDate('')
     }
   }, [project, open])
@@ -102,24 +104,9 @@ export function ProjectModal({ project, open, onClose, onSaved }: Props) {
     return () => window.removeEventListener('keydown', handler)
   }, [open])
 
-  function validateJiraUrl(url: string): string {
-    if (!url) return ''
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      return 'URL must start with http:// or https://'
-    }
-    return ''
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!workItem.trim()) { toast.error('Work Item is required'); return }
-
-    const errors = linkedJiras.map(j => validateJiraUrl(j.url))
-    if (errors.some(e => e !== '')) {
-      setJiraErrors(errors)
-      toast.error('Fix JIRA URL errors before saving')
-      return
-    }
 
     setSaving(true)
     try {
@@ -132,7 +119,7 @@ export function ProjectModal({ project, open, onClose, onSaved }: Props) {
         productAreaId: productAreaId ? Number(productAreaId) : null,
         statusId: statusId ? Number(statusId) : null,
         stakeholders,
-        linkedJiras,
+        tags,
         dueDate: dueDate || null,
       }
 
@@ -175,19 +162,6 @@ export function ProjectModal({ project, open, onClose, onSaved }: Props) {
   const updateStakeholder = (index: number, value: string) =>
     setStakeholders(prev =>
       prev.map((entry, i) => i === index ? { name: value } : entry)
-    )
-
-  const addJiraLink = () =>
-    setLinkedJiras(prev => [...prev, { url: '', label: '' }])
-
-  const removeJiraLink = (index: number) => {
-    setLinkedJiras(prev => prev.filter((_, i) => i !== index))
-    setJiraErrors(prev => prev.filter((_, i) => i !== index))
-  }
-
-  const updateJiraLink = (index: number, field: 'url' | 'label', value: string) =>
-    setLinkedJiras(prev =>
-      prev.map((entry, i) => i === index ? { ...entry, [field]: value } : entry)
     )
 
   const fieldClass = 'space-y-1.5'
@@ -377,58 +351,13 @@ export function ProjectModal({ project, open, onClose, onSaved }: Props) {
             </Button>
           </div>
 
-          {/* Linked JIRAs */}
-          <div className={fieldClass}>
-            <Label>Linked JIRAs</Label>
-            {linkedJiras.length > 0 && (
-              <div className="space-y-2">
-                {linkedJiras.map((entry, i) => (
-                  <div key={i} className="space-y-1">
-                    <div className="flex gap-2 items-center">
-                      <Input
-                        value={entry.label}
-                        onChange={e => updateJiraLink(i, 'label', e.target.value)}
-                        placeholder="Label (e.g. PROJ-123)"
-                        className="w-36 shrink-0"
-                      />
-                      <Input
-                        value={entry.url}
-                        onChange={e => updateJiraLink(i, 'url', e.target.value)}
-                        onBlur={() => setJiraErrors(prev => {
-                          const next = [...prev]
-                          next[i] = validateJiraUrl(entry.url)
-                          return next
-                        })}
-                        placeholder="https://..."
-                        className={`flex-1 ${jiraErrors[i] ? 'border-destructive focus-visible:ring-destructive' : ''}`}
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeJiraLink(i)}
-                        className="shrink-0 text-muted-foreground hover:text-destructive"
-                      >
-                        Remove
-                      </Button>
-                    </div>
-                    {jiraErrors[i] && (
-                      <p className="text-xs text-destructive pl-[9.5rem]">{jiraErrors[i]}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={addJiraLink}
-              className="mt-1"
-            >
-              + Add JIRA link
-            </Button>
-          </div>
+          {/* Tags */}
+          <TagInput
+            id="project-modal-tags"
+            value={tags}
+            onChange={setTags}
+            suggestions={knownTags}
+          />
         </form>
 
         <DialogFooter className="flex items-center justify-between gap-2 pt-2">

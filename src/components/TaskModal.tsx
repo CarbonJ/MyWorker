@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { createTask, updateTask, deleteTask } from '@/db/tasks'
-import { getAllProjects } from '@/db/projects'
+import { getAllProjects, getAllTagNames } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
 import type { Task, TaskStatus, DropdownOption, Project } from '@/types'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
@@ -16,6 +16,7 @@ import { Calendar } from '@/components/ui/calendar'
 import { ChevronsUpDown, Check, X, CalendarIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Checkbox } from '@/components/ui/checkbox'
+import { TagInput } from '@/components/TagInput'
 
 interface Props {
   projectId?: number | null            // initial project; undefined = no default
@@ -37,8 +38,10 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
   const [priorityId,  setPriorityId]  = useState<string>('')
   const [startDate,   setStartDate]   = useState('')
   const [dueDate,     setDueDate]     = useState('')
+  const [tags,        setTags]        = useState<string[]>([])
   const [isRecurring, setIsRecurring] = useState(false)
   const [saving,      setSaving]      = useState(false)
+  const [knownTags,   setKnownTags]   = useState<string[]>([])
 
   // Project combobox state
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null)
@@ -55,6 +58,7 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
     if (!open) return
     getDropdownOptions('priority').then(setPriorities)
     getDropdownOptions('product_area').then(setProductAreas)
+    getAllTagNames().then(setKnownTags)
     // Only fetch projects if they weren't passed in as a prop
     if (!propProjects) {
       getAllProjects().then(setProjects)
@@ -75,6 +79,7 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
       setStatus(task.status)
       setPriorityId(task.priorityId?.toString() ?? '')
       setProductAreaId(task.productAreaId?.toString() ?? '')
+      setTags(task.tags ?? [])
       setStartDate(task.startDate ?? '')
       setDueDate(task.dueDate ?? '')
       setSelectedProjectId(task.projectId)
@@ -83,6 +88,7 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
       setTitle(''); setDescription(''); setNotes('')
       setStatus('open'); setPriorityId('')
       setProductAreaId(initialProductAreaId ? String(initialProductAreaId) : '')
+      setTags([])
       setStartDate(''); setDueDate('')
       setIsRecurring(false)
       setSelectedProjectId(initialProjectId ?? null)
@@ -104,6 +110,7 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
         notes,
         status,
         priorityId: priorityId ? Number(priorityId) : null,
+        tags,
         startDate: startDate || null,
         dueDate: dueDate || null,
         isRecurring,
@@ -434,6 +441,14 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
               <span className="ml-1.5 text-xs text-muted-foreground">(when completed, prompts for next due date)</span>
             </Label>
           </div>
+
+          {/* Tags */}
+          <TagInput
+            id="task-tags"
+            value={tags}
+            onChange={setTags}
+            suggestions={knownTags}
+          />
         </div>
 
         <DialogFooter className="flex items-center">

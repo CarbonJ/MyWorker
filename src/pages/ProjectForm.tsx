@@ -1,14 +1,15 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { getProjectById, createProject, updateProject, deleteProject, getAllStakeholderNames } from '@/db/projects'
+import { getProjectById, createProject, updateProject, deleteProject, getAllStakeholderNames, getAllTagNames } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
-import type { Project, DropdownOption, RagStatus, JiraLink, Stakeholder } from '@/types'
+import type { Project, DropdownOption, RagStatus, Stakeholder } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { TagInput } from '@/components/TagInput'
 
 export default function ProjectForm() {
   const navigate = useNavigate()
@@ -30,10 +31,10 @@ export default function ProjectForm() {
   const [productAreaId, setProductAreaId] = useState<string>('')
   const [statusId, setStatusId] = useState<string>('')
   const [stakeholders, setStakeholders] = useState<Stakeholder[]>([])
-  const [linkedJiras, setLinkedJiras] = useState<JiraLink[]>([])
-  const [jiraErrors, setJiraErrors] = useState<string[]>([])
+  const [tags, setTags] = useState<string[]>([])
   const [dueDate, setDueDate] = useState<string>('')
   const [knownStakeholders, setKnownStakeholders] = useState<string[]>([])
+  const [knownTags, setKnownTags] = useState<string[]>([])
 
   const formRef = useRef<HTMLFormElement>(null)
 
@@ -51,16 +52,18 @@ export default function ProjectForm() {
 
   const load = useCallback(async () => {
     try {
-      const [pris, areas, statuses, names] = await Promise.all([
+      const [pris, areas, statuses, names, tagNames] = await Promise.all([
         getDropdownOptions('priority'),
         getDropdownOptions('product_area'),
         getDropdownOptions('project_status'),
         getAllStakeholderNames(),
+        getAllTagNames(),
       ])
       setPriorities(pris)
       setProductAreas(areas)
       setProjectStatuses(statuses)
       setKnownStakeholders(names)
+      setKnownTags(tagNames)
 
       if (isEdit && id) {
         const p = await getProjectById(Number(id))
@@ -74,7 +77,7 @@ export default function ProjectForm() {
         setProductAreaId(p.productAreaId?.toString() ?? '')
         setStatusId(p.statusId?.toString() ?? '')
         setStakeholders(p.stakeholders ?? [])
-        setLinkedJiras(p.linkedJiras)
+        setTags(p.tags ?? [])
         setDueDate(p.dueDate ?? '')
       }
     } catch (err) {
@@ -84,24 +87,9 @@ export default function ProjectForm() {
 
   useEffect(() => { load() }, [load])
 
-  function validateJiraUrl(url: string): string {
-    if (!url) return ''
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      return 'URL must start with http:// or https://'
-    }
-    return ''
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!workItem.trim()) { toast.error('Work Item is required'); return }
-
-    const errors = linkedJiras.map(j => validateJiraUrl(j.url))
-    if (errors.some(e => e !== '')) {
-      setJiraErrors(errors)
-      toast.error('Fix JIRA URL errors before saving')
-      return
-    }
 
     setSaving(true)
     try {
@@ -114,7 +102,7 @@ export default function ProjectForm() {
         productAreaId: productAreaId ? Number(productAreaId) : null,
         statusId: statusId ? Number(statusId) : null,
         stakeholders,
-        linkedJiras,
+        tags,
         dueDate: dueDate || null,
       }
 
@@ -154,19 +142,6 @@ export default function ProjectForm() {
   const updateStakeholder = (index: number, value: string) =>
     setStakeholders(prev =>
       prev.map((entry, i) => i === index ? { name: value } : entry)
-    )
-
-  const addJiraLink = () =>
-    setLinkedJiras(prev => [...prev, { url: '', label: '' }])
-
-  const removeJiraLink = (index: number) => {
-    setLinkedJiras(prev => prev.filter((_, i) => i !== index))
-    setJiraErrors(prev => prev.filter((_, i) => i !== index))
-  }
-
-  const updateJiraLink = (index: number, field: 'url' | 'label', value: string) =>
-    setLinkedJiras(prev =>
-      prev.map((entry, i) => i === index ? { ...entry, [field]: value } : entry)
     )
 
   const fieldClass = 'space-y-1.5'
@@ -336,58 +311,13 @@ export default function ProjectForm() {
           </Button>
         </div>
 
-        {/* Linked JIRAs */}
-        <div className={fieldClass}>
-          <Label>Linked JIRAs</Label>
-          {linkedJiras.length > 0 && (
-            <div className="space-y-2">
-              {linkedJiras.map((entry, i) => (
-                <div key={i} className="space-y-1">
-                  <div className="flex gap-2 items-center">
-                    <Input
-                      value={entry.label}
-                      onChange={e => updateJiraLink(i, 'label', e.target.value)}
-                      placeholder="Label (e.g. PROJ-123)"
-                      className="w-36 shrink-0"
-                    />
-                    <Input
-                      value={entry.url}
-                      onChange={e => updateJiraLink(i, 'url', e.target.value)}
-                      onBlur={() => setJiraErrors(prev => {
-                        const next = [...prev]
-                        next[i] = validateJiraUrl(entry.url)
-                        return next
-                      })}
-                      placeholder="https://..."
-                      className={`flex-1 ${jiraErrors[i] ? 'border-destructive focus-visible:ring-destructive' : ''}`}
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeJiraLink(i)}
-                      className="shrink-0 text-muted-foreground hover:text-destructive"
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                  {jiraErrors[i] && (
-                    <p className="text-xs text-destructive pl-[9.5rem]">{jiraErrors[i]}</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={addJiraLink}
-            className="mt-1"
-          >
-            + Add JIRA link
-          </Button>
-        </div>
+        {/* Tags */}
+        <TagInput
+          id="project-tags"
+          value={tags}
+          onChange={setTags}
+          suggestions={knownTags}
+        />
 
         {/* Actions */}
         <div className="flex items-center justify-between pt-2">
