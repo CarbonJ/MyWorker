@@ -7,7 +7,7 @@
  * Entries can also be deleted via the trash icon.
  */
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import type { WorkLogEntry } from '@/types'
 import { updateWorkLogEntry, deleteWorkLogEntry } from '@/db/workLog'
@@ -28,6 +28,14 @@ interface Props {
 export function WorkLogPane({ projectId, workLog, onSaved, expanded = false, onToggleExpand }: Props) {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editDraft, setEditDraft] = useState('')
+  const [, forceGuiUpdate] = useState(0)
+
+  useEffect(() => {
+    const handler = () => forceGuiUpdate(n => n + 1)
+    window.addEventListener('myworker:gui-settings-changed', handler)
+    return () => window.removeEventListener('myworker:gui-settings-changed', handler)
+  }, [])
+
   const { rowColor, rowOpacity } = loadGuiSettings()
 
   const startEdit = (entry: WorkLogEntry) => {
@@ -88,7 +96,9 @@ export function WorkLogPane({ projectId, workLog, onSaved, expanded = false, onT
         {workLog.length === 0 && (
           <p className="px-4 py-6 text-sm text-muted-foreground text-center">No entries yet. Add one above to get started.</p>
         )}
-        {workLog.map((entry, index) => (
+        {workLog.map((entry, index) => {
+          const isAutoEntry = entry.note.startsWith('✓ Completed')
+          return (
           <div key={entry.id} className="px-4 py-3" style={altRowStyle(rowColor, rowOpacity, index)}>
             <div className="flex items-center gap-1.5 mb-1">
               <p className="text-xs text-muted-foreground">
@@ -144,10 +154,13 @@ export function WorkLogPane({ projectId, workLog, onSaved, expanded = false, onT
                 </div>
               </div>
             ) : (
-              <MarkdownContent>{entry.note}</MarkdownContent>
+              <div className={isAutoEntry ? 'opacity-60' : ''}>
+                <MarkdownContent>{entry.note}</MarkdownContent>
+              </div>
             )}
           </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

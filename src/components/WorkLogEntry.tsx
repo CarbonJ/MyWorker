@@ -42,7 +42,13 @@ export function WorkLogEntryForm({ projectId, onSaved }: Props) {
       />
       <div className="flex items-center justify-between">
         <span className="text-xs text-muted-foreground">⌘/Ctrl+↵ to save</span>
-        <Button type="submit" size="sm" variant="muted-dark" disabled={saving || !note.trim()}>
+        <Button
+          type="submit"
+          size="sm"
+          variant="muted-dark"
+          disabled={saving || !note.trim()}
+          onMouseDown={e => e.preventDefault()}
+        >
           {saving ? 'Saving…' : '+ Add Entry'}
         </Button>
       </div>

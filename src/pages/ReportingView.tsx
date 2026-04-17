@@ -397,15 +397,30 @@ export default function ReportingView() {
   // ── Column resizing ────────────────────────────────────────────────────────
   const COL_KEYS = ['staleness', 'ragStatus', 'workItem', 'productArea', 'priority', 'projectStatus', 'openTasks', 'latestStatus', 'latestUpdate'] as const
   type ColKey = typeof COL_KEYS[number]
-  const DEFAULT_COL_WIDTHS: Record<ColKey, number> = {
-    staleness: 60, ragStatus: 70, workItem: 220, productArea: 130,
-    priority: 110, projectStatus: 110, openTasks: 90, latestStatus: 240, latestUpdate: 200,
+
+  /** Minimum resize width per column — prevents content wrapping */
+  const COL_MIN_WIDTHS: Record<ColKey, number> = {
+    staleness: 50, ragStatus: 60, workItem: 100, productArea: 110,
+    priority: 95, projectStatus: 80, openTasks: 75, latestStatus: 100, latestUpdate: 100,
   }
+
+  /** Compute default widths that fill the available viewport width */
+  const computeDefaultWidths = (): Record<ColKey, number> => {
+    const fixedWidths = { staleness: 60, ragStatus: 70, productArea: 130, priority: 110, projectStatus: 110, openTasks: 90 }
+    const fixedTotal = Object.values(fixedWidths).reduce((s, v) => s + v, 0)
+    const available = Math.max(800, (window.innerWidth || 1200) - 48)
+    const contentSpace = Math.max(500, available - fixedTotal)
+    const workItem    = Math.round(contentSpace * 0.22)
+    const latestStatus = Math.round(contentSpace * 0.35)
+    const latestUpdate = contentSpace - workItem - latestStatus
+    return { ...fixedWidths, workItem, latestStatus, latestUpdate }
+  }
+
   const [colWidths, setColWidths] = useState<Record<ColKey, number>>(() => {
     try {
       const saved = JSON.parse(localStorage.getItem('myworker:reporting-col-widths') ?? 'null')
-      return saved ? { ...DEFAULT_COL_WIDTHS, ...saved } : DEFAULT_COL_WIDTHS
-    } catch { return DEFAULT_COL_WIDTHS }
+      return saved ? { ...computeDefaultWidths(), ...saved } : computeDefaultWidths()
+    } catch { return computeDefaultWidths() }
   })
   const colResizeDrag = useRef<{ col: ColKey; startX: number; startWidth: number } | null>(null)
 
@@ -416,7 +431,7 @@ export default function ReportingView() {
     const onMove = (ev: MouseEvent) => {
       if (!colResizeDrag.current) return
       const delta = ev.clientX - colResizeDrag.current.startX
-      const newWidth = Math.max(40, colResizeDrag.current.startWidth + delta)
+      const newWidth = Math.max(COL_MIN_WIDTHS[colResizeDrag.current!.col], colResizeDrag.current.startWidth + delta)
       setColWidths(prev => {
         const next = { ...prev, [colResizeDrag.current!.col]: newWidth }
         localStorage.setItem('myworker:reporting-col-widths', JSON.stringify(next))

@@ -302,8 +302,18 @@ export default function Settings() {
   const [guiButtonColor,   setGuiButtonColor]   = useState(() => localStorage.getItem('myworker:gui-button-color')        ?? '')
   const [guiButtonOpacity, setGuiButtonOpacity] = useState(() => Number(localStorage.getItem('myworker:gui-button-opacity') ?? '20'))
 
-  useEffect(() => { localStorage.setItem('myworker:gui-row-color',      guiRowColor)             }, [guiRowColor])
-  useEffect(() => { localStorage.setItem('myworker:gui-row-opacity',    String(guiRowOpacity))   }, [guiRowOpacity])
+  const [upcomingDays, setUpcomingDays] = useState(() =>
+    Number(localStorage.getItem('myworker:upcoming-days') ?? '7')
+  )
+
+  useEffect(() => {
+    localStorage.setItem('myworker:gui-row-color', guiRowColor)
+    window.dispatchEvent(new Event('myworker:gui-settings-changed'))
+  }, [guiRowColor])
+  useEffect(() => {
+    localStorage.setItem('myworker:gui-row-opacity', String(guiRowOpacity))
+    window.dispatchEvent(new Event('myworker:gui-settings-changed'))
+  }, [guiRowOpacity])
   useEffect(() => {
     localStorage.setItem('myworker:gui-button-color', guiButtonColor)
     window.dispatchEvent(new Event('myworker:gui-settings-changed'))
@@ -434,6 +444,26 @@ export default function Settings() {
                   <label htmlFor="area-filter-buttons" className="text-sm cursor-pointer select-none text-muted-foreground">
                     Show area filter as buttons on the Tasks screen
                   </label>
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <label htmlFor="upcoming-days" className="text-sm text-muted-foreground select-none">
+                    "Upcoming" window
+                  </label>
+                  <input
+                    id="upcoming-days"
+                    type="number"
+                    min="1"
+                    max="365"
+                    value={upcomingDays}
+                    onChange={e => {
+                      const v = Math.max(1, Math.min(365, Number(e.target.value) || 7))
+                      setUpcomingDays(v)
+                      localStorage.setItem('myworker:upcoming-days', String(v))
+                      window.dispatchEvent(new Event('myworker:gui-settings-changed'))
+                    }}
+                    className="w-16 h-7 text-sm border rounded-md px-2 bg-background"
+                  />
+                  <span className="text-sm text-muted-foreground">days</span>
                 </div>
               </div>
             </section>

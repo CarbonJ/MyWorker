@@ -19,13 +19,18 @@ function DueDateBanner() {
   const [count, setCount] = useState(0)
 
   useEffect(() => {
-    getDueSoonTasks().then(tasks => {
-      const n = tasks.length
-      setCount(n)
-      document.title = n > 0 ? `(${n}) MyWorker` : 'MyWorker'
-    }).catch(() => {
-      // Non-critical — banner simply won't show if this fails
-    })
+    const refresh = () => {
+      getDueSoonTasks().then(tasks => {
+        const n = tasks.length
+        setCount(n)
+        document.title = n > 0 ? `(${n}) MyWorker` : 'MyWorker'
+      }).catch(() => {
+        // Non-critical — banner simply won't show if this fails
+      })
+    }
+    refresh()
+    window.addEventListener('myworker:task-saved', refresh)
+    return () => window.removeEventListener('myworker:task-saved', refresh)
   }, [])
 
   if (count === 0) return null

@@ -55,14 +55,22 @@ export async function getOpenTasksByProject(projectId: number): Promise<Task[]> 
   return rows.map(rowToTask)
 }
 
-/** Returns all tasks that are overdue or due today, across all projects */
+/** Returns all tasks that are overdue or due today, excluding tasks on archived projects */
 export async function getDueSoonTasks(): Promise<Task[]> {
   const rows = await query(
-    `SELECT * FROM tasks
-     WHERE status != 'done'
-       AND due_date IS NOT NULL
-       AND due_date <= date('now')
-     ORDER BY due_date ASC`,
+    `SELECT t.* FROM tasks t
+     LEFT JOIN projects p ON t.project_id = p.id
+     WHERE t.status != 'done'
+       AND t.due_date IS NOT NULL
+       AND t.due_date <= date('now')
+       AND (
+         t.project_id IS NULL
+         OR p.status_id IS NULL
+         OR p.status_id NOT IN (
+           SELECT id FROM dropdown_options WHERE type='project_status' AND lower(label)='done'
+         )
+       )
+     ORDER BY t.due_date ASC`,
   )
   return rows.map(rowToTask)
 }

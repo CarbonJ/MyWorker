@@ -129,6 +129,7 @@ export function TaskPane({
       if (newStatus === 'done' && task.projectId) {
         await addWorkLogEntry(task.projectId, `✓ Completed: ${task.title}`)
       }
+      window.dispatchEvent(new Event('myworker:task-saved'))
       onReload()
     } catch (err) {
       handleError(err, 'Failed to update task')

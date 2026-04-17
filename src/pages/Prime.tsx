@@ -98,6 +98,9 @@ export default function Prime() {
     loadArr('myworker:prime-gen-status2', ['active'])
   )
   const [showUpcoming,   setShowUpcoming]   = useState(false)
+  const [upcomingDays,   setUpcomingDays]   = useState(() =>
+    Number(localStorage.getItem('myworker:upcoming-days') ?? '7')
+  )
   const [generalSorts,   setGeneralSorts]   = useState<GeneralSortEntry[]>(() =>
     loadSorted<GeneralSortEntry>('myworker:prime-gen-sorts2', [{ key: 'due', dir: 'asc' }])
   )
@@ -135,6 +138,13 @@ export default function Prime() {
   const productAreas    = data?.productAreas    ?? []
   const projectStatuses = data?.projectStatuses ?? []
   const allTasks        = data?.allTasks        ?? []
+
+  // Reload upcomingDays when changed in Settings
+  useEffect(() => {
+    const handler = () => setUpcomingDays(Number(localStorage.getItem('myworker:upcoming-days') ?? '7'))
+    window.addEventListener('myworker:gui-settings-changed', handler)
+    return () => window.removeEventListener('myworker:gui-settings-changed', handler)
+  }, [])
 
   // Persist filter/sort state
   useEffect(() => { localStorage.setItem('myworker:prime-rag2',         JSON.stringify(ragFilters))      }, [ragFilters])
@@ -177,9 +187,9 @@ export default function Prime() {
   const tasksByProject = useMemo(() => {
     const map = new Map<number, Task[]>()
     const today = new Date().toISOString().slice(0, 10)
-    const sevenDaysOut = new Date()
-    sevenDaysOut.setDate(sevenDaysOut.getDate() + 7)
-    const maxDate = sevenDaysOut.toISOString().slice(0, 10)
+    const cutoff = new Date()
+    cutoff.setDate(cutoff.getDate() + upcomingDays)
+    const maxDate = cutoff.toISOString().slice(0, 10)
     const q = query.trim().toLowerCase()
     for (const t of allTasks) {
       if (t.projectId === null || t.status === 'done') continue
@@ -194,7 +204,7 @@ export default function Prime() {
       map.set(t.projectId, arr)
     }
     return map
-  }, [allTasks, showUpcoming, query])
+  }, [allTasks, showUpcoming, upcomingDays, query])
 
   /** Projects with at least one overdue open task */
   const overdueProjectIds = useMemo(() => {
@@ -264,9 +274,9 @@ export default function Prime() {
     } else if (dueFilter) {
       list = list.filter(t => t.status !== 'done' && t.dueDate && t.dueDate <= today)
     } else if (showUpcoming) {
-      const sevenDaysOut = new Date()
-      sevenDaysOut.setDate(sevenDaysOut.getDate() + 7)
-      const maxDate = sevenDaysOut.toISOString().slice(0, 10)
+      const cutoff = new Date()
+      cutoff.setDate(cutoff.getDate() + upcomingDays)
+      const maxDate = cutoff.toISOString().slice(0, 10)
       list = list.filter(t => t.status !== 'done' && t.dueDate && t.dueDate >= today && t.dueDate <= maxDate)
     } else {
       // Area filter — skipped when inbox is active (inbox tasks have no area by definition)
@@ -314,7 +324,7 @@ export default function Prime() {
     })
 
     return list
-  }, [allTasks, query, dueFilter, showUpcoming, areaFilters, generalStatusFilters, tagFilters, generalSorts, priorities])
+  }, [allTasks, query, dueFilter, showUpcoming, upcomingDays, areaFilters, generalStatusFilters, tagFilters, generalSorts, priorities])
 
   /** Filtered + sorted projects */
   const filteredProjects = useMemo(() => {
@@ -403,6 +413,7 @@ export default function Prime() {
     if (next === 'done' && t.projectId) {
       await addWorkLogEntry(t.projectId, `✓ Completed: ${t.title}`)
     }
+    window.dispatchEvent(new Event('myworker:task-saved'))
     patchData(prev => ({ ...prev, allTasks: prev.allTasks.map(task => task.id === t.id ? { ...task, status: next } : task) }))
   }
 
@@ -568,7 +579,7 @@ export default function Prime() {
         </div>
       </div>
 
-      {/* ── Toolbar row 2 — Area filter ── */}
+      {/* ── Toolbar row 2 — Area filter + Upcoming ── */}
       <div className="flex items-center gap-2 px-6 py-2.5 border-b bg-background shrink-0">
         <span className="text-xs text-muted-foreground font-medium mr-1">Area:</span>
         {areaFilterButtons ? (
@@ -613,6 +624,18 @@ export default function Prime() {
             width="w-40"
           />
         )}
+        {/* Upcoming toggle */}
+        <button
+          onClick={() => setShowUpcoming(v => !v)}
+          className={`ml-auto h-7 px-2.5 text-xs rounded-full border transition-colors whitespace-nowrap ${
+            showUpcoming
+              ? 'bg-blue-100 border-blue-300 text-blue-800 hover:bg-blue-200'
+              : 'border-input bg-background hover:bg-accent hover:text-accent-foreground'
+          }`}
+          title={`Show tasks due in the next ${upcomingDays} days`}
+        >
+          Upcoming in {upcomingDays} days
+        </button>
       </div>
 
       {/* ── Split pane ── */}
@@ -1022,18 +1045,6 @@ export default function Prime() {
             placeholder="Active"
             width="w-28"
           />
-          {/* Upcoming toggle */}
-          <button
-            onClick={() => setShowUpcoming(v => !v)}
-            className={`h-7 px-2.5 text-xs rounded-full border transition-colors ${
-              showUpcoming
-                ? 'bg-blue-100 border-blue-300 text-blue-800 hover:bg-blue-200'
-                : 'border-input bg-background hover:bg-accent hover:text-accent-foreground'
-            }`}
-            title="Show tasks due in the next 7 days"
-          >
-            Upcoming
-          </button>
           <span className="text-xs text-muted-foreground ml-auto">
             {generalTasks.length} task{generalTasks.length !== 1 ? 's' : ''}
           </span>
