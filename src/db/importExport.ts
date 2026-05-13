@@ -156,14 +156,15 @@ export async function importFromJson(file: File): Promise<void> {
       await exec(sqlite, db,
         `INSERT INTO projects
            (id, work_item, work_desc, rag_status, priority_id, latest_status,
-            product_area_id, status_id, due_date, stakeholders, linked_jiras, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            product_area_id, status_id, due_date, is_archived, stakeholders, linked_jiras, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           p.id as number, p.work_item as string, p.work_desc as string,
           p.rag_status as string, p.priority_id as number | null,
           p.latest_status as string, p.product_area_id as number | null,
           (p.status_id as number | null) ?? null,
           (p.due_date as string | null) ?? null,
+          (p.is_archived as number) ?? 0,
           p.stakeholders as string, p.linked_jiras as string,
           p.created_at as string, p.updated_at as string,
         ],

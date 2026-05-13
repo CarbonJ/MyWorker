@@ -14,20 +14,22 @@ import { updateWorkLogEntry, deleteWorkLogEntry } from '@/db/workLog'
 import { WorkLogEntryForm } from '@/components/WorkLogEntry'
 import { MarkdownContent } from '@/components/MarkdownContent'
 import { MarkdownField } from '@/components/MarkdownField'
-import { Pencil, Trash2, Maximize2, Minimize2 } from 'lucide-react'
+import { Pencil, Trash2, Maximize2, Minimize2, Filter } from 'lucide-react'
 import { loadGuiSettings, altRowStyle } from '@/lib/guiSettings'
 
 interface Props {
   projectId: number
   workLog: WorkLogEntry[]
+  latestStatus?: string
   onSaved: () => void
   expanded?: boolean
   onToggleExpand?: () => void
 }
 
-export function WorkLogPane({ projectId, workLog, onSaved, expanded = false, onToggleExpand }: Props) {
+export function WorkLogPane({ projectId, workLog, latestStatus, onSaved, expanded = false, onToggleExpand }: Props) {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editDraft, setEditDraft] = useState('')
+  const [filterCompleted, setFilterCompleted] = useState(true)
   const [, forceGuiUpdate] = useState(0)
 
   useEffect(() => {
@@ -37,6 +39,11 @@ export function WorkLogPane({ projectId, workLog, onSaved, expanded = false, onT
   }, [])
 
   const { rowColor, rowOpacity } = loadGuiSettings()
+
+  const visibleEntries = filterCompleted
+    ? workLog.filter(e => !e.note.startsWith('✓ Completed'))
+    : workLog
+  const hiddenCount = workLog.length - visibleEntries.length
 
   const startEdit = (entry: WorkLogEntry) => {
     setEditingId(entry.id)
@@ -75,6 +82,13 @@ export function WorkLogPane({ projectId, workLog, onSaved, expanded = false, onT
       <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-semibold">Work Log</h2>
+          <button
+            onClick={() => setFilterCompleted(f => !f)}
+            className={`p-0.5 rounded transition-colors ${filterCompleted ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+            title={filterCompleted ? 'Showing manual entries only (click to show all)' : 'Showing all entries (click to hide task completions)'}
+          >
+            <Filter className="h-3.5 w-3.5" />
+          </button>
           {onToggleExpand && (
             <button
               onClick={onToggleExpand}
@@ -85,18 +99,25 @@ export function WorkLogPane({ projectId, workLog, onSaved, expanded = false, onT
             </button>
           )}
         </div>
-        <span className="text-xs text-muted-foreground">{workLog.length} entries</span>
+        <span className="text-xs text-muted-foreground">
+          {filterCompleted && hiddenCount > 0
+            ? `${visibleEntries.length} of ${workLog.length} entries`
+            : `${workLog.length} entries`}
+        </span>
       </div>
 
       <div className="px-4 py-3 border-b bg-muted/30 shrink-0">
-        <WorkLogEntryForm projectId={projectId} onSaved={onSaved} />
+        <WorkLogEntryForm projectId={projectId} latestStatus={latestStatus} onSaved={onSaved} />
       </div>
 
       <div className="flex-1 overflow-y-auto divide-y divide-border min-h-0">
         {workLog.length === 0 && (
           <p className="px-4 py-6 text-sm text-muted-foreground text-center">No entries yet. Add one above to get started.</p>
         )}
-        {workLog.map((entry, index) => {
+        {workLog.length > 0 && visibleEntries.length === 0 && (
+          <p className="px-4 py-6 text-sm text-muted-foreground text-center">All entries are task completions. Click the filter button to show them.</p>
+        )}
+        {visibleEntries.map((entry, index) => {
           const isAutoEntry = entry.note.startsWith('✓ Completed')
           return (
           <div key={entry.id} className="px-4 py-3" style={altRowStyle(rowColor, rowOpacity, index)}>

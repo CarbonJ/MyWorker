@@ -119,8 +119,8 @@ function AppInner() {
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      // Cmd+Shift+L / Ctrl+Shift+L → open Quick Add inbox task modal
-      if (e.key === 'L' && e.shiftKey && (e.metaKey || e.ctrlKey)) {
+      // Cmd+Shift+T / Ctrl+Shift+T → open Quick Add inbox task modal
+      if (e.key === 'T' && e.shiftKey && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
         setQuickTaskAreaId(null)
         setQuickTaskOpen(true)

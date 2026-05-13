@@ -1,6 +1,7 @@
 import { query, run, lastInsertId } from './index'
 import type { Project, RagStatus, JiraLink, Stakeholder } from '@/types'
 
+
 function parseTags(raw: string): string[] {
   if (!raw || raw.trim() === '') return []
   try {
@@ -15,9 +16,6 @@ function parseTags(raw: string): string[] {
 function stringifyTags(tags: string[]): string {
   return tags.length === 0 ? '' : JSON.stringify(tags)
 }
-
-// Subquery: finds the id(s) of any project_status option labelled "done"
-const DONE_SUBQ = `SELECT id FROM dropdown_options WHERE type='project_status' AND lower(label)='done'`
 
 function parseLinkedJiras(raw: string): JiraLink[] {
   if (!raw || raw.trim() === '') return []
@@ -64,35 +62,38 @@ function rowToProject(row: Record<string, unknown>): Project {
     linkedJiras: parseLinkedJiras(row.linked_jiras as string),
     tags: parseTags(row.tags as string),
     dueDate: (row.due_date as string | null) ?? null,
+    isArchived: !!(row.is_archived as number),
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   }
 }
 
-/** Returns all non-archived (non-Done) projects, newest first */
+/** Returns all non-archived projects, newest first */
 export async function getAllProjects(): Promise<Project[]> {
-  const rows = await query(`
-    SELECT * FROM projects
-    WHERE status_id IS NULL OR status_id NOT IN (${DONE_SUBQ})
-    ORDER BY updated_at DESC
-  `)
+  const rows = await query(`SELECT * FROM projects WHERE is_archived = 0 ORDER BY updated_at DESC`)
   return rows.map(rowToProject)
 }
 
-/** Returns every project regardless of status — used for lookups that need the full set */
+/** Returns every project regardless of archive status — used for lookups that need the full set */
 export async function getAllProjectsIncludingArchived(): Promise<Project[]> {
   const rows = await query(`SELECT * FROM projects ORDER BY updated_at DESC`)
   return rows.map(rowToProject)
 }
 
-/** Returns all archived (Done) projects, newest first */
+/** Returns all archived projects, newest first */
 export async function getArchivedProjects(): Promise<Project[]> {
-  const rows = await query(`
-    SELECT * FROM projects
-    WHERE status_id IN (${DONE_SUBQ})
-    ORDER BY updated_at DESC
-  `)
+  const rows = await query(`SELECT * FROM projects WHERE is_archived = 1 ORDER BY updated_at DESC`)
   return rows.map(rowToProject)
+}
+
+/** Marks a project as archived (independent of its status label). */
+export async function archiveProject(id: number): Promise<void> {
+  await run(`UPDATE projects SET is_archived = 1 WHERE id = ?`, [id])
+}
+
+/** Restores an archived project back to active. */
+export async function restoreProject(id: number): Promise<void> {
+  await run(`UPDATE projects SET is_archived = 0 WHERE id = ?`, [id])
 }
 
 export async function getProjectById(id: number): Promise<Project | null> {

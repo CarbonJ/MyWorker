@@ -24,6 +24,7 @@ export interface Project {
   linkedJiras: JiraLink[]
   tags: string[]
   dueDate: string | null
+  isArchived: boolean
   createdAt: string
   updatedAt: string
 }

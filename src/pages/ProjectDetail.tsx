@@ -12,7 +12,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { getProjectById, updateProject } from '@/db/projects'
+import { getProjectById, updateProject, archiveProject, restoreProject } from '@/db/projects'
 import { getTasksByProject, archiveTasksByProject, restoreTasksByProject } from '@/db/tasks'
 import { getWorkLogByProject } from '@/db/workLog'
 import { getDropdownOptions } from '@/db/dropdownOptions'
@@ -91,8 +91,7 @@ export default function ProjectDetail() {
       // Default task filter to 'done' for archived projects on first load
       if (!initialFilterSet.current) {
         initialFilterSet.current = true
-        const doneOpt = statuses.find(s => s.label.toLowerCase() === 'done')
-        if (doneOpt && p.statusId === doneOpt.id) setFilterStatuses(['done'])
+        if (p.isArchived) setFilterStatuses(['done'])
       }
     } catch (err) {
       handleError(err, 'Failed to load project')
@@ -113,13 +112,14 @@ export default function ProjectDetail() {
   }, [project, load])
 
   const doneOpt = projectStatuses.find(s => s.label.toLowerCase() === 'done')
-  const isArchived = !!(project && doneOpt && project.statusId === doneOpt.id)
+  const isArchived = project?.isArchived ?? false
 
   const markComplete = async () => {
-    if (!project || !doneOpt) { toast.error('No "Done" status configured in Settings'); return }
+    if (!project) return
     try {
       await archiveTasksByProject(project.id)
-      await updateProject({ id: project.id, statusId: doneOpt.id })
+      await archiveProject(project.id)
+      if (doneOpt) await updateProject({ id: project.id, statusId: doneOpt.id })
       toast.success('Project archived')
       navigate('/')
     } catch (err) {
@@ -131,6 +131,7 @@ export default function ProjectDetail() {
     if (!project) return
     try {
       await restoreTasksByProject(project.id)
+      await restoreProject(project.id)
       await updateProject({ id: project.id, statusId: null })
       toast.success('Project reopened')
       await load()
@@ -192,6 +193,7 @@ export default function ProjectDetail() {
           <WorkLogPane
             projectId={projectId}
             workLog={workLog}
+            latestStatus={project.latestStatus}
             onSaved={load}
             expanded={workLogExpanded}
             onToggleExpand={() => setWorkLogExpanded(v => !v)}

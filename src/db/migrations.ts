@@ -386,6 +386,23 @@ const migrations: Migration[] = [
         END;
     `,
   },
+  {
+    version: 14,
+    up: `
+      -- Decouple archiving from the "Done" status label.
+      -- is_archived = 1 means the project is in the archive regardless of
+      -- what the user has named their project status options.
+      ALTER TABLE projects ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0;
+      -- Back-fill: any project whose status_id currently points to a "Done"
+      -- option is considered archived.
+      UPDATE projects
+        SET is_archived = 1
+        WHERE status_id IN (
+          SELECT id FROM dropdown_options
+          WHERE type = 'project_status' AND lower(label) = 'done'
+        );
+    `,
+  },
 ]
 
 export async function runMigrations(handle: DbHandle): Promise<void> {

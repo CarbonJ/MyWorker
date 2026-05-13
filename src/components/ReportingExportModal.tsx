@@ -49,6 +49,20 @@ function downloadMd(content: string, filename: string) {
   URL.revokeObjectURL(url)
 }
 
+function downloadCsv(content: string, filename: string) {
+  const blob = new Blob([content], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+function escapeCsv(v: string): string {
+  return `"${String(v).replace(/"/g, '""')}"`
+}
+
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -131,6 +145,48 @@ function ChecklistSection({
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
+
+function buildCsv(
+  projects: Props['projects'],
+  productAreas: Props['productAreas'],
+  priorities: Props['priorities'],
+  projectStatuses: Props['projectStatuses'],
+  allTasks: Props['allTasks'],
+  allWorkLog: Props['allWorkLog'],
+): string {
+  const latestLog = new Map<number, (typeof allWorkLog)[0]>()
+  for (const e of allWorkLog) {
+    const ex = latestLog.get(e.projectId)
+    if (!ex || e.createdAt > ex.createdAt) latestLog.set(e.projectId, e)
+  }
+  const openCount = new Map<number, number>()
+  for (const t of allTasks) {
+    if (t.projectId && t.status !== 'done')
+      openCount.set(t.projectId, (openCount.get(t.projectId) ?? 0) + 1)
+  }
+  const today = new Date().toISOString().slice(0, 10)
+  const headers = ['Work Item','RAG','Area','Priority','Status','Status Comment','Days Stale','Open Tasks','Latest Update Date','Latest Update Note']
+  const rows = projects.map(p => {
+    const log = latestLog.get(p.id)
+    const logDate = log ? log.createdAt.slice(0, 10) : ''
+    const daysSince = logDate
+      ? String(Math.floor((new Date(today).getTime() - new Date(logDate).getTime()) / 86400000))
+      : ''
+    return [
+      escapeCsv(p.workItem),
+      escapeCsv(p.ragStatus),
+      escapeCsv(productAreas.find(a => a.id === p.productAreaId)?.label ?? ''),
+      escapeCsv(priorities.find(pr => pr.id === p.priorityId)?.label ?? ''),
+      escapeCsv(projectStatuses.find(s => s.id === p.statusId)?.label ?? ''),
+      escapeCsv(p.latestStatus),
+      daysSince,
+      String(openCount.get(p.id) ?? 0),
+      escapeCsv(logDate),
+      escapeCsv(log?.note ?? ''),
+    ].join(',')
+  })
+  return [headers.map(escapeCsv).join(','), ...rows].join('\r\n')
+}
 
 export function ReportingExportModal({
   open, onClose, projects, productAreas, priorities, projectStatuses, allTasks, allWorkLog,
@@ -245,6 +301,15 @@ export function ReportingExportModal({
         <DialogFooter className="mt-2">
           <Button variant="ghost" onClick={copyAll}>{clipboardCopied ? '✓ Copied' : 'Copy All'}</Button>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button
+            variant="outline"
+            onClick={() => downloadCsv(
+              buildCsv(projects, productAreas, priorities, projectStatuses, allTasks, allWorkLog),
+              `report-all-${date}.csv`,
+            )}
+          >
+            CSV
+          </Button>
           <Button onClick={exportAll}>Export All</Button>
         </DialogFooter>
       </DialogContent>

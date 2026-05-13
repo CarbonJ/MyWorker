@@ -12,10 +12,11 @@ import { useSearch } from '@/contexts/SearchContext'
 import { MultiSelectFilter } from '@/components/ui/MultiSelectFilter'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
-import { Check } from 'lucide-react'
+import { Check, Bookmark, X as XIcon } from 'lucide-react'
 import { pillClass, dotClass, pillClassActive, RAG_ORDER } from '@/lib/colors'
 import { loadGuiSettings, buttonStyle } from '@/lib/guiSettings'
 import { fmtDate, isOverdue, isDueToday } from '@/lib/utils'
+import { Input } from '@/components/ui/input'
 import { useDataLoader } from '@/hooks/useDataLoader'
 import { SplitPane } from '@/components/project/SplitPane'
 import { TaskModal } from '@/components/TaskModal'
@@ -36,6 +37,26 @@ type ProjectSortKey = 'workItem' | 'rag' | 'priority' | 'status' | 'statusCommen
 type ProjectSortEntry = { key: ProjectSortKey; dir: 'asc' | 'desc' }
 type GeneralSortKey = 'title' | 'priority' | 'due'
 type GeneralSortEntry = { key: GeneralSortKey; dir: 'asc' | 'desc' }
+
+interface SavedView {
+  name: string
+  ragFilters: RagStatus[]
+  priorityFilters: string[]
+  statusFilters: string[]
+  areaFilters: string[]
+  tagFilters: string[]
+}
+
+const LS_SAVED_VIEWS = 'myworker:saved-views'
+
+function loadSavedViews(): SavedView[] {
+  try { return JSON.parse(localStorage.getItem(LS_SAVED_VIEWS) ?? '[]') ?? [] }
+  catch { return [] }
+}
+
+function persistSavedViews(views: SavedView[]): void {
+  localStorage.setItem(LS_SAVED_VIEWS, JSON.stringify(views))
+}
 
 function loadArr(key: string, fallback: string[]): string[] {
   try { return JSON.parse(localStorage.getItem(key) ?? 'null') ?? fallback }
@@ -84,6 +105,9 @@ export default function Prime() {
   const [areaFilters,     setAreaFilters]     = useState<string[]>(()   => loadArr('myworker:prime-area2', []))
   const [tagFilters,      setTagFilters]      = useState<string[]>(()   => loadArr('myworker:prime-tags2', []))
   const [areaFilterButtons]                   = useState(() => localStorage.getItem('myworker:area-filter-buttons-projects') !== 'false')
+  const [savedViews,      setSavedViews]      = useState<SavedView[]>(loadSavedViews)
+  const [saveViewName,    setSaveViewName]    = useState('')
+  const [saveViewOpen,    setSaveViewOpen]    = useState(false)
 
   // ── Project sort (multi-sort stack) ───────────────────────────────────────
   const [projectSorts, setProjectSorts] = useState<ProjectSortEntry[]>(() =>
@@ -469,6 +493,32 @@ export default function Prime() {
 
   const hasActiveFilters = ragFilters.length > 0 || priorityFilters.length > 0 || areaFilters.length > 0 || statusFilters.length > 0 || tagFilters.length > 0
 
+  const saveCurrentView = () => {
+    const name = saveViewName.trim()
+    if (!name) return
+    const view: SavedView = { name, ragFilters, priorityFilters, statusFilters, areaFilters, tagFilters }
+    const updated = [...savedViews.filter(v => v.name !== name), view]
+    setSavedViews(updated)
+    persistSavedViews(updated)
+    setSaveViewName('')
+    setSaveViewOpen(false)
+    toast.success(`View "${name}" saved`)
+  }
+
+  const applyView = (view: SavedView) => {
+    setRagFilters(view.ragFilters)
+    setPriorityFilters(view.priorityFilters)
+    setStatusFilters(view.statusFilters)
+    setAreaFilters(view.areaFilters)
+    setTagFilters(view.tagFilters)
+  }
+
+  const deleteView = (name: string) => {
+    const updated = savedViews.filter(v => v.name !== name)
+    setSavedViews(updated)
+    persistSavedViews(updated)
+  }
+
   // All unique tags from projects + tasks — for the tags filter dropdown
   const allProjectTags = useMemo(() => {
     const tagSet = new Set<string>()
@@ -563,6 +613,35 @@ export default function Prime() {
           </Button>
         )}
 
+        {/* Save view */}
+        <Popover open={saveViewOpen} onOpenChange={setSaveViewOpen}>
+          <PopoverTrigger asChild>
+            <button
+              className="h-8 px-2 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border rounded-md hover:bg-accent transition-colors"
+              title="Save current filters as a named view"
+            >
+              <Bookmark className="h-3.5 w-3.5" />
+              Save view
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-56 p-3" align="start">
+            <p className="text-xs font-medium mb-2">Name this view</p>
+            <div className="flex gap-1.5">
+              <Input
+                value={saveViewName}
+                onChange={e => setSaveViewName(e.target.value)}
+                placeholder="e.g. Red + Platform"
+                className="h-7 text-xs flex-1"
+                onKeyDown={e => { if (e.key === 'Enter') saveCurrentView(); if (e.key === 'Escape') setSaveViewOpen(false) }}
+                autoFocus
+              />
+              <Button size="sm" className="h-7 px-2 text-xs" onClick={saveCurrentView} disabled={!saveViewName.trim()}>
+                Save
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
+
         {/* Expand / Collapse all — right side */}
         <div className="ml-auto">
           <button
@@ -637,6 +716,31 @@ export default function Prime() {
           Upcoming in {upcomingDays} days
         </button>
       </div>
+
+      {/* ── Toolbar row 3 — Saved views (only when views exist) ── */}
+      {savedViews.length > 0 && (
+        <div className="flex items-center gap-1.5 px-6 py-1.5 border-b bg-background shrink-0 flex-wrap">
+          <span className="text-xs text-muted-foreground mr-0.5">Views:</span>
+          {savedViews.map(view => (
+            <div key={view.name} className="flex items-center gap-0 border rounded-full overflow-hidden h-6">
+              <button
+                onClick={() => applyView(view)}
+                className="px-2.5 text-xs hover:bg-accent transition-colors h-full"
+                title={`Apply view: ${view.name}`}
+              >
+                {view.name}
+              </button>
+              <button
+                onClick={() => deleteView(view.name)}
+                className="pr-1.5 pl-0.5 text-muted-foreground hover:text-destructive transition-colors h-full flex items-center"
+                title={`Delete view "${view.name}"`}
+              >
+                <XIcon className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ── Split pane ── */}
       <SplitPane
@@ -1056,12 +1160,14 @@ export default function Prime() {
           <button onClick={() => handleGeneralSort('title')} className="flex-1 text-left hover:text-foreground transition-colors">
             Task<span className="ml-1"><GenSortInd col="title" /></span>
           </button>
-          <button onClick={() => handleGeneralSort('priority')} className="w-4 text-center shrink-0 hover:text-foreground transition-colors">
-            Pri<span className="ml-0.5"><GenSortInd col="priority" /></span>
-          </button>
-          <button onClick={() => handleGeneralSort('due')} className="w-14 text-right shrink-0 hover:text-foreground transition-colors">
-            Due<span className="ml-1"><GenSortInd col="due" /></span>
-          </button>
+          <div className="shrink-0 flex items-center gap-1.5">
+            <button onClick={() => handleGeneralSort('priority')} className="w-8 text-center hover:text-foreground transition-colors whitespace-nowrap">
+              Pri<span className="ml-0.5"><GenSortInd col="priority" /></span>
+            </button>
+            <button onClick={() => handleGeneralSort('due')} className="w-14 text-right hover:text-foreground transition-colors whitespace-nowrap">
+              Due<span className="ml-1"><GenSortInd col="due" /></span>
+            </button>
+          </div>
         </div>
 
         {/* Task list */}
