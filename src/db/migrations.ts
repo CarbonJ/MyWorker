@@ -403,6 +403,27 @@ const migrations: Migration[] = [
         );
     `,
   },
+  {
+    version: 15,
+    up: `
+      -- Re-run the is_archived back-fill as a standalone migration.
+      -- Migration v14 can hit a "duplicate column name" error on databases
+      -- where the ALTER TABLE committed but the process crashed before
+      -- PRAGMA user_version was written. The migration runner's catch block
+      -- skips the entire v14 SQL in that case, leaving is_archived = 0 for
+      -- all rows. This migration fixes that: it's a pure UPDATE with no DDL
+      -- so it cannot fail with duplicate column, and it is safe to run on
+      -- databases where the v14 back-fill already ran (WHERE is_archived = 0
+      -- simply won't match those rows).
+      UPDATE projects
+        SET is_archived = 1
+        WHERE is_archived = 0
+          AND status_id IN (
+            SELECT id FROM dropdown_options
+            WHERE type = 'project_status' AND lower(label) = 'done'
+          );
+    `,
+  },
 ]
 
 export async function runMigrations(handle: DbHandle): Promise<void> {
