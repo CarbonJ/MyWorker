@@ -424,6 +424,16 @@ export async function runMigrations(handle: DbHandle): Promise<void> {
       // and the migration will be retried on the next startup.
       await exec(sqlite, db, `PRAGMA user_version = ${migration.version};`)
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      // SQLite ALTER TABLE ADD COLUMN auto-commits even inside a transaction,
+      // so a crash between the ADD COLUMN and the PRAGMA user_version update
+      // leaves the column present but the version un-bumped. On the next
+      // startup the migration retries and hits "duplicate column name".
+      // The schema is already in the desired state — just bump the version.
+      if (msg.includes('duplicate column name')) {
+        await exec(sqlite, db, `PRAGMA user_version = ${migration.version};`)
+        continue
+      }
       console.error(`[db] Migration v${migration.version} FAILED`, err)
       throw err
     }
