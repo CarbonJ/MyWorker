@@ -334,7 +334,7 @@ export default function ReportingView() {
     const staleCount = ps.filter(p => effectiveStaleness(p) >= 14).length
 
     // Overdue tasks
-    const overdueTaskCount = scopedTasks.filter(t => t.status !== 'done' && isOverdue(t.dueDate)).length
+    const overdueTaskCount = scopedTasks.filter(t => t.status !== 'done' && t.projectId !== null && isOverdue(t.dueDate)).length
 
     // Area bars
     const areaCounts = new Map<number, number>()
