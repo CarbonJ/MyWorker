@@ -70,7 +70,7 @@ export function ProjectHeader({
     const priorityOpt = priorities.find(o => o.id === project.priorityId)
     return (
       <div className="shrink-0 px-4 py-2 border-b bg-background flex items-center gap-3 min-h-0">
-        <button onClick={() => navigate('/')} className="text-sm text-muted-foreground hover:text-foreground shrink-0">
+        <button onClick={() => navigate(-1)} className="text-sm text-muted-foreground hover:text-foreground shrink-0">
           ← Back
         </button>
         <div className="w-px h-4 bg-border shrink-0" />
@@ -106,7 +106,7 @@ export function ProjectHeader({
 
   return (
     <div className="shrink-0 px-6 py-4 border-b bg-background">
-      <button onClick={() => navigate('/')} className="text-sm text-muted-foreground hover:text-foreground mb-3 block">
+      <button onClick={() => navigate(-1)} className="text-sm text-muted-foreground hover:text-foreground mb-3 block">
         ← Back
       </button>
 

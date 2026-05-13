@@ -683,7 +683,7 @@ export default function Prime() {
                       setAreaFilters([])
                     } else {
                       setAreaFilters(prev =>
-                        prev.includes(opt.value) ? prev.filter(x => x !== opt.value) : [...prev, opt.value]
+                        prev.length === 1 && prev[0] === opt.value ? [] : [opt.value]
                       )
                     }
                   }}

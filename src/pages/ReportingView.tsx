@@ -1,7 +1,8 @@
 import { useState, useMemo, useRef, useLayoutEffect } from 'react'
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Clock } from 'lucide-react'
+import { Clock, Bookmark, X as XIcon } from 'lucide-react'
+import { toast } from 'sonner'
 import { useSearch } from '@/contexts/SearchContext'
 import { getAllProjects } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
@@ -11,6 +12,8 @@ import type { Project, DropdownOption, RagStatus, Task, WorkLogEntry } from '@/t
 import { RagBadge } from '@/components/RagBadge'
 import { ReportingExportModal } from '@/components/ReportingExportModal'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { MultiSelectFilter } from '@/components/ui/MultiSelectFilter'
 import { RAG_ORDER, pillClass, dotClass } from '@/lib/colors'
 import { loadGuiSettings, buttonStyle } from '@/lib/guiSettings'
@@ -19,6 +22,26 @@ import { fmtDate, isOverdue } from '@/lib/utils'
 
 type SortKey = 'staleness' | 'ragStatus' | 'workItem' | 'productArea' | 'priority' | 'latestStatus' | 'projectStatus' | 'openTasks'
 type SortEntry = { key: SortKey; dir: 'asc' | 'desc' }
+
+interface SavedView {
+  name: string
+  ragFilters: RagStatus[]
+  areaFilters: string[]
+  statusFilters: string[]
+  tagFilters: string[]
+  sorts: SortEntry[]
+}
+
+const LS_REPORTING_VIEWS = 'myworker:reporting-saved-views'
+
+function loadSavedViews(): SavedView[] {
+  try { return JSON.parse(localStorage.getItem(LS_REPORTING_VIEWS) ?? '[]') ?? [] }
+  catch { return [] }
+}
+
+function persistSavedViews(views: SavedView[]): void {
+  localStorage.setItem(LS_REPORTING_VIEWS, JSON.stringify(views))
+}
 
 interface PageData {
   projects: Project[]
@@ -70,14 +93,20 @@ function stalenessColor(days: number): string {
   return 'text-red-600 dark:text-red-400'
 }
 
-function StatCard({ label, value, valueClass = 'text-foreground' }: {
-  label: string; value: number; valueClass?: string
+function StatCard({ label, value, valueClass = 'text-foreground', active, onClick }: {
+  label: string; value: number; valueClass?: string; active?: boolean; onClick?: () => void
 }) {
   return (
-    <div className="flex flex-col items-center justify-center bg-accent/40 rounded-lg px-4 py-2 min-w-[72px]">
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex flex-col items-center justify-center rounded-lg px-4 py-2 min-w-[72px] transition-colors select-none
+        ${onClick ? 'cursor-pointer hover:ring-2 hover:ring-primary/40' : 'cursor-default'}
+        ${active ? 'bg-primary/15 ring-2 ring-primary/50' : 'bg-accent/40'}`}
+    >
       <span className={`text-xl font-bold tabular-nums ${valueClass}`}>{value}</span>
       <span className="text-[10px] text-muted-foreground uppercase tracking-wide mt-0.5 text-center">{label}</span>
-    </div>
+    </button>
   )
 }
 
@@ -95,6 +124,18 @@ export default function ReportingView() {
   const [statusFilters,   setStatusFilters]   = useState<string[]>([])
   const [tagFilters,      setTagFilters]      = useState<string[]>([])
   const [filterInsights,  setFilterInsights]  = useState(false)
+
+  // Quick filter from stat cards (exclusive — only one at a time)
+  type QuickFilter = 'red' | 'amber' | 'green' | 'stale' | 'overdue_tasks' | 'no_due_date'
+  const [activeQuickFilter, setActiveQuickFilter] = useState<QuickFilter | null>(null)
+
+  const toggleQuickFilter = (f: QuickFilter) =>
+    setActiveQuickFilter(prev => prev === f ? null : f)
+
+  // Saved views
+  const [savedViews,   setSavedViews]   = useState<SavedView[]>(loadSavedViews)
+  const [saveViewName, setSaveViewName] = useState('')
+  const [saveViewOpen, setSaveViewOpen] = useState(false)
 
   // Export modal
   const [exportOpen, setExportOpen] = useState(false)
@@ -191,6 +232,16 @@ export default function ReportingView() {
     return map
   }, [allWorkLog])
 
+  /** Projects that have at least one overdue non-done task — used by quick filter */
+  const overdueTaskProjectIds = useMemo(() => {
+    const ids = new Set<number>()
+    for (const t of allTasks) {
+      if (t.status !== 'done' && isOverdue(t.dueDate) && t.projectId !== null)
+        ids.add(t.projectId)
+    }
+    return ids
+  }, [allTasks])
+
   // ── Filtered + sorted list ───────────────────────────────────────────────────
 
   const sorted = useMemo(() => {
@@ -214,6 +265,17 @@ export default function ReportingView() {
           tasks.some(task => task.tags.some(t => t.toLowerCase() === tf.toLowerCase()))
         )
       })
+    }
+
+    if (activeQuickFilter !== null) {
+      switch (activeQuickFilter) {
+        case 'red':           list = list.filter(p => p.ragStatus === 'Red'); break
+        case 'amber':         list = list.filter(p => p.ragStatus === 'Amber'); break
+        case 'green':         list = list.filter(p => p.ragStatus === 'Green'); break
+        case 'stale':         list = list.filter(p => (stalenessMap.get(p.id) ?? Infinity) >= 14); break
+        case 'overdue_tasks': list = list.filter(p => overdueTaskProjectIds.has(p.id)); break
+        case 'no_due_date':   list = list.filter(p => !p.dueDate); break
+      }
     }
 
     if (query.trim()) {
@@ -247,7 +309,7 @@ export default function ReportingView() {
       }
       return 0
     })
-  }, [projects, sorts, ragFilters, areaFilters, statusFilters, tagFilters, query, priorities, productAreas, projectStatuses, taskCountsByProject, stalenessMap, allTasks])
+  }, [projects, sorts, ragFilters, areaFilters, statusFilters, tagFilters, activeQuickFilter, query, priorities, productAreas, projectStatuses, taskCountsByProject, stalenessMap, overdueTaskProjectIds, allTasks])
 
   // ── Metrics (single pass) ────────────────────────────────────────────────────
 
@@ -288,16 +350,6 @@ export default function ReportingView() {
         .filter(d => d.count > 0),
       ...(noAreaCount > 0 ? [{ label: 'No Area', count: noAreaCount, pct: noAreaCount / maxAreaCount * 100 }] : []),
     ]
-
-    // Attention: stale 14d+, Red first then most stale
-    const attentionProjects = ps
-      .filter(p => effectiveStaleness(p) >= 14)
-      .sort((a, b) => {
-        const rd = RAG_ORDER[a.ragStatus] - RAG_ORDER[b.ragStatus]
-        if (rd !== 0) return rd
-        return effectiveStaleness(b) - effectiveStaleness(a)
-      })
-      .slice(0, 8)
 
     // 1. Red × Overdue compound risk
     const overdueTaskProjectIds = new Set<number>()
@@ -372,13 +424,42 @@ export default function ReportingView() {
     const noDueDateCount = ps.filter(p => !p.dueDate).length
 
     return {
-      ragCounts, staleCount, overdueTaskCount, areaBarData, attentionProjects,
+      ragCounts, staleCount, overdueTaskCount, areaBarData,
       redOverdueProjects, priorityBarData, mostActiveProjects,
       ragByAreaData, noOpenTasksProjects,
       activityPulse: { thisWeek: activityThisWeek, lastWeek: activityLastWeek },
       noDueDateCount,
     }
   }, [projects, sorted, filterInsights, allWorkLog, allTasks, productAreas, priorities, stalenessMap])
+
+  const saveCurrentView = () => {
+    const name = saveViewName.trim()
+    if (!name) return
+    const view: SavedView = { name, ragFilters, areaFilters, statusFilters, tagFilters, sorts }
+    const updated = [...savedViews.filter(v => v.name !== name), view]
+    setSavedViews(updated)
+    persistSavedViews(updated)
+    setSaveViewName('')
+    setSaveViewOpen(false)
+    toast.success(`View "${name}" saved`)
+  }
+
+  const applyView = (view: SavedView) => {
+    setRagFilters(view.ragFilters)
+    setAreaFilters(view.areaFilters)
+    setStatusFilters(view.statusFilters)
+    setTagFilters(view.tagFilters)
+    setSorts(() => {
+      localStorage.setItem('myworker:reporting-sorts', JSON.stringify(view.sorts))
+      return view.sorts
+    })
+  }
+
+  const deleteView = (name: string) => {
+    const updated = savedViews.filter(v => v.name !== name)
+    setSavedViews(updated)
+    persistSavedViews(updated)
+  }
 
   const SortIcon = ({ col }: { col: SortKey }) => {
     const idx = sorts.findIndex(s => s.key === col)
@@ -392,7 +473,7 @@ export default function ReportingView() {
   }
 
   const thClass = 'relative px-3 py-1.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground whitespace-nowrap'
-  const filtersActive = ragFilters.length > 0 || areaFilters.length > 0 || statusFilters.length > 0 || tagFilters.length > 0
+  const filtersActive = ragFilters.length > 0 || areaFilters.length > 0 || statusFilters.length > 0 || tagFilters.length > 0 || activeQuickFilter !== null
 
   // ── Column resizing ────────────────────────────────────────────────────────
   const COL_KEYS = ['staleness', 'ragStatus', 'workItem', 'productArea', 'priority', 'projectStatus', 'openTasks', 'latestStatus', 'latestUpdate'] as const
@@ -522,11 +603,40 @@ export default function ReportingView() {
             variant="ghost"
             size="sm"
             className="h-8 text-xs text-muted-foreground hover:text-foreground"
-            onClick={() => { setRagFilters([]); setAreaFilters([]); setStatusFilters([]); setTagFilters([]) }}
+            onClick={() => { setRagFilters([]); setAreaFilters([]); setStatusFilters([]); setTagFilters([]); setActiveQuickFilter(null) }}
           >
             ✕ Reset filters
           </Button>
         )}
+
+        {/* Save view */}
+        <Popover open={saveViewOpen} onOpenChange={setSaveViewOpen}>
+          <PopoverTrigger asChild>
+            <button
+              className="h-8 px-2 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border rounded-md hover:bg-accent transition-colors"
+              title="Save current filters and sort as a named view"
+            >
+              <Bookmark className="h-3.5 w-3.5" />
+              Save view
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-56 p-3" align="start">
+            <p className="text-xs font-medium mb-2">Name this view</p>
+            <div className="flex gap-1.5">
+              <Input
+                value={saveViewName}
+                onChange={e => setSaveViewName(e.target.value)}
+                placeholder="e.g. Red + Platform"
+                className="h-7 text-xs flex-1"
+                onKeyDown={e => { if (e.key === 'Enter') saveCurrentView(); if (e.key === 'Escape') setSaveViewOpen(false) }}
+                autoFocus
+              />
+              <Button size="sm" className="h-7 px-2 text-xs" onClick={saveCurrentView} disabled={!saveViewName.trim()}>
+                Save
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
 
         <div className="ml-auto flex items-center gap-2">
           <button onClick={toggleMetrics} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
@@ -553,6 +663,31 @@ export default function ReportingView() {
         </div>
       </div>
 
+      {/* ── Saved views row ─────────────────────────────────────────────── */}
+      {savedViews.length > 0 && (
+        <div className="flex items-center gap-1.5 px-6 py-1.5 border-b bg-background shrink-0 flex-wrap">
+          <span className="text-xs text-muted-foreground mr-0.5">Views:</span>
+          {savedViews.map(view => (
+            <div key={view.name} className="flex items-center gap-0 border rounded-full overflow-hidden h-6">
+              <button
+                onClick={() => applyView(view)}
+                className="px-2.5 text-xs hover:bg-accent transition-colors h-full"
+                title={`Apply view: ${view.name}`}
+              >
+                {view.name}
+              </button>
+              <button
+                onClick={() => deleteView(view.name)}
+                className="pr-1.5 pl-0.5 text-muted-foreground hover:text-destructive transition-colors h-full flex items-center"
+                title={`Delete view "${view.name}"`}
+              >
+                <XIcon className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* ── Metrics Panel ────────────────────────────────────────────────── */}
       {metricsOpen && (
         <div className="shrink-0 max-h-[44vh] overflow-auto border-b-2 border-b-border/60 px-6 py-4 space-y-4 bg-accent/10">
@@ -562,12 +697,12 @@ export default function ReportingView() {
             {/* Stat cards */}
             <div className="flex gap-3 flex-wrap">
               <StatCard label="Projects" value={projects.length} />
-              <StatCard label="Red" value={metrics.ragCounts.Red} valueClass="text-red-600" />
-              <StatCard label="Amber" value={metrics.ragCounts.Amber} valueClass="text-amber-600" />
-              <StatCard label="Green" value={metrics.ragCounts.Green} valueClass="text-green-600" />
-              <StatCard label="Stale 14d+" value={metrics.staleCount} valueClass={metrics.staleCount > 0 ? 'text-amber-600' : 'text-muted-foreground'} />
-              <StatCard label="Overdue tasks" value={metrics.overdueTaskCount} valueClass={metrics.overdueTaskCount > 0 ? 'text-red-600' : 'text-muted-foreground'} />
-              <StatCard label="No due date" value={metrics.noDueDateCount} valueClass="text-muted-foreground" />
+              <StatCard label="Red"          value={metrics.ragCounts.Red}    valueClass="text-red-600"   active={activeQuickFilter === 'red'}           onClick={() => toggleQuickFilter('red')} />
+              <StatCard label="Amber"        value={metrics.ragCounts.Amber}  valueClass="text-amber-600" active={activeQuickFilter === 'amber'}         onClick={() => toggleQuickFilter('amber')} />
+              <StatCard label="Green"        value={metrics.ragCounts.Green}  valueClass="text-green-600" active={activeQuickFilter === 'green'}         onClick={() => toggleQuickFilter('green')} />
+              <StatCard label="Stale 14d+"   value={metrics.staleCount}       valueClass={metrics.staleCount > 0 ? 'text-amber-600' : 'text-muted-foreground'} active={activeQuickFilter === 'stale'}         onClick={() => toggleQuickFilter('stale')} />
+              <StatCard label="Overdue tasks" value={metrics.overdueTaskCount} valueClass={metrics.overdueTaskCount > 0 ? 'text-red-600' : 'text-muted-foreground'} active={activeQuickFilter === 'overdue_tasks'} onClick={() => toggleQuickFilter('overdue_tasks')} />
+              <StatCard label="No due date"  value={metrics.noDueDateCount}   valueClass="text-muted-foreground" active={activeQuickFilter === 'no_due_date'}    onClick={() => toggleQuickFilter('no_due_date')} />
             </div>
 
             {/* Divider */}
@@ -746,31 +881,6 @@ export default function ReportingView() {
 
           </div>
 
-          {/* Row 4 — Attention list */}
-          {metrics.attentionProjects.length > 0 && (
-            <div className="space-y-1.5">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold">Needs attention (stale 14d+)</p>
-              <div className="flex gap-2 flex-wrap">
-                {metrics.attentionProjects.map(p => {
-                  const logDays = stalenessMap.get(p.id)
-                  const days = logDays ?? Math.max(0, Math.floor((Date.now() - new Date(p.createdAt).getTime()) / 86_400_000))
-                  const ragDot = p.ragStatus === 'Red' ? '🔴' : p.ragStatus === 'Amber' ? '🟡' : '🟢'
-                  const ageLabel = logDays === undefined ? `no log · ${days}d old` : `${days}d ago`
-                  return (
-                    <button
-                      key={p.id}
-                      onClick={() => navigate(`/projects/${p.id}`)}
-                      className="inline-flex items-center gap-1 text-[11px] bg-accent/60 border rounded-full px-2.5 py-0.5 hover:bg-accent hover:border-foreground/20 transition-colors cursor-pointer"
-                    >
-                      <span>{ragDot}</span>
-                      <span className="font-medium">{p.workItem}</span>
-                      <span className="text-muted-foreground">· {ageLabel}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
