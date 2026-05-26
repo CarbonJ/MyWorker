@@ -11,10 +11,16 @@ interface Props {
  * Uses remark-gfm for GitHub Flavoured Markdown support:
  * tables, task lists (- [ ]), strikethrough, autolinks.
  */
+const components = {
+  a: ({ href, children }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
+    <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
+  ),
+}
+
 export function MarkdownContent({ children, className }: Props) {
   return (
     <div className={`prose prose-sm dark:prose-invert max-w-none ${className ?? ''}`}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
         {children}
       </ReactMarkdown>
     </div>

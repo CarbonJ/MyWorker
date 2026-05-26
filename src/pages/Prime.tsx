@@ -23,6 +23,7 @@ import { TaskModal } from '@/components/TaskModal'
 import { RecurringCompleteDialog } from '@/components/RecurringCompleteDialog'
 import { ProjectModal } from '@/components/ProjectModal'
 import { CalendarIcon, RotateCcw } from 'lucide-react'
+import { MarkdownContent } from '@/components/MarkdownContent'
 
 interface PageData {
   projects: Project[]
@@ -141,6 +142,8 @@ export default function Prime() {
 
   // Project modal for creating projects
   const [projectModalOpen, setProjectModalOpen] = useState(false)
+
+  const [draggedTaskId, setDraggedTaskId] = useState<number | null>(null)
 
   const { data, reload, patchData } = useDataLoader<PageData>(
     async () => {
@@ -462,6 +465,24 @@ export default function Prime() {
       reload()
     } finally {
       setRecurringTask(null)
+    }
+  }
+
+  const assignTaskToProject = async (taskId: number, projectId: number) => {
+    const task = allTasks.find(t => t.id === taskId)
+    if (!task) return
+    const projectName = projects.find(p => p.id === projectId)?.workItem ?? 'project'
+    try {
+      await updateTask({ id: taskId, projectId })
+      patchData(prev => ({
+        ...prev,
+        allTasks: prev.allTasks.map(t =>
+          t.id === taskId ? { ...t, projectId, productAreaId: null } : t
+        ),
+      }))
+      toast.success(`"${task.title}" assigned to ${projectName}`)
+    } catch (err) {
+      toast.error(`Failed to assign task: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
@@ -844,7 +865,28 @@ export default function Prime() {
     const latestLog  = latestLogByProjectMap.get(p.id)
 
     return (
-      <tbody className="group/proj">
+      <tbody
+        className="group/proj"
+        onDragOver={e => {
+          if (!e.dataTransfer.types.includes('application/x-task-id')) return
+          e.preventDefault()
+          e.dataTransfer.dropEffect = 'move'
+          e.currentTarget.classList.add('outline', 'outline-2', 'outline-blue-400', '-outline-offset-2')
+        }}
+        onDragLeave={e => {
+          if (e.currentTarget.contains(e.relatedTarget as Node)) return
+          e.currentTarget.classList.remove('outline', 'outline-2', 'outline-blue-400', '-outline-offset-2')
+        }}
+        onDrop={e => {
+          e.currentTarget.classList.remove('outline', 'outline-2', 'outline-blue-400', '-outline-offset-2')
+          const rawId = e.dataTransfer.getData('application/x-task-id')
+          if (!rawId) return
+          const taskId = Number(rawId)
+          if (Number.isNaN(taskId)) return
+          e.preventDefault()
+          assignTaskToProject(taskId, p.id)
+        }}
+      >
         {/* TR1 — project header */}
         <tr
           onClick={() => navigate(`/projects/${p.id}`)}
@@ -1019,9 +1061,11 @@ export default function Prime() {
         >
           <td className="w-10" />
           <td className="px-3 pb-1.5 pt-0 overflow-hidden max-w-0">
-            <span className="text-xs italic text-muted-foreground/70 truncate block pl-0">
-              {latestLog ? latestLog.note : '—'}
-            </span>
+            <div className="truncate text-muted-foreground/70 [&_.prose]:!text-xs [&_p]:m-0 [&_p]:inline">
+              {latestLog
+                ? <MarkdownContent>{latestLog.note.split('\n')[0]}</MarkdownContent>
+                : <span className="text-xs">—</span>}
+            </div>
           </td>
           <td colSpan={4} />
         </tr>
@@ -1191,7 +1235,14 @@ export default function Prime() {
 
     return (
       <div
-        className={`px-4 py-2 hover:bg-accent/50 transition-colors cursor-pointer ${t.status === 'done' && !completedToday ? 'opacity-60' : ''}`}
+        className={`px-4 py-2 hover:bg-accent/50 transition-colors cursor-grab active:cursor-grabbing ${t.status === 'done' && !completedToday ? 'opacity-60' : ''} ${draggedTaskId === t.id ? 'opacity-40 ring-1 ring-inset ring-blue-300' : ''}`}
+        draggable
+        onDragStart={e => {
+          e.dataTransfer.setData('application/x-task-id', String(t.id))
+          e.dataTransfer.effectAllowed = 'move'
+          setDraggedTaskId(t.id)
+        }}
+        onDragEnd={() => setDraggedTaskId(null)}
         onClick={() => { setEditingTask(t); setTaskModalOpen(true) }}
       >
         {/* Line 1: status dot + title + priority dot + due date */}

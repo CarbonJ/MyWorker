@@ -23,6 +23,7 @@ export async function getLatestWorkLogPerProject(): Promise<WorkLogEntry[]> {
     WITH ranked AS (
       SELECT *, ROW_NUMBER() OVER (PARTITION BY project_id ORDER BY created_at DESC) AS rn
       FROM work_log_entries
+      WHERE note NOT LIKE '✓ Completed%'
     )
     SELECT id, project_id, note, created_at FROM ranked WHERE rn = 1
   `)

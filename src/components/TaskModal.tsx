@@ -172,19 +172,19 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
       <DialogContent
-        className="max-w-lg"
+        className="max-w-lg flex flex-col max-h-[90vh]"
         onKeyDown={e => {
           if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') handleSave()
         }}
       >
-        <DialogHeader>
+        <DialogHeader className="shrink-0">
           <DialogTitle>{isEdit ? 'Edit Task' : 'New Task'}</DialogTitle>
           <DialogDescription className="sr-only">
             {isEdit ? 'Edit task details' : 'Create a new task'}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2 overflow-x-hidden min-w-0">
+        <div className="space-y-4 py-2 overflow-y-auto overflow-x-hidden min-w-0 flex-1 min-h-0">
           {/* Title */}
           <div className={fieldClass}>
             <Label htmlFor="task-title">Title <span className="text-destructive">*</span></Label>
@@ -451,7 +451,7 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
           />
         </div>
 
-        <DialogFooter className="flex items-center">
+        <DialogFooter className="flex items-center shrink-0">
           {isEdit && (
             <Button variant="destructive" onClick={handleDelete} className="mr-auto">
               Delete

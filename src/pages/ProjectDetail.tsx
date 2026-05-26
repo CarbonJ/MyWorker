@@ -193,7 +193,6 @@ export default function ProjectDetail() {
           <WorkLogPane
             projectId={projectId}
             workLog={workLog}
-            latestStatus={project.latestStatus}
             onSaved={load}
             expanded={workLogExpanded}
             onToggleExpand={() => setWorkLogExpanded(v => !v)}

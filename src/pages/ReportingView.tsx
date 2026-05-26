@@ -232,15 +232,18 @@ export default function ReportingView() {
     return map
   }, [allWorkLog])
 
+  /** IDs of active (non-archived) projects — used to exclude tasks from archived projects */
+  const activeProjectIds = useMemo(() => new Set(projects.map(p => p.id)), [projects])
+
   /** Projects that have at least one overdue non-done task — used by quick filter */
   const overdueTaskProjectIds = useMemo(() => {
     const ids = new Set<number>()
     for (const t of allTasks) {
-      if (t.status !== 'done' && isOverdue(t.dueDate) && t.projectId !== null)
+      if (t.status !== 'done' && isOverdue(t.dueDate) && t.projectId !== null && activeProjectIds.has(t.projectId))
         ids.add(t.projectId)
     }
     return ids
-  }, [allTasks])
+  }, [allTasks, activeProjectIds])
 
   // ── Filtered + sorted list ───────────────────────────────────────────────────
 
@@ -334,7 +337,7 @@ export default function ReportingView() {
     const staleCount = ps.filter(p => effectiveStaleness(p) >= 14).length
 
     // Overdue tasks
-    const overdueTaskCount = scopedTasks.filter(t => t.status !== 'done' && t.projectId !== null && isOverdue(t.dueDate)).length
+    const overdueTaskCount = scopedTasks.filter(t => t.status !== 'done' && t.projectId !== null && activeProjectIds.has(t.projectId) && isOverdue(t.dueDate)).length
 
     // Area bars
     const areaCounts = new Map<number, number>()
@@ -430,7 +433,7 @@ export default function ReportingView() {
       activityPulse: { thisWeek: activityThisWeek, lastWeek: activityLastWeek },
       noDueDateCount,
     }
-  }, [projects, sorted, filterInsights, allWorkLog, allTasks, productAreas, priorities, stalenessMap])
+  }, [projects, sorted, filterInsights, allWorkLog, allTasks, productAreas, priorities, stalenessMap, activeProjectIds])
 
   const saveCurrentView = () => {
     const name = saveViewName.trim()

@@ -20,13 +20,12 @@ import { loadGuiSettings, altRowStyle } from '@/lib/guiSettings'
 interface Props {
   projectId: number
   workLog: WorkLogEntry[]
-  latestStatus?: string
   onSaved: () => void
   expanded?: boolean
   onToggleExpand?: () => void
 }
 
-export function WorkLogPane({ projectId, workLog, latestStatus, onSaved, expanded = false, onToggleExpand }: Props) {
+export function WorkLogPane({ projectId, workLog, onSaved, expanded = false, onToggleExpand }: Props) {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editDraft, setEditDraft] = useState('')
   const [filterCompleted, setFilterCompleted] = useState(true)
@@ -107,7 +106,7 @@ export function WorkLogPane({ projectId, workLog, latestStatus, onSaved, expande
       </div>
 
       <div className="px-4 py-3 border-b bg-muted/30 shrink-0">
-        <WorkLogEntryForm projectId={projectId} latestStatus={latestStatus} onSaved={onSaved} />
+        <WorkLogEntryForm projectId={projectId} onSaved={onSaved} />
       </div>
 
       <div className="flex-1 overflow-y-auto divide-y divide-border min-h-0">

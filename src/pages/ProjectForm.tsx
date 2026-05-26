@@ -7,9 +7,9 @@ import type { Project, DropdownOption, RagStatus, Stakeholder } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { TagInput } from '@/components/TagInput'
+import { MarkdownField } from '@/components/MarkdownField'
 
 export default function ProjectForm() {
   const navigate = useNavigate()
@@ -170,16 +170,14 @@ export default function ProjectForm() {
         </div>
 
         {/* Work Description */}
-        <div className={fieldClass}>
-          <Label htmlFor="workDesc">Work Description</Label>
-          <Textarea
-            id="workDesc"
-            value={workDescription}
-            onChange={e => setWorkDescription(e.target.value)}
-            placeholder="What is this project about?"
-            rows={3}
-          />
-        </div>
+        <MarkdownField
+          id="workDesc"
+          label="Work Description"
+          value={workDescription}
+          onChange={setWorkDescription}
+          placeholder="What is this project about?"
+          rows={3}
+        />
 
         {/* RAG + Priority */}
         <div className={sectionClass}>

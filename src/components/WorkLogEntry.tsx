@@ -1,20 +1,16 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { addWorkLogEntry } from '@/db/workLog'
-import { updateProject } from '@/db/projects'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { MarkdownField } from '@/components/MarkdownField'
 
 interface Props {
   projectId: number
-  latestStatus?: string
   onSaved: () => void
 }
 
-export function WorkLogEntryForm({ projectId, latestStatus, onSaved }: Props) {
+export function WorkLogEntryForm({ projectId, onSaved }: Props) {
   const [note, setNote] = useState('')
-  const [statusComment, setStatusComment] = useState('')
   const [saving, setSaving] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -23,11 +19,7 @@ export function WorkLogEntryForm({ projectId, latestStatus, onSaved }: Props) {
     setSaving(true)
     try {
       await addWorkLogEntry(projectId, note.trim())
-      if (statusComment.trim()) {
-        await updateProject({ id: projectId, latestStatus: statusComment.trim() })
-      }
       setNote('')
-      setStatusComment('')
       onSaved()
     } catch (err) {
       toast.error(`Failed to add work log entry: ${err instanceof Error ? err.message : String(err)}`)
@@ -44,15 +36,6 @@ export function WorkLogEntryForm({ projectId, latestStatus, onSaved }: Props) {
         onChange={setNote}
         placeholder="Add a work log entry…"
         rows={3}
-        onKeyDown={e => {
-          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') handleSubmit(e as unknown as React.FormEvent)
-        }}
-      />
-      <Input
-        value={statusComment}
-        onChange={e => setStatusComment(e.target.value)}
-        placeholder={latestStatus ? `Status: ${latestStatus}` : 'Update status comment… (optional)'}
-        className="h-7 text-xs"
         onKeyDown={e => {
           if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') handleSubmit(e as unknown as React.FormEvent)
         }}
