@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useLayoutEffect } from 'react'
+import { useState, useMemo, useRef, useLayoutEffect, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Clock, Bookmark, X as XIcon } from 'lucide-react'
@@ -8,6 +8,7 @@ import { getAllProjects } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
 import { getAllTasks } from '@/db/tasks'
 import { getAllWorkLogEntries } from '@/db/workLog'
+import { getSavedViewsForPage, upsertSavedView, deleteSavedView } from '@/db/savedViews'
 import type { Project, DropdownOption, RagStatus, Task, WorkLogEntry } from '@/types'
 import { RagBadge } from '@/components/RagBadge'
 import { ReportingExportModal } from '@/components/ReportingExportModal'
@@ -32,16 +33,6 @@ interface SavedView {
   sorts: SortEntry[]
 }
 
-const LS_REPORTING_VIEWS = 'myworker:reporting-saved-views'
-
-function loadSavedViews(): SavedView[] {
-  try { return JSON.parse(localStorage.getItem(LS_REPORTING_VIEWS) ?? '[]') ?? [] }
-  catch { return [] }
-}
-
-function persistSavedViews(views: SavedView[]): void {
-  localStorage.setItem(LS_REPORTING_VIEWS, JSON.stringify(views))
-}
 
 interface PageData {
   projects: Project[]
@@ -133,7 +124,7 @@ export default function ReportingView() {
     setActiveQuickFilter(prev => prev === f ? null : f)
 
   // Saved views
-  const [savedViews,   setSavedViews]   = useState<SavedView[]>(loadSavedViews)
+  const [savedViews,   setSavedViews]   = useState<SavedView[]>([])
   const [saveViewName, setSaveViewName] = useState('')
   const [saveViewOpen, setSaveViewOpen] = useState(false)
 
@@ -435,13 +426,29 @@ export default function ReportingView() {
     }
   }, [projects, sorted, filterInsights, allWorkLog, allTasks, productAreas, priorities, stalenessMap, activeProjectIds])
 
-  const saveCurrentView = () => {
+  // Load saved views from DB (migrate one-time from localStorage if present)
+  useEffect(() => {
+    const load = async () => {
+      const lsRaw = localStorage.getItem('myworker:reporting-saved-views')
+      if (lsRaw) {
+        try {
+          const lsViews: SavedView[] = JSON.parse(lsRaw) ?? []
+          for (const v of lsViews) await upsertSavedView('reporting', v.name, JSON.stringify(v))
+        } catch {}
+        localStorage.removeItem('myworker:reporting-saved-views')
+      }
+      const rows = await getSavedViewsForPage('reporting')
+      setSavedViews(rows.map(r => JSON.parse(r.data) as SavedView))
+    }
+    load().catch(console.error)
+  }, [])
+
+  const saveCurrentView = async () => {
     const name = saveViewName.trim()
     if (!name) return
     const view: SavedView = { name, ragFilters, areaFilters, statusFilters, tagFilters, sorts }
-    const updated = [...savedViews.filter(v => v.name !== name), view]
-    setSavedViews(updated)
-    persistSavedViews(updated)
+    await upsertSavedView('reporting', name, JSON.stringify(view))
+    setSavedViews(prev => [...prev.filter(v => v.name !== name), view])
     setSaveViewName('')
     setSaveViewOpen(false)
     toast.success(`View "${name}" saved`)
@@ -458,10 +465,9 @@ export default function ReportingView() {
     })
   }
 
-  const deleteView = (name: string) => {
-    const updated = savedViews.filter(v => v.name !== name)
-    setSavedViews(updated)
-    persistSavedViews(updated)
+  const deleteView = async (name: string) => {
+    await deleteSavedView('reporting', name)
+    setSavedViews(prev => prev.filter(v => v.name !== name))
   }
 
   const SortIcon = ({ col }: { col: SortKey }) => {

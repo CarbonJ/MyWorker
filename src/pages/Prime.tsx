@@ -5,6 +5,7 @@ import { getAllProjects, updateProject } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
 import { getAllTasks, updateTask } from '@/db/tasks'
 import { getLatestWorkLogPerProject, addWorkLogEntry } from '@/db/workLog'
+import { getSavedViewsForPage, upsertSavedView, deleteSavedView } from '@/db/savedViews'
 import type { Project, DropdownOption, RagStatus, Task, WorkLogEntry, TaskStatus } from '@/types'
 import { RagBadge } from '@/components/RagBadge'
 import { Button } from '@/components/ui/button'
@@ -48,16 +49,6 @@ interface SavedView {
   tagFilters: string[]
 }
 
-const LS_SAVED_VIEWS = 'myworker:saved-views'
-
-function loadSavedViews(): SavedView[] {
-  try { return JSON.parse(localStorage.getItem(LS_SAVED_VIEWS) ?? '[]') ?? [] }
-  catch { return [] }
-}
-
-function persistSavedViews(views: SavedView[]): void {
-  localStorage.setItem(LS_SAVED_VIEWS, JSON.stringify(views))
-}
 
 function loadArr(key: string, fallback: string[]): string[] {
   try { return JSON.parse(localStorage.getItem(key) ?? 'null') ?? fallback }
@@ -106,7 +97,7 @@ export default function Prime() {
   const [areaFilters,     setAreaFilters]     = useState<string[]>(()   => loadArr('myworker:prime-area2', []))
   const [tagFilters,      setTagFilters]      = useState<string[]>(()   => loadArr('myworker:prime-tags2', []))
   const [areaFilterButtons]                   = useState(() => localStorage.getItem('myworker:area-filter-buttons-projects') !== 'false')
-  const [savedViews,      setSavedViews]      = useState<SavedView[]>(loadSavedViews)
+  const [savedViews,      setSavedViews]      = useState<SavedView[]>([])
   const [saveViewName,    setSaveViewName]    = useState('')
   const [saveViewOpen,    setSaveViewOpen]    = useState(false)
 
@@ -182,6 +173,23 @@ export default function Prime() {
   useEffect(() => { localStorage.setItem('myworker:prime-proj-sorts2',  JSON.stringify(projectSorts))    }, [projectSorts])
   useEffect(() => { localStorage.setItem('myworker:prime-gen-status2',  JSON.stringify(generalStatusFilters)) }, [generalStatusFilters])
   useEffect(() => { localStorage.setItem('myworker:prime-gen-sorts2',   JSON.stringify(generalSorts))    }, [generalSorts])
+
+  // Load saved views from DB (migrate one-time from localStorage if present)
+  useEffect(() => {
+    const load = async () => {
+      const lsRaw = localStorage.getItem('myworker:saved-views')
+      if (lsRaw) {
+        try {
+          const lsViews: SavedView[] = JSON.parse(lsRaw) ?? []
+          for (const v of lsViews) await upsertSavedView('prime', v.name, JSON.stringify(v))
+        } catch {}
+        localStorage.removeItem('myworker:saved-views')
+      }
+      const rows = await getSavedViewsForPage('prime')
+      setSavedViews(rows.map(r => JSON.parse(r.data) as SavedView))
+    }
+    load().catch(console.error)
+  }, [])
 
   /** Latest work log entry per project */
   const latestLogByProjectMap = useMemo(() => {
@@ -514,13 +522,12 @@ export default function Prime() {
 
   const hasActiveFilters = ragFilters.length > 0 || priorityFilters.length > 0 || areaFilters.length > 0 || statusFilters.length > 0 || tagFilters.length > 0
 
-  const saveCurrentView = () => {
+  const saveCurrentView = async () => {
     const name = saveViewName.trim()
     if (!name) return
     const view: SavedView = { name, ragFilters, priorityFilters, statusFilters, areaFilters, tagFilters }
-    const updated = [...savedViews.filter(v => v.name !== name), view]
-    setSavedViews(updated)
-    persistSavedViews(updated)
+    await upsertSavedView('prime', name, JSON.stringify(view))
+    setSavedViews(prev => [...prev.filter(v => v.name !== name), view])
     setSaveViewName('')
     setSaveViewOpen(false)
     toast.success(`View "${name}" saved`)
@@ -534,10 +541,9 @@ export default function Prime() {
     setTagFilters(view.tagFilters)
   }
 
-  const deleteView = (name: string) => {
-    const updated = savedViews.filter(v => v.name !== name)
-    setSavedViews(updated)
-    persistSavedViews(updated)
+  const deleteView = async (name: string) => {
+    await deleteSavedView('prime', name)
+    setSavedViews(prev => prev.filter(v => v.name !== name))
   }
 
   // All unique tags from projects + tasks — for the tags filter dropdown

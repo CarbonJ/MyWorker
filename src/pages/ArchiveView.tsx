@@ -4,6 +4,7 @@ import { useSearch } from '@/contexts/SearchContext'
 import { toast } from 'sonner'
 import { getArchivedProjects } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
+import { getSavedViewsForPage, upsertSavedView, deleteSavedView } from '@/db/savedViews'
 import type { Project, DropdownOption, RagStatus } from '@/types'
 import { RagBadge } from '@/components/RagBadge'
 import { Button } from '@/components/ui/button'
@@ -26,15 +27,7 @@ interface SavedView {
 }
 
 const LS = 'myworker:archive'
-const LS_SAVED_VIEWS = `${LS}-saved-views`
 
-function loadSavedViews(): SavedView[] {
-  try { return JSON.parse(localStorage.getItem(LS_SAVED_VIEWS) ?? '[]') ?? [] }
-  catch { return [] }
-}
-function persistSavedViews(views: SavedView[]) {
-  localStorage.setItem(LS_SAVED_VIEWS, JSON.stringify(views))
-}
 function loadArr(key: string): string[] {
   try { return JSON.parse(localStorage.getItem(key) ?? 'null') ?? [] }
   catch { return [] }
@@ -65,7 +58,7 @@ export default function ArchiveView() {
   const [areaFilters,     setAreaFilters]     = useState<string[]>(()   => loadArr(`${LS}-area`))
   const [tagFilters,      setTagFilters]      = useState<string[]>(()   => loadArr(`${LS}-tags`))
   const [areaFilterButtons]                   = useState(() => localStorage.getItem('myworker:area-filter-buttons-projects') !== 'false')
-  const [savedViews,      setSavedViews]      = useState<SavedView[]>(loadSavedViews)
+  const [savedViews,      setSavedViews]      = useState<SavedView[]>([])
   const [saveViewName,    setSaveViewName]    = useState('')
   const [saveViewOpen,    setSaveViewOpen]    = useState(false)
 
@@ -91,6 +84,23 @@ export default function ArchiveView() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  // Load saved views from DB (migrate one-time from localStorage if present)
+  useEffect(() => {
+    const loadViews = async () => {
+      const lsRaw = localStorage.getItem(`${LS}-saved-views`)
+      if (lsRaw) {
+        try {
+          const lsViews: SavedView[] = JSON.parse(lsRaw) ?? []
+          for (const v of lsViews) await upsertSavedView('archive', v.name, JSON.stringify(v))
+        } catch {}
+        localStorage.removeItem(`${LS}-saved-views`)
+      }
+      const rows = await getSavedViewsForPage('archive')
+      setSavedViews(rows.map(r => JSON.parse(r.data) as SavedView))
+    }
+    loadViews().catch(console.error)
+  }, [])
 
   // Persist filter/sort state
   useEffect(() => { localStorage.setItem(`${LS}-rag`,      JSON.stringify(ragFilters))      }, [ragFilters])
@@ -161,13 +171,12 @@ export default function ArchiveView() {
 
   const hasActiveFilters = ragFilters.length > 0 || priorityFilters.length > 0 || areaFilters.length > 0 || statusFilters.length > 0 || tagFilters.length > 0
 
-  const saveCurrentView = () => {
+  const saveCurrentView = async () => {
     const name = saveViewName.trim()
     if (!name) return
     const view: SavedView = { name, ragFilters, priorityFilters, statusFilters, areaFilters, tagFilters }
-    const updated = [...savedViews.filter(v => v.name !== name), view]
-    setSavedViews(updated)
-    persistSavedViews(updated)
+    await upsertSavedView('archive', name, JSON.stringify(view))
+    setSavedViews(prev => [...prev.filter(v => v.name !== name), view])
     setSaveViewName('')
     setSaveViewOpen(false)
     toast.success(`View "${name}" saved`)
@@ -177,9 +186,9 @@ export default function ArchiveView() {
     setRagFilters(view.ragFilters); setPriorityFilters(view.priorityFilters)
     setStatusFilters(view.statusFilters); setAreaFilters(view.areaFilters); setTagFilters(view.tagFilters)
   }
-  const deleteView = (name: string) => {
-    const updated = savedViews.filter(v => v.name !== name)
-    setSavedViews(updated); persistSavedViews(updated)
+  const deleteView = async (name: string) => {
+    await deleteSavedView('archive', name)
+    setSavedViews(prev => prev.filter(v => v.name !== name))
   }
 
   const ragOptions      = RAG_OPTIONS.map(o => ({ value: o.value, label: o.label, prefix: <span className={`w-2 h-2 rounded-full shrink-0 ${o.dotColor}`} /> }))

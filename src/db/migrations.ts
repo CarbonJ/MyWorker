@@ -424,6 +424,19 @@ const migrations: Migration[] = [
           );
     `,
   },
+  {
+    version: 16,
+    up: `
+      CREATE TABLE IF NOT EXISTS saved_views (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        page       TEXT NOT NULL,
+        name       TEXT NOT NULL,
+        data       TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now')),
+        UNIQUE(page, name)
+      );
+    `,
+  },
 ]
 
 export async function runMigrations(handle: DbHandle): Promise<void> {
