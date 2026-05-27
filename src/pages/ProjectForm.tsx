@@ -177,6 +177,7 @@ export default function ProjectForm() {
           onChange={setWorkDescription}
           placeholder="What is this project about?"
           rows={3}
+          expandable
         />
 
         {/* RAG + Priority */}

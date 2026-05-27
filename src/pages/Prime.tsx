@@ -1235,12 +1235,12 @@ export default function Prime() {
 
     return (
       <div
-        className={`px-4 py-2 hover:bg-accent/50 transition-colors cursor-grab active:cursor-grabbing ${t.status === 'done' && !completedToday ? 'opacity-60' : ''} ${draggedTaskId === t.id ? 'opacity-40 ring-1 ring-inset ring-blue-300' : ''}`}
+        className={`px-4 py-2 hover:bg-accent/50 transition-colors cursor-grab active:cursor-grabbing select-none ${t.status === 'done' && !completedToday ? 'opacity-60' : ''} ${draggedTaskId === t.id ? 'opacity-40 ring-1 ring-inset ring-blue-300' : ''}`}
         draggable
         onDragStart={e => {
           e.dataTransfer.setData('application/x-task-id', String(t.id))
           e.dataTransfer.effectAllowed = 'move'
-          setDraggedTaskId(t.id)
+          setTimeout(() => setDraggedTaskId(t.id), 0)
         }}
         onDragEnd={() => setDraggedTaskId(null)}
         onClick={() => { setEditingTask(t); setTaskModalOpen(true) }}

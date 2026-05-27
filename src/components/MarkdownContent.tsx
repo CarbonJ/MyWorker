@@ -13,7 +13,7 @@ interface Props {
  */
 const components = {
   a: ({ href, children }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
-    <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
+    <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 underline underline-offset-2 hover:opacity-80 break-all">{children}</a>
   ),
 }
 

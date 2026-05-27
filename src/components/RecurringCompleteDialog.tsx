@@ -12,7 +12,7 @@ import type { Task } from '@/types'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
+import { MarkdownField } from '@/components/MarkdownField'
 import { Calendar } from '@/components/ui/calendar'
 import { RefreshCw } from 'lucide-react'
 
@@ -105,11 +105,13 @@ export function RecurringCompleteDialog({ task, open, onReschedule, onMarkDone, 
 
           {/* Optional completion note */}
           <div className="space-y-1.5">
-            <Label htmlFor="recur-note">Completion note <span className="text-xs text-muted-foreground">(optional — added to work log)</span></Label>
-            <Textarea
+            <Label htmlFor="recur-note">
+              Completion note <span className="text-xs text-muted-foreground">(optional — added to work log)</span>
+            </Label>
+            <MarkdownField
               id="recur-note"
               value={note}
-              onChange={e => setNote(e.target.value)}
+              onChange={setNote}
               placeholder="What was completed? Any context for the next run?"
               rows={2}
             />
