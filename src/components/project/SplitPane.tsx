@@ -13,10 +13,9 @@ interface Props {
   left: ReactNode
   right: ReactNode
   initialSplitPct?: number
-  rightExpanded?: boolean
 }
 
-export function SplitPane({ left, right, initialSplitPct = SPLIT_DEFAULT_PCT, rightExpanded = false }: Props) {
+export function SplitPane({ left, right, initialSplitPct = SPLIT_DEFAULT_PCT }: Props) {
   const [splitPct, setSplitPct] = useState(initialSplitPct)
   const containerRef = useRef<HTMLDivElement>(null)
   const dragging = useRef(false)
@@ -35,19 +34,15 @@ export function SplitPane({ left, right, initialSplitPct = SPLIT_DEFAULT_PCT, ri
 
   return (
     <div ref={containerRef} className="flex flex-1 overflow-hidden">
-      {!rightExpanded && (
-        <>
-          <div style={{ width: `${splitPct}%` }} className="flex flex-col overflow-hidden min-w-0 min-h-0">
-            {left}
-          </div>
-          <div
-            className="w-1 shrink-0 cursor-col-resize bg-border hover:bg-primary/40 transition-colors"
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-          />
-        </>
-      )}
+      <div style={{ width: `${splitPct}%` }} className="flex flex-col overflow-hidden min-w-0 min-h-0">
+        {left}
+      </div>
+      <div
+        className="w-1 shrink-0 cursor-col-resize bg-border hover:bg-primary/40 transition-colors"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+      />
       <div className="flex-1 flex flex-col overflow-hidden min-h-0">
         {right}
       </div>

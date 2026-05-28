@@ -914,14 +914,14 @@ export default function Prime() {
           <td className="px-3 py-1 font-medium max-w-[18rem]">
             <div className="flex flex-col gap-0.5 min-w-0">
               <span className="truncate">{p.workItem}</span>
-              {(hasOverdue || (counts && (counts.open > 0 || counts.inProgress > 0))) && (
+              {(hasOverdue || (!isExpanded && counts && (counts.open > 0 || counts.inProgress > 0))) && (
                 <span className="flex items-center gap-1.5 font-normal">
                   {hasOverdue && (
                     <span className="inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0 rounded bg-red-50 border border-red-200 text-red-700 shrink-0">
                       🗓 Overdue
                     </span>
                   )}
-                  {counts && (counts.open > 0 || counts.inProgress > 0) && (
+                  {!isExpanded && counts && (counts.open > 0 || counts.inProgress > 0) && (
                     <span className="text-xs text-muted-foreground">
                       {counts.open > 0 && <span>{counts.open} open</span>}
                       {counts.open > 0 && counts.inProgress > 0 && <span> · </span>}
@@ -1089,27 +1089,32 @@ export default function Prime() {
           return (
             <tr
               key={t.id}
-              className="hover:bg-accent/40 transition-colors cursor-pointer border-b border-border/60"
+              className="bg-muted/20 hover:bg-blue-50/40 dark:hover:bg-blue-950/10 transition-colors cursor-pointer border-b border-border/60"
               onClick={() => { setEditingTask(t); setTaskModalOpen(true) }}
             >
               <td className="w-10" />
-              <td className="px-3 py-1 pl-7" colSpan={4}>
-                <span className="flex items-center gap-2">
-                  <button
-                    onClick={async e => { e.stopPropagation(); await cycleTaskStatus(t) }}
-                    className="shrink-0 hover:scale-110 transition-transform"
-                    title={`Status: ${t.status} — click to cycle`}
-                  >
-                    <TaskStatusDot status={t.status} />
-                  </button>
-                  {taskPriority && (
-                    <span
-                      className={`w-2 h-2 rounded-full shrink-0 ${dotClass(taskPriority.color)}`}
-                      title={taskPriority.label}
-                    />
+              <td className="px-3 py-1.5 pl-7" colSpan={4}>
+                <div className="flex flex-col gap-0.5 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <button
+                      onClick={async e => { e.stopPropagation(); await cycleTaskStatus(t) }}
+                      className="shrink-0 hover:scale-110 transition-transform"
+                      title={`Status: ${t.status} — click to cycle`}
+                    >
+                      <TaskStatusDot status={t.status} />
+                    </button>
+                    {taskPriority && (
+                      <span
+                        className={`w-2 h-2 rounded-full shrink-0 ${dotClass(taskPriority.color)}`}
+                        title={taskPriority.label}
+                      />
+                    )}
+                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate min-w-0">{t.title}</span>
+                  </div>
+                  {t.notes && (
+                    <p className="text-xs text-muted-foreground truncate leading-tight pl-5">{t.notes}</p>
                   )}
-                  <span className="text-xs italic truncate text-slate-600 dark:text-slate-400">{t.title}</span>
-                </span>
+                </div>
               </td>
               <td className="px-3 py-1.5">
                 <Popover

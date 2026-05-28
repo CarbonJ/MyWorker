@@ -78,19 +78,21 @@ export function MarkdownField({ id, label, value, onChange, placeholder, rows = 
       ? 'Enter fullscreen'
       : 'Collapse editor'
 
-  const labelRow = label && (
+  const expandBtn = expandable && (
+    <button
+      type="button"
+      onClick={cycleSize}
+      title={sizeTitle}
+      className="text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded"
+    >
+      {sizeIcon}
+    </button>
+  )
+
+  const labelRow = (label || expandable) && (
     <div className="flex items-center justify-between">
-      <Label htmlFor={id}>{label}</Label>
-      {expandable && (
-        <button
-          type="button"
-          onClick={cycleSize}
-          title={sizeTitle}
-          className="text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded"
-        >
-          {sizeIcon}
-        </button>
-      )}
+      {label ? <Label htmlFor={id}>{label}</Label> : <span />}
+      {expandBtn}
     </div>
   )
 

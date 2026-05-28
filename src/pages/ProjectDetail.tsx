@@ -67,9 +67,6 @@ export default function ProjectDetail() {
   const [taskModalOpen, setTaskModalOpen] = useState(false)
   const [editingTask,   setEditingTask]   = useState<Task | null>(null)
 
-  // ── Work log expand ───────────────────────────────────────────────────────
-  const [workLogExpanded, setWorkLogExpanded] = useState(false)
-
   // ── Load ──────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
     try {
@@ -169,11 +166,9 @@ export default function ProjectDetail() {
         onSaveField={saveField}
         onMarkComplete={markComplete}
         onReopen={reopenProject}
-        compact={workLogExpanded}
       />
 
       <SplitPane
-        rightExpanded={workLogExpanded}
         left={
           <TaskPane
             tasks={tasks}
@@ -194,8 +189,6 @@ export default function ProjectDetail() {
             projectId={projectId}
             workLog={workLog}
             onSaved={load}
-            expanded={workLogExpanded}
-            onToggleExpand={() => setWorkLogExpanded(v => !v)}
           />
         }
       />

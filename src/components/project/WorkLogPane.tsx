@@ -14,18 +14,16 @@ import { updateWorkLogEntry, deleteWorkLogEntry } from '@/db/workLog'
 import { WorkLogEntryForm } from '@/components/WorkLogEntry'
 import { MarkdownContent } from '@/components/MarkdownContent'
 import { MarkdownField } from '@/components/MarkdownField'
-import { Pencil, Trash2, Maximize2, Minimize2, Filter } from 'lucide-react'
+import { Pencil, Trash2, Filter } from 'lucide-react'
 import { loadGuiSettings, altRowStyle } from '@/lib/guiSettings'
 
 interface Props {
   projectId: number
   workLog: WorkLogEntry[]
   onSaved: () => void
-  expanded?: boolean
-  onToggleExpand?: () => void
 }
 
-export function WorkLogPane({ projectId, workLog, onSaved, expanded = false, onToggleExpand }: Props) {
+export function WorkLogPane({ projectId, workLog, onSaved }: Props) {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editDraft, setEditDraft] = useState('')
   const [filterCompleted, setFilterCompleted] = useState(true)
@@ -88,15 +86,6 @@ export function WorkLogPane({ projectId, workLog, onSaved, expanded = false, onT
           >
             <Filter className="h-3.5 w-3.5" />
           </button>
-          {onToggleExpand && (
-            <button
-              onClick={onToggleExpand}
-              className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors"
-              title={expanded ? 'Collapse work log' : 'Expand work log to full width'}
-            >
-              {expanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-            </button>
-          )}
         </div>
         <span className="text-xs text-muted-foreground">
           {filterCompleted && hiddenCount > 0
@@ -151,6 +140,7 @@ export function WorkLogPane({ projectId, workLog, onSaved, expanded = false, onT
                   value={editDraft}
                   onChange={setEditDraft}
                   rows={3}
+                  expandable
                   initialFocused
                   onKeyDown={e => {
                     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') saveEdit(entry.id)

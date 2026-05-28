@@ -36,6 +36,7 @@ export function WorkLogEntryForm({ projectId, onSaved }: Props) {
         onChange={setNote}
         placeholder="Add a work log entry…"
         rows={3}
+        expandable
         onKeyDown={e => {
           if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') handleSubmit(e as unknown as React.FormEvent)
         }}
