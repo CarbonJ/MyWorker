@@ -1112,7 +1112,7 @@ export default function Prime() {
                     <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate min-w-0">{t.title}</span>
                   </div>
                   {t.notes && (
-                    <p className="text-xs text-muted-foreground truncate leading-tight pl-5">{t.notes}</p>
+                    <p className="text-xs text-muted-foreground truncate leading-tight pl-5">{t.notes.split('\n')[0]}</p>
                   )}
                 </div>
               </td>
