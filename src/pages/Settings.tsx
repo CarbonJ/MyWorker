@@ -302,8 +302,8 @@ export default function Settings() {
   const [guiButtonColor,   setGuiButtonColor]   = useState(() => localStorage.getItem('myworker:gui-button-color')        ?? '')
   const [guiButtonOpacity, setGuiButtonOpacity] = useState(() => Number(localStorage.getItem('myworker:gui-button-opacity') ?? '20'))
 
-  const [upcomingDays, setUpcomingDays] = useState(() =>
-    Number(localStorage.getItem('myworker:upcoming-days') ?? '7')
+  const [dueFilterShowAll, setDueFilterShowAll] = useState(
+    () => localStorage.getItem('myworker:due-filter-show-all') === 'true'
   )
 
   useEffect(() => {
@@ -445,25 +445,20 @@ export default function Settings() {
                     Show area filter as buttons on the Tasks screen
                   </label>
                 </div>
-                <div className="flex items-center gap-2 pt-1">
-                  <label htmlFor="upcoming-days" className="text-sm text-muted-foreground select-none">
-                    "Upcoming" window
-                  </label>
-                  <input
-                    id="upcoming-days"
-                    type="number"
-                    min="1"
-                    max="365"
-                    value={upcomingDays}
-                    onChange={e => {
-                      const v = Math.max(1, Math.min(365, Number(e.target.value) || 7))
-                      setUpcomingDays(v)
-                      localStorage.setItem('myworker:upcoming-days', String(v))
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="due-filter-show-all"
+                    checked={dueFilterShowAll}
+                    onCheckedChange={v => {
+                      const next = v === true
+                      setDueFilterShowAll(next)
+                      localStorage.setItem('myworker:due-filter-show-all', String(next))
                       window.dispatchEvent(new Event('myworker:gui-settings-changed'))
                     }}
-                    className="w-16 h-7 text-sm border rounded-md px-2 bg-background"
                   />
-                  <span className="text-sm text-muted-foreground">days</span>
+                  <label htmlFor="due-filter-show-all" className="text-sm cursor-pointer select-none text-muted-foreground">
+                    Show all tasks (not just due/overdue) in Due/Overdue filter mode
+                  </label>
                 </div>
               </div>
             </section>

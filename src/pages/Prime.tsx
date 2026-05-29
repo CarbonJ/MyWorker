@@ -81,6 +81,22 @@ const RAG_OPTIONS: { value: RagStatus; label: string; dotColor: string }[] = [
   { value: 'Red',   label: 'Red',   dotColor: 'bg-red-500' },
 ]
 
+/** Compute cutoff date string for the upcoming filter mode. */
+function getUpcomingCutoff(mode: '1' | '3' | 'week'): string {
+  const d = new Date()
+  if (mode === '1') {
+    d.setDate(d.getDate() + 1)
+  } else if (mode === '3') {
+    d.setDate(d.getDate() + 3)
+  } else {
+    // End of current business week (this Friday; if Sat/Sun, next Friday)
+    const day = d.getDay() // 0=Sun…6=Sat
+    const daysToFriday = day === 0 ? 5 : day === 6 ? 6 : 5 - day
+    d.setDate(d.getDate() + daysToFriday)
+  }
+  return d.toISOString().slice(0, 10)
+}
+
 export default function Prime() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -113,9 +129,12 @@ export default function Prime() {
   const [generalStatusFilters, setGeneralStatusFilters] = useState<string[]>(() =>
     loadArr('myworker:prime-gen-status2', ['active'])
   )
-  const [showUpcoming,   setShowUpcoming]   = useState(false)
-  const [upcomingDays,   setUpcomingDays]   = useState(() =>
-    Number(localStorage.getItem('myworker:upcoming-days') ?? '7')
+  const [upcomingMode, setUpcomingMode] = useState<null | '1' | '3' | 'week'>(() => {
+    const v = localStorage.getItem('myworker:upcoming-mode')
+    return (v === '1' || v === '3' || v === 'week') ? v : null
+  })
+  const [dueFilterShowAll, setDueFilterShowAll] = useState(
+    () => localStorage.getItem('myworker:due-filter-show-all') === 'true'
   )
   const [generalSorts,   setGeneralSorts]   = useState<GeneralSortEntry[]>(() =>
     loadSorted<GeneralSortEntry>('myworker:prime-gen-sorts2', [{ key: 'due', dir: 'asc' }])
@@ -157,9 +176,9 @@ export default function Prime() {
   const projectStatuses = data?.projectStatuses ?? []
   const allTasks        = data?.allTasks        ?? []
 
-  // Reload upcomingDays when changed in Settings
+  // Reload settings-driven state when changed in Settings
   useEffect(() => {
-    const handler = () => setUpcomingDays(Number(localStorage.getItem('myworker:upcoming-days') ?? '7'))
+    const handler = () => setDueFilterShowAll(localStorage.getItem('myworker:due-filter-show-all') === 'true')
     window.addEventListener('myworker:gui-settings-changed', handler)
     return () => window.removeEventListener('myworker:gui-settings-changed', handler)
   }, [])
@@ -222,13 +241,20 @@ export default function Prime() {
   const tasksByProject = useMemo(() => {
     const map = new Map<number, Task[]>()
     const today = new Date().toISOString().slice(0, 10)
-    const cutoff = new Date()
-    cutoff.setDate(cutoff.getDate() + upcomingDays)
-    const maxDate = cutoff.toISOString().slice(0, 10)
+    const upcomingCutoff = upcomingMode ? getUpcomingCutoff(upcomingMode) : null
     const q = query.trim().toLowerCase()
     for (const t of allTasks) {
       if (t.projectId === null || t.status === 'done') continue
-      if (showUpcoming && (!t.dueDate || t.dueDate < today || t.dueDate > maxDate)) continue
+      // Due filter: hide tasks without a due date or with future due dates (unless show-all enabled)
+      if (dueFilter && !dueFilterShowAll && (!t.dueDate || t.dueDate > today)) continue
+      // Upcoming filter
+      if (upcomingMode && upcomingCutoff) {
+        if (!t.dueDate || t.dueDate < today || t.dueDate > upcomingCutoff) continue
+        if (upcomingMode === 'week') {
+          const dow = new Date(t.dueDate + 'T12:00:00').getDay()
+          if (dow === 0 || dow === 6) continue
+        }
+      }
       if (q && !(
         t.title.toLowerCase().includes(q) ||
         t.description.toLowerCase().includes(q) ||
@@ -239,7 +265,7 @@ export default function Prime() {
       map.set(t.projectId, arr)
     }
     return map
-  }, [allTasks, showUpcoming, upcomingDays, query])
+  }, [allTasks, upcomingMode, dueFilter, dueFilterShowAll, query])
 
   /** Projects with at least one overdue open task */
   const overdueProjectIds = useMemo(() => {
@@ -308,11 +334,16 @@ export default function Prime() {
       )
     } else if (dueFilter) {
       list = list.filter(t => t.status !== 'done' && t.dueDate && t.dueDate <= today)
-    } else if (showUpcoming) {
-      const cutoff = new Date()
-      cutoff.setDate(cutoff.getDate() + upcomingDays)
-      const maxDate = cutoff.toISOString().slice(0, 10)
-      list = list.filter(t => t.status !== 'done' && t.dueDate && t.dueDate >= today && t.dueDate <= maxDate)
+    } else if (upcomingMode) {
+      const upcomingCutoff = getUpcomingCutoff(upcomingMode)
+      list = list.filter(t => {
+        if (t.status === 'done' || !t.dueDate || t.dueDate < today || t.dueDate > upcomingCutoff) return false
+        if (upcomingMode === 'week') {
+          const dow = new Date(t.dueDate + 'T12:00:00').getDay()
+          if (dow === 0 || dow === 6) return false
+        }
+        return true
+      })
     } else {
       // Area filter — skipped when inbox is active (inbox tasks have no area by definition)
       if (areaFilters.length > 0 && !generalStatusFilters.includes('inbox')) {
@@ -359,7 +390,7 @@ export default function Prime() {
     })
 
     return list
-  }, [allTasks, query, dueFilter, showUpcoming, upcomingDays, areaFilters, generalStatusFilters, tagFilters, generalSorts, priorities])
+  }, [allTasks, query, dueFilter, upcomingMode, areaFilters, generalStatusFilters, tagFilters, generalSorts, priorities])
 
   /** Filtered + sorted projects */
   const filteredProjects = useMemo(() => {
@@ -730,18 +761,27 @@ export default function Prime() {
             width="w-40"
           />
         )}
-        {/* Upcoming toggle */}
-        <button
-          onClick={() => setShowUpcoming(v => !v)}
-          className={`ml-auto h-7 px-2.5 text-xs rounded-full border transition-colors whitespace-nowrap ${
-            showUpcoming
-              ? 'bg-blue-100 border-blue-300 text-blue-800 hover:bg-blue-200'
-              : 'border-input bg-background hover:bg-accent hover:text-accent-foreground'
-          }`}
-          title={`Show tasks due in the next ${upcomingDays} days`}
-        >
-          Upcoming in {upcomingDays} days
-        </button>
+        {/* Upcoming toggle group */}
+        <div className="ml-auto flex items-center gap-1">
+          {(['1', '3', 'week'] as const).map(mode => (
+            <button
+              key={mode}
+              onClick={() => {
+                const next = upcomingMode === mode ? null : mode
+                setUpcomingMode(next)
+                localStorage.setItem('myworker:upcoming-mode', next ?? '')
+              }}
+              className={`h-7 px-2.5 text-xs rounded-full border transition-colors whitespace-nowrap ${
+                upcomingMode === mode
+                  ? 'bg-blue-100 border-blue-300 text-blue-800 dark:bg-blue-900/40 dark:border-blue-700 dark:text-blue-300 hover:bg-blue-200'
+                  : 'border-input bg-background hover:bg-accent hover:text-accent-foreground'
+              }`}
+              title={mode === '1' ? 'Due tomorrow' : mode === '3' ? 'Due in next 3 days' : 'Due this business week (Mon–Fri)'}
+            >
+              {mode === '1' ? 'Tomorrow' : mode === '3' ? '3 days' : 'Week'}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ── Toolbar row 3 — Saved views (only when views exist) ── */}
