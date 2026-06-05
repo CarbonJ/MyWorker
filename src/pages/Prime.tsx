@@ -245,14 +245,20 @@ export default function Prime() {
     const q = query.trim().toLowerCase()
     for (const t of allTasks) {
       if (t.projectId === null || t.status === 'done') continue
-      // Due filter: hide tasks without a due date or with future due dates (unless show-all enabled)
-      if (dueFilter && !dueFilterShowAll && (!t.dueDate || t.dueDate > today)) continue
-      // Upcoming filter
+      // Due filter: hide tasks with no active due date AND no started start date (unless show-all enabled)
+      if (dueFilter && !dueFilterShowAll &&
+          (!t.dueDate || t.dueDate > today) &&
+          (!t.startDate || t.startDate > today)) continue
+      // Upcoming filter: include tasks where dueDate OR startDate falls within the window
       if (upcomingMode && upcomingCutoff) {
-        if (!t.dueDate || t.dueDate < today || t.dueDate > upcomingCutoff) continue
+        const dueFits = !!t.dueDate && t.dueDate >= today && t.dueDate <= upcomingCutoff
+        const startFits = !!t.startDate && t.startDate >= today && t.startDate <= upcomingCutoff
         if (upcomingMode === 'week') {
-          const dow = new Date(t.dueDate + 'T12:00:00').getDay()
-          if (dow === 0 || dow === 6) continue
+          const dueWeekday = dueFits && (() => { const d = new Date(t.dueDate! + 'T12:00:00').getDay(); return d !== 0 && d !== 6 })()
+          const startWeekday = startFits && (() => { const d = new Date(t.startDate! + 'T12:00:00').getDay(); return d !== 0 && d !== 6 })()
+          if (!dueWeekday && !startWeekday) continue
+        } else {
+          if (!dueFits && !startFits) continue
         }
       }
       if (q && !(
@@ -278,12 +284,13 @@ export default function Prime() {
     return ids
   }, [allTasks])
 
-  /** Projects with at least one due or overdue open task */
+  /** Projects with at least one due/overdue open task, or an open task whose start date has arrived */
   const projectsWithDueTasks = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10)
     const ids = new Set<number>()
     for (const t of allTasks) {
-      if (t.projectId !== null && t.status !== 'done' && t.dueDate && t.dueDate <= today)
+      if (t.projectId === null || t.status === 'done') continue
+      if ((t.dueDate && t.dueDate <= today) || (t.startDate && t.startDate <= today))
         ids.add(t.projectId)
     }
     return ids
@@ -295,6 +302,13 @@ export default function Prime() {
       setExpandedProjects(new Set(projectsWithDueTasks))
     }
   }, [dueFilter, allTasks, projectsWithDueTasks])
+
+  // Auto-expand projects with upcoming tasks when an upcoming filter is active
+  useEffect(() => {
+    if (upcomingMode && allTasks.length > 0) {
+      setExpandedProjects(new Set(tasksByProject.keys()))
+    }
+  }, [upcomingMode, allTasks, tasksByProject])
 
   // Auto-expand projects that appear in the list only because of a task match
   useEffect(() => {
@@ -333,16 +347,21 @@ export default function Prime() {
         t.notes.toLowerCase().includes(q)
       )
     } else if (dueFilter) {
-      list = list.filter(t => t.status !== 'done' && t.dueDate && t.dueDate <= today)
+      list = list.filter(t => t.status !== 'done' && (
+        (t.dueDate && t.dueDate <= today) || (t.startDate && t.startDate <= today)
+      ))
     } else if (upcomingMode) {
       const upcomingCutoff = getUpcomingCutoff(upcomingMode)
       list = list.filter(t => {
-        if (t.status === 'done' || !t.dueDate || t.dueDate < today || t.dueDate > upcomingCutoff) return false
+        if (t.status === 'done') return false
+        const dueFits = !!t.dueDate && t.dueDate >= today && t.dueDate <= upcomingCutoff
+        const startFits = !!t.startDate && t.startDate >= today && t.startDate <= upcomingCutoff
         if (upcomingMode === 'week') {
-          const dow = new Date(t.dueDate + 'T12:00:00').getDay()
-          if (dow === 0 || dow === 6) return false
+          const dueWeekday = dueFits && (() => { const d = new Date(t.dueDate! + 'T12:00:00').getDay(); return d !== 0 && d !== 6 })()
+          const startWeekday = startFits && (() => { const d = new Date(t.startDate! + 'T12:00:00').getDay(); return d !== 0 && d !== 6 })()
+          return !!(dueWeekday || startWeekday)
         }
-        return true
+        return dueFits || startFits
       })
     } else {
       // Area filter — skipped when inbox is active (inbox tasks have no area by definition)
@@ -398,6 +417,8 @@ export default function Prime() {
 
     if (dueFilter) {
       list = list.filter(p => projectsWithDueTasks.has(p.id))
+    } else if (upcomingMode) {
+      list = list.filter(p => (tasksByProject.get(p.id)?.length ?? 0) > 0)
     } else if (query.trim()) {
       const q = query.toLowerCase()
       list = list.filter(p =>
@@ -441,7 +462,7 @@ export default function Prime() {
     })
 
     return list
-  }, [projects, query, dueFilter, projectsWithDueTasks, projectIdsWithMatchingTasks, ragFilters, priorityFilters, areaFilters, statusFilters, tagFilters, priorities, projectStatuses, projectSorts, tasksByProject])
+  }, [projects, query, dueFilter, upcomingMode, projectsWithDueTasks, projectIdsWithMatchingTasks, ragFilters, priorityFilters, areaFilters, statusFilters, tagFilters, priorities, projectStatuses, projectSorts, tasksByProject])
 
   const toggleProject = (id: number) =>
     setExpandedProjects(prev => {
@@ -1165,7 +1186,7 @@ export default function Prime() {
                     <button
                       onClick={e => e.stopPropagation()}
                       className="hover:opacity-70 transition-opacity"
-                      title={t.dueDate ? `Due ${fmtDate(t.dueDate)} — click to change` : 'Set due date'}
+                      title={t.dueDate ? `Due ${fmtDate(t.dueDate)} — click to change` : t.startDate ? `Start ${fmtDate(t.startDate)} — click to set due date` : 'Set due date'}
                     >
                       {t.dueDate ? (
                         <span className={`text-xs whitespace-nowrap ${
@@ -1174,6 +1195,10 @@ export default function Prime() {
                           'text-muted-foreground'
                         }`}>
                           {fmtDate(t.dueDate)}
+                        </span>
+                      ) : t.startDate ? (
+                        <span className="text-xs whitespace-nowrap text-muted-foreground/50">
+                          {fmtDate(t.startDate)}
                         </span>
                       ) : (
                         <CalendarIcon className="w-3.5 h-3.5 text-muted-foreground/40" />
@@ -1354,7 +1379,7 @@ export default function Prime() {
                 <button
                   onClick={e => e.stopPropagation()}
                   className="w-14 text-right hover:opacity-70 transition-opacity"
-                  title={t.dueDate ? `Due ${fmtDate(t.dueDate)} — click to change` : 'Set due date'}
+                  title={t.dueDate ? `Due ${fmtDate(t.dueDate)} — click to change` : t.startDate ? `Start ${fmtDate(t.startDate)} — click to set due date` : 'Set due date'}
                 >
                   {t.dueDate ? (
                     <span className={`text-xs whitespace-nowrap ${
@@ -1363,6 +1388,10 @@ export default function Prime() {
                       'text-muted-foreground'
                     }`}>
                       {fmtDate(t.dueDate)}
+                    </span>
+                  ) : t.startDate ? (
+                    <span className="text-xs whitespace-nowrap text-muted-foreground/50">
+                      {fmtDate(t.startDate)}
                     </span>
                   ) : (
                     <CalendarIcon className="w-3.5 h-3.5 text-muted-foreground/40 ml-auto" />
