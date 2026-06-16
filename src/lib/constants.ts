@@ -11,8 +11,10 @@ export const SPLIT_MIN_PCT = 20
 /** Maximum percentage width of the left pane in the resizable SplitPane. */
 export const SPLIT_MAX_PCT = 80
 
-/** Default starting split position (left pane percentage). */
-export const SPLIT_DEFAULT_PCT = 60
+/** Default starting split position (left pane percentage).
+ *  40% aligns the divider with the gap between col1 and col2 of the
+ *  ProjectHeader grid (grid-cols-[1fr_1fr_14rem] with px-6 padding). */
+export const SPLIT_DEFAULT_PCT = 40
 
 /**
  * Character count beyond which the project description "Show more" toggle

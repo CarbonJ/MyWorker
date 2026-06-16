@@ -14,19 +14,21 @@ import { updateWorkLogEntry, deleteWorkLogEntry } from '@/db/workLog'
 import { WorkLogEntryForm } from '@/components/WorkLogEntry'
 import { MarkdownContent } from '@/components/MarkdownContent'
 import { MarkdownField } from '@/components/MarkdownField'
-import { Pencil, Trash2, Filter } from 'lucide-react'
+import { Pencil, Trash2, Filter, Search, X } from 'lucide-react'
 import { loadGuiSettings, altRowStyle } from '@/lib/guiSettings'
 
 interface Props {
   projectId: number
+  projectName?: string
   workLog: WorkLogEntry[]
   onSaved: () => void
 }
 
-export function WorkLogPane({ projectId, workLog, onSaved }: Props) {
+export function WorkLogPane({ projectId, projectName, workLog, onSaved }: Props) {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editDraft, setEditDraft] = useState('')
   const [filterCompleted, setFilterCompleted] = useState(true)
+  const [searchQuery, setSearchQuery] = useState('')
   const [, forceGuiUpdate] = useState(0)
 
   useEffect(() => {
@@ -37,10 +39,17 @@ export function WorkLogPane({ projectId, workLog, onSaved }: Props) {
 
   const { rowColor, rowOpacity } = loadGuiSettings()
 
-  const visibleEntries = filterCompleted
+  const filteredByCompletion = filterCompleted
     ? workLog.filter(e => !e.note.startsWith('✓ Completed'))
     : workLog
-  const hiddenCount = workLog.length - visibleEntries.length
+  const hiddenCount = workLog.length - filteredByCompletion.length
+
+  const searchTerms = searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  const visibleEntries = searchTerms.length > 0
+    ? filteredByCompletion.filter(e =>
+        searchTerms.every(term => e.note.toLowerCase().includes(term))
+      )
+    : filteredByCompletion
 
   const startEdit = (entry: WorkLogEntry) => {
     setEditingId(entry.id)
@@ -86,23 +95,46 @@ export function WorkLogPane({ projectId, workLog, onSaved }: Props) {
           >
             <Filter className="h-3.5 w-3.5" />
           </button>
+          <div className="relative flex items-center">
+            <Search className="absolute left-1.5 h-3 w-3 text-muted-foreground pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search log…"
+              className="h-6 pl-5 pr-5 text-xs rounded border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring w-36"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-1 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
         </div>
         <span className="text-xs text-muted-foreground">
-          {filterCompleted && hiddenCount > 0
-            ? `${visibleEntries.length} of ${workLog.length} entries`
-            : `${workLog.length} entries`}
+          {searchTerms.length > 0
+            ? `${visibleEntries.length} of ${filteredByCompletion.length} entries`
+            : filterCompleted && hiddenCount > 0
+              ? `${filteredByCompletion.length} of ${workLog.length} entries`
+              : `${workLog.length} entries`}
         </span>
       </div>
 
       <div className="px-4 py-3 border-b bg-muted/30 shrink-0">
-        <WorkLogEntryForm projectId={projectId} onSaved={onSaved} />
+        <WorkLogEntryForm projectId={projectId} projectName={projectName} onSaved={onSaved} />
       </div>
 
       <div className="flex-1 overflow-y-auto divide-y divide-border min-h-0">
         {workLog.length === 0 && (
           <p className="px-4 py-6 text-sm text-muted-foreground text-center">No entries yet. Add one above to get started.</p>
         )}
-        {workLog.length > 0 && visibleEntries.length === 0 && (
+        {workLog.length > 0 && visibleEntries.length === 0 && searchTerms.length > 0 && (
+          <p className="px-4 py-6 text-sm text-muted-foreground text-center">No entries match your search.</p>
+        )}
+        {workLog.length > 0 && visibleEntries.length === 0 && searchTerms.length === 0 && (
           <p className="px-4 py-6 text-sm text-muted-foreground text-center">All entries are task completions. Click the filter button to show them.</p>
         )}
         {visibleEntries.map((entry, index) => {
@@ -137,6 +169,7 @@ export function WorkLogPane({ projectId, workLog, onSaved }: Props) {
               <div className="space-y-2">
                 <MarkdownField
                   id={`worklog-edit-${entry.id}`}
+                  headerLabel={projectName}
                   value={editDraft}
                   onChange={setEditDraft}
                   rows={3}

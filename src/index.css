@@ -157,3 +157,27 @@
     @apply bg-background text-foreground;
     }
 }
+
+/* Tighter list spacing in prose (editor + read-only renderer) */
+.prose ul, .prose ol {
+  margin-top: 0.25em;
+  margin-bottom: 0.25em;
+}
+.prose li {
+  margin-top: 0.1em;
+  margin-bottom: 0.1em;
+}
+.prose li > p {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+/* TipTap placeholder */
+.tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--muted-foreground);
+  pointer-events: none;
+  height: 0;
+  opacity: 0.5;
+}

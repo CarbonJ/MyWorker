@@ -6,10 +6,11 @@ import { MarkdownField } from '@/components/MarkdownField'
 
 interface Props {
   projectId: number
+  projectName?: string
   onSaved: () => void
 }
 
-export function WorkLogEntryForm({ projectId, onSaved }: Props) {
+export function WorkLogEntryForm({ projectId, projectName, onSaved }: Props) {
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -32,6 +33,7 @@ export function WorkLogEntryForm({ projectId, onSaved }: Props) {
     <form onSubmit={handleSubmit} className="space-y-2">
       <MarkdownField
         id="worklog-entry-note"
+        headerLabel={projectName}
         value={note}
         onChange={setNote}
         placeholder="Add a work log entry…"

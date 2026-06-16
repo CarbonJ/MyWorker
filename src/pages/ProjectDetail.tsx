@@ -187,6 +187,7 @@ export default function ProjectDetail() {
         right={
           <WorkLogPane
             projectId={projectId}
+            projectName={project?.workItem}
             workLog={workLog}
             onSaved={load}
           />

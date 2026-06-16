@@ -1,15 +1,33 @@
-import { useRef, useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { MarkdownContent } from '@/components/MarkdownContent'
+import { useEditor, EditorContent } from '@tiptap/react'
+import { BubbleMenu } from '@tiptap/react/menus'
+import StarterKit from '@tiptap/starter-kit'
+import { Markdown } from 'tiptap-markdown'
+import Placeholder from '@tiptap/extension-placeholder'
+import Link from '@tiptap/extension-link'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Maximize2, Fullscreen, Minimize2 } from 'lucide-react'
+import { Maximize2, Fullscreen, Minimize2, Bold, Italic, Heading1, Heading2, Heading3, Pilcrow } from 'lucide-react'
 
 type SizeMode = 'default' | 'large' | 'fullscreen'
+
+function ToolbarBtn({ active, onClick, title, children }: { active: boolean; onClick: () => void; title: string; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onMouseDown={e => { e.preventDefault(); onClick() }}
+      title={title}
+      className={`p-1 rounded transition-colors ${active ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'}`}
+    >
+      {children}
+    </button>
+  )
+}
 
 interface Props {
   id: string
   label?: string
+  headerLabel?: string
   value: string
   onChange: (v: string) => void
   placeholder?: string
@@ -19,52 +37,59 @@ interface Props {
   expandable?: boolean
 }
 
-export function MarkdownField({ id, label, value, onChange, placeholder, rows = 2, onKeyDown, initialFocused = false, expandable = false }: Props) {
+export function MarkdownField({ id, label, headerLabel, value, onChange, placeholder, rows = 2, onKeyDown, initialFocused = false, expandable = false }: Props) {
   const [focused, setFocused] = useState(initialFocused)
   const [sizeMode, setSizeMode] = useState<SizeMode>('default')
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const sizeModeRef = useRef(sizeMode)
+  sizeModeRef.current = sizeMode
 
   const cycleSize = () => setSizeMode(m => m === 'default' ? 'large' : m === 'large' ? 'fullscreen' : 'default')
 
-  const applyInlineFormat = (el: HTMLTextAreaElement, marker: string) => {
-    const start = el.selectionStart
-    const end = el.selectionEnd
-    const selected = value.substring(start, end)
-    const wrapped = `${marker}${selected}${marker}`
-    onChange(value.substring(0, start) + wrapped + value.substring(end))
-    requestAnimationFrame(() => {
-      if (selected.length > 0) {
-        el.setSelectionRange(start, start + wrapped.length)
-      } else {
-        el.setSelectionRange(start + marker.length, start + marker.length)
-      }
-    })
-  }
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Markdown.configure({ html: false, tightLists: true }),
+      Placeholder.configure({ placeholder: placeholder ?? '' }),
+      Link.configure({ openOnClick: false, autolink: true }),
+    ],
+    content: value,
+    autofocus: initialFocused,
+    editorProps: {
+      attributes: {
+        id,
+        class: 'prose prose-sm dark:prose-invert max-w-none focus:outline-none',
+      },
+      handleKeyDown: (_view, event) => {
+        if (event.key === 'Escape' && sizeModeRef.current === 'fullscreen') {
+          setSizeMode('default')
+          return true
+        }
+        onKeyDown?.(event as unknown as React.KeyboardEvent<HTMLTextAreaElement>)
+        return false
+      },
+    },
+    onFocus: () => setFocused(true),
+    onBlur: () => setFocused(false),
+    onUpdate: ({ editor }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      onChange((editor.storage as any).markdown.getMarkdown())
+    },
+  })
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Tab') {
-      e.preventDefault()
-      const el = e.currentTarget
-      const start = el.selectionStart
-      const end = el.selectionEnd
-      onChange(value.substring(0, start) + '  ' + value.substring(end))
-      requestAnimationFrame(() => el.setSelectionRange(start + 2, start + 2))
-      return
-    }
-    if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
-      e.preventDefault()
-      applyInlineFormat(e.currentTarget, '**')
-      return
-    }
-    if ((e.metaKey || e.ctrlKey) && e.key === 'i') {
-      e.preventDefault()
-      applyInlineFormat(e.currentTarget, '_')
-      return
-    }
-    onKeyDown?.(e)
-  }
+  // Sync external value changes (e.g. form reset after save) without clobbering cursor
+  useEffect(() => {
+    if (!editor) return
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const current = (editor.storage as any).markdown.getMarkdown()
+    if (current !== value) editor.commands.setContent(value, { emitUpdate: false })
+  }, [value, editor])
 
-  const showPreview = !focused && value.trim().length > 0
+  // Focus editor when entering fullscreen
+  useEffect(() => {
+    if (sizeMode === 'fullscreen') {
+      requestAnimationFrame(() => editor?.commands.focus())
+    }
+  }, [sizeMode, editor])
 
   const sizeIcon = sizeMode === 'default'
     ? <Maximize2 size={14} />
@@ -96,9 +121,66 @@ export function MarkdownField({ id, label, value, onChange, placeholder, rows = 
     </div>
   )
 
+  const minHeight = `${rows * 1.5 + 1}rem`
+
+  const containerClass = [
+    'rounded-md border px-3 py-2 text-sm cursor-text transition-colors overflow-y-auto',
+    focused
+      ? 'border-ring ring-1 ring-ring bg-background'
+      : 'border-input bg-background hover:border-ring/50',
+    sizeMode === 'large' ? 'h-64 overflow-y-auto' : '',
+  ].filter(Boolean).join(' ')
+
+  const toolbar = editor && (
+    <BubbleMenu
+      editor={editor}
+      shouldShow={({ editor: e, state }) => {
+        // Show on any text selection, or when cursor is inside a heading
+        const { empty } = state.selection
+        return !empty || e.isActive('heading')
+      }}
+      options={{ placement: 'top-start' }}
+    >
+      <div className="flex items-center gap-0.5 rounded-md border border-border bg-popover shadow-md p-0.5">
+        <ToolbarBtn
+          active={editor.isActive('bold')}
+          onClick={() => editor.chain().focus().toggleBold().run()}
+          title="Bold (⌘B)"
+        ><Bold size={13} /></ToolbarBtn>
+        <ToolbarBtn
+          active={editor.isActive('italic')}
+          onClick={() => editor.chain().focus().toggleItalic().run()}
+          title="Italic (⌘I)"
+        ><Italic size={13} /></ToolbarBtn>
+        <div className="w-px h-4 bg-border mx-0.5" />
+        <ToolbarBtn
+          active={editor.isActive('heading', { level: 1 })}
+          onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+          title="Heading 1"
+        ><Heading1 size={13} /></ToolbarBtn>
+        <ToolbarBtn
+          active={editor.isActive('heading', { level: 2 })}
+          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+          title="Heading 2"
+        ><Heading2 size={13} /></ToolbarBtn>
+        <ToolbarBtn
+          active={editor.isActive('heading', { level: 3 })}
+          onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+          title="Heading 3"
+        ><Heading3 size={13} /></ToolbarBtn>
+        <ToolbarBtn
+          active={editor.isActive('paragraph')}
+          onClick={() => editor.chain().focus().setParagraph().run()}
+          title="Plain text"
+        ><Pilcrow size={13} /></ToolbarBtn>
+      </div>
+    </BubbleMenu>
+  )
+
   if (sizeMode === 'fullscreen') {
     return (
       <>
+        {toolbar}
         <div className="space-y-1.5">
           {labelRow}
           <div className="h-10 rounded-md border border-dashed border-input bg-muted/20 px-3 py-2 text-sm text-muted-foreground/60 flex items-center">
@@ -108,7 +190,9 @@ export function MarkdownField({ id, label, value, onChange, placeholder, rows = 
         {createPortal(
           <div className="fixed inset-0 z-50 bg-background flex flex-col">
             <div className="flex items-center border-b px-4 py-2 gap-2">
-              {label && <span className="text-sm font-medium">{label}</span>}
+              {(headerLabel || label) && (
+                <span className="text-sm font-medium">{headerLabel ?? label}</span>
+              )}
               <button
                 type="button"
                 onClick={() => setSizeMode('default')}
@@ -118,21 +202,14 @@ export function MarkdownField({ id, label, value, onChange, placeholder, rows = 
                 <Minimize2 size={16} />
               </button>
             </div>
-            <Textarea
-              id={`${id}-fullscreen`}
-              value={value}
-              onChange={e => onChange(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Escape') { setSizeMode('default'); return }
-                handleKeyDown(e)
-              }}
-              placeholder={placeholder}
-              className="flex-1 resize-none rounded-none border-0 focus-visible:ring-0 text-base p-4 break-words h-full"
-              autoFocus
-            />
-            <div className="border-t px-4 py-1.5 text-xs text-muted-foreground/50 flex gap-4">
-              <span>Supports Markdown</span>
-              <span>Esc · exit fullscreen</span>
+            <div
+              className="flex-1 overflow-y-auto p-4 cursor-text"
+              onClick={() => editor?.chain().focus().run()}
+            >
+              <EditorContent editor={editor} className="text-base min-h-full" />
+            </div>
+            <div className="border-t px-4 py-1.5 text-xs text-muted-foreground/50">
+              Esc · exit fullscreen
             </div>
           </div>,
           document.body
@@ -141,44 +218,17 @@ export function MarkdownField({ id, label, value, onChange, placeholder, rows = 
     )
   }
 
-  const largeClass = sizeMode === 'large' ? 'h-64 resize-y' : ''
-
   return (
     <div className="space-y-1.5">
+      {toolbar}
       {labelRow}
-
-      {showPreview ? (
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => { setFocused(true); requestAnimationFrame(() => textareaRef.current?.focus()) }}
-          onFocus={() => { setFocused(true); requestAnimationFrame(() => textareaRef.current?.focus()) }}
-          className={`min-h-[5rem] rounded-md border border-input bg-background px-3 py-2 text-sm cursor-text hover:border-ring/50 transition-colors overflow-y-auto ${largeClass}`}
-          title="Click to edit"
-        >
-          <MarkdownContent>{value}</MarkdownContent>
-        </div>
-      ) : (
-        <Textarea
-          ref={textareaRef}
-          id={id}
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-          placeholder={placeholder}
-          rows={sizeMode === 'large' ? undefined : rows}
-          className={`break-words ${largeClass}`}
-          autoFocus={focused}
-        />
-      )}
-
-      {!focused && (
-        <p className="text-[11px] text-muted-foreground/60 leading-none">
-          {value.trim() ? 'Click to edit · ' : ''}Supports Markdown
-        </p>
-      )}
+      <div
+        className={containerClass}
+        style={{ minHeight }}
+        onClick={() => editor?.chain().focus().run()}
+      >
+        <EditorContent editor={editor} />
+      </div>
     </div>
   )
 }
