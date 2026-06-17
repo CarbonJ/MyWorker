@@ -7,7 +7,7 @@ import {
 } from '@/components/ui/command'
 import { getAllProjects } from '@/db/projects'
 import type { Project } from '@/types'
-import { LayoutDashboard, BarChart2, Archive, Settings, BookOpen, FolderOpen, Plus, ClipboardList } from 'lucide-react'
+import { LayoutDashboard, BarChart2, Archive, Settings, BookOpen, FolderOpen, Plus, ClipboardList, FileText } from 'lucide-react'
 
 interface Props {
   open: boolean
@@ -39,6 +39,9 @@ export function CommandPalette({ open, onClose, onNewTask }: Props) {
               </CommandItem>
               <CommandItem value="daily digest journal" onSelect={() => go('/digest')}>
                 <BookOpen className="text-muted-foreground" /> Daily Digest
+              </CommandItem>
+              <CommandItem value="weekly report status" onSelect={() => go('/weekly')}>
+                <FileText className="text-muted-foreground" /> Weekly Report
               </CommandItem>
               <CommandItem value="reporting view" onSelect={() => go('/reporting')}>
                 <BarChart2 className="text-muted-foreground" /> Reporting

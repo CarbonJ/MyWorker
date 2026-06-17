@@ -15,6 +15,7 @@ import ReportingView from '@/pages/ReportingView'
 import ArchiveView from '@/pages/ArchiveView'
 import Settings from '@/pages/Settings'
 import DailyDigestView from '@/pages/DailyDigestView'
+import WeeklyReportView from '@/pages/WeeklyReportView'
 import { CommandPalette } from '@/components/CommandPalette'
 
 function DueDateBanner() {
@@ -159,6 +160,7 @@ function AppInner() {
           <Route path="/projects/:id/edit" element={<ProjectForm />} />
           <Route path="/reporting" element={<ReportingView />} />
           <Route path="/digest" element={<DailyDigestView />} />
+          <Route path="/weekly" element={<WeeklyReportView />} />
           <Route path="/archive" element={<ArchiveView />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>

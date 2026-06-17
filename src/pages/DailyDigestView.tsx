@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getWorkLogByDate, type WorkLogEntryWithProject } from '@/db/workLog'
 import { MarkdownContent } from '@/components/MarkdownContent'
-import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CalendarDays, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 function toLocalDateString(date: Date): string {
@@ -73,7 +73,11 @@ export default function DailyDigestView() {
             Today
           </Button>
         )}
-        <span className="ml-auto text-sm text-muted-foreground">
+        <Button variant="ghost" size="sm" className="ml-auto gap-1.5 text-muted-foreground"
+          onClick={() => navigate('/weekly')}>
+          <FileText className="h-3.5 w-3.5" /> Weekly Report
+        </Button>
+        <span className="text-sm text-muted-foreground">
           {loading ? '' : entries.length === 0 ? 'No entries' : `${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} across ${groups.length} project${groups.length === 1 ? '' : 's'}`}
         </span>
       </div>

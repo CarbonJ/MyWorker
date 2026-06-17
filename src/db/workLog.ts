@@ -59,6 +59,30 @@ export async function deleteWorkLogEntry(id: number): Promise<void> {
 
 export interface WorkLogEntryWithProject extends WorkLogEntry {
   projectName: string
+  ragStatus?: string
+  latestStatus?: string
+}
+
+/** Returns all work log entries across all projects for a date range (inclusive, YYYY-MM-DD). */
+export async function getWorkLogByDateRange(startDate: string, endDate: string): Promise<WorkLogEntryWithProject[]> {
+  const rows = await query(
+    `SELECT wle.id, wle.project_id, wle.note, wle.created_at, p.work_item AS project_name,
+            p.rag_status, p.latest_status
+     FROM work_log_entries wle
+     JOIN projects p ON p.id = wle.project_id
+     WHERE DATE(wle.created_at) BETWEEN ? AND ?
+     ORDER BY p.work_item ASC, wle.created_at ASC`,
+    [startDate, endDate],
+  )
+  return rows.map(row => ({
+    id: row.id as number,
+    projectId: row.project_id as number,
+    note: row.note as string,
+    createdAt: row.created_at as string,
+    projectName: row.project_name as string,
+    ragStatus: row.rag_status as string,
+    latestStatus: row.latest_status as string,
+  }))
 }
 
 /** Returns all work log entries across all projects for a given YYYY-MM-DD date. */
