@@ -14,6 +14,8 @@ import ProjectForm from '@/pages/ProjectForm'
 import ReportingView from '@/pages/ReportingView'
 import ArchiveView from '@/pages/ArchiveView'
 import Settings from '@/pages/Settings'
+import DailyDigestView from '@/pages/DailyDigestView'
+import { CommandPalette } from '@/components/CommandPalette'
 
 function DueDateBanner() {
   const [count, setCount] = useState(0)
@@ -78,6 +80,7 @@ function NavBar({ isDark, onToggleDark }: { isDark: boolean; onToggleDark: () =>
       <span className="font-bold text-lg mr-4">MyWorker</span>
       <NavLink to="/" end className={linkClass} style={navStyle}>Prime</NavLink>
       <NavLink to="/reporting" className={linkClass} style={navStyle}>Reporting</NavLink>
+      <NavLink to="/digest" className={linkClass} style={navStyle}>Digest</NavLink>
       <NavLink to="/archive" className={linkClass} style={navStyle}>Archive</NavLink>
       <NavLink to="/settings" className={linkClass} style={navStyle}>Settings</NavLink>
       {/* Global search — top right */}
@@ -109,6 +112,7 @@ function AppInner() {
   const navigate = useNavigate()
   const [quickTaskOpen, setQuickTaskOpen] = useState(false)
   const [quickTaskAreaId, setQuickTaskAreaId] = useState<number | null>(null)
+  const [paletteOpen, setPaletteOpen] = useState(false)
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'))
   const toggleDark = () => {
     const next = !isDark
@@ -119,6 +123,12 @@ function AppInner() {
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
+      // Cmd+K / Ctrl+K → open Command Palette
+      if (e.key === 'k' && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
+        e.preventDefault()
+        setPaletteOpen(p => !p)
+        return
+      }
       // Cmd+Shift+T / Ctrl+Shift+T → open Quick Add inbox task modal
       if (e.key === 'T' && e.shiftKey && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
@@ -148,10 +158,16 @@ function AppInner() {
           <Route path="/projects/:id" element={<ProjectDetail />} />
           <Route path="/projects/:id/edit" element={<ProjectForm />} />
           <Route path="/reporting" element={<ReportingView />} />
+          <Route path="/digest" element={<DailyDigestView />} />
           <Route path="/archive" element={<ArchiveView />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </main>
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        onNewTask={() => { setQuickTaskAreaId(null); setQuickTaskOpen(true) }}
+      />
       <TaskModal
         open={quickTaskOpen}
         projectId={null}

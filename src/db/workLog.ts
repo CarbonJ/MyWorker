@@ -56,3 +56,26 @@ export async function updateWorkLogEntry(id: number, note: string): Promise<void
 export async function deleteWorkLogEntry(id: number): Promise<void> {
   await run(`DELETE FROM work_log_entries WHERE id = ?`, [id])
 }
+
+export interface WorkLogEntryWithProject extends WorkLogEntry {
+  projectName: string
+}
+
+/** Returns all work log entries across all projects for a given YYYY-MM-DD date. */
+export async function getWorkLogByDate(date: string): Promise<WorkLogEntryWithProject[]> {
+  const rows = await query(
+    `SELECT wle.id, wle.project_id, wle.note, wle.created_at, p.work_item AS project_name
+     FROM work_log_entries wle
+     JOIN projects p ON p.id = wle.project_id
+     WHERE DATE(wle.created_at) = ?
+     ORDER BY p.work_item ASC, wle.created_at DESC`,
+    [date],
+  )
+  return rows.map(row => ({
+    id: row.id as number,
+    projectId: row.project_id as number,
+    note: row.note as string,
+    createdAt: row.created_at as string,
+    projectName: row.project_name as string,
+  }))
+}
