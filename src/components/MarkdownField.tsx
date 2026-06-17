@@ -57,6 +57,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
     editorProps: {
       attributes: {
         id,
+        spellcheck: 'true',
         class: 'prose prose-sm dark:prose-invert max-w-none focus:outline-none',
       },
       handleKeyDown: (_view, event) => {
