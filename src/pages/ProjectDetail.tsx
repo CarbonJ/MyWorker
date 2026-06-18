@@ -14,9 +14,11 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { getProjectById, updateProject, archiveProject, restoreProject } from '@/db/projects'
 import { getTasksByProject, archiveTasksByProject, restoreTasksByProject } from '@/db/tasks'
-import { getWorkLogByProject } from '@/db/workLog'
+import { getWorkLogByProject, addWorkLogEntry } from '@/db/workLog'
 import { getDropdownOptions } from '@/db/dropdownOptions'
 import type { Project, Task, WorkLogEntry, DropdownOption } from '@/types'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 import { TaskModal } from '@/components/TaskModal'
 import { ProjectHeader } from '@/components/project/ProjectHeader'
 import { TaskPane, type SortEntry, type TaskSortField } from '@/components/project/TaskPane'
@@ -67,6 +69,11 @@ export default function ProjectDetail() {
   const [taskModalOpen, setTaskModalOpen] = useState(false)
   const [editingTask,   setEditingTask]   = useState<Task | null>(null)
 
+  // ── Close-project dialog ──────────────────────────────────────────────────
+  const [closeDialogOpen, setCloseDialogOpen] = useState(false)
+  const [closingNote,     setClosingNote]     = useState('')
+  const [closing,         setClosing]         = useState(false)
+
   // ── Load ──────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
     try {
@@ -111,16 +118,27 @@ export default function ProjectDetail() {
   const doneOpt = projectStatuses.find(s => s.label.toLowerCase() === 'done')
   const isArchived = project?.isArchived ?? false
 
-  const markComplete = async () => {
+  const markComplete = () => {
     if (!project) return
+    setClosingNote('')
+    setCloseDialogOpen(true)
+  }
+
+  const confirmClose = async () => {
+    if (!project || !closingNote.trim()) return
+    setClosing(true)
     try {
+      await addWorkLogEntry(project.id, closingNote.trim())
       await archiveTasksByProject(project.id)
       await archiveProject(project.id)
       if (doneOpt) await updateProject({ id: project.id, statusId: doneOpt.id })
-      toast.success('Project archived')
+      toast.success('Project closed')
       navigate('/')
     } catch (err) {
-      handleError(err, 'Failed to archive project')
+      handleError(err, 'Failed to close project')
+    } finally {
+      setClosing(false)
+      setCloseDialogOpen(false)
     }
   }
 
@@ -201,6 +219,42 @@ export default function ProjectDetail() {
         onClose={() => { setTaskModalOpen(false); setEditingTask(null) }}
         onSaved={load}
       />
+
+      {/* ── Close Project dialog ─────────────────────────────────────────── */}
+      <Dialog open={closeDialogOpen} onOpenChange={v => { if (!v) setCloseDialogOpen(false) }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Close Project</DialogTitle>
+            <DialogDescription>
+              Write a closing summary before archiving <span className="font-medium text-foreground">"{project.workItem}"</span>. This will be saved as the final work log entry.
+            </DialogDescription>
+          </DialogHeader>
+
+          <textarea
+            className="w-full min-h-[120px] rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-y"
+            placeholder="Summarise what was delivered, any outcomes, lessons learned, or handoff notes…"
+            value={closingNote}
+            onChange={e => setClosingNote(e.target.value)}
+            autoFocus
+            onKeyDown={e => {
+              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') confirmClose()
+            }}
+          />
+
+          <DialogFooter>
+            <p className="text-xs text-muted-foreground mr-auto">⌘/Ctrl+↵ to close project</p>
+            <Button variant="outline" onClick={() => setCloseDialogOpen(false)}>Cancel</Button>
+            <Button
+              onClick={confirmClose}
+              disabled={!closingNote.trim() || closing}
+              className="text-green-700 border-green-300 bg-green-50 hover:bg-green-100 hover:text-green-800"
+              variant="outline"
+            >
+              {closing ? 'Closing…' : '✓ Close Project'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { MultiSelectFilter } from '@/components/ui/MultiSelectFilter'
-import { RAG_ORDER, pillClass, dotClass } from '@/lib/colors'
+import { RAG_ORDER, pillClass, pillClassActive, dotClass } from '@/lib/colors'
 import { loadGuiSettings, buttonStyle } from '@/lib/guiSettings'
 import { useDataLoader } from '@/hooks/useDataLoader'
 import { fmtDate, isOverdue } from '@/lib/utils'
@@ -28,6 +28,7 @@ interface SavedView {
   name: string
   ragFilters: RagStatus[]
   areaFilters: string[]
+  priorityFilters: string[]
   statusFilters: string[]
   tagFilters: string[]
   sorts: SortEntry[]
@@ -112,6 +113,7 @@ export default function ReportingView() {
   // Filters (empty array = All)
   const [ragFilters,      setRagFilters]      = useState<RagStatus[]>([])
   const [areaFilters,     setAreaFilters]     = useState<string[]>([])
+  const [priorityFilters, setPriorityFilters] = useState<string[]>([])
   const [statusFilters,   setStatusFilters]   = useState<string[]>([])
   const [tagFilters,      setTagFilters]      = useState<string[]>([])
   const [filterInsights,  setFilterInsights]  = useState(false)
@@ -241,9 +243,10 @@ export default function ReportingView() {
   const sorted = useMemo(() => {
     let list = [...projects]
 
-    if (ragFilters.length > 0)    list = list.filter(p => ragFilters.includes(p.ragStatus))
-    if (areaFilters.length > 0)   list = list.filter(p => areaFilters.includes(String(p.productAreaId ?? '')))
-    if (statusFilters.length > 0) list = list.filter(p => statusFilters.includes(String(p.statusId ?? '')))
+    if (ragFilters.length > 0)      list = list.filter(p => ragFilters.includes(p.ragStatus))
+    if (areaFilters.length > 0)     list = list.filter(p => areaFilters.includes(String(p.productAreaId ?? '')))
+    if (priorityFilters.length > 0) list = list.filter(p => priorityFilters.includes(String(p.priorityId ?? '')))
+    if (statusFilters.length > 0)   list = list.filter(p => statusFilters.includes(String(p.statusId ?? '')))
     if (tagFilters.length > 0) {
       const tasksByProject = new Map<number, Task[]>()
       for (const t of allTasks) {
@@ -303,7 +306,7 @@ export default function ReportingView() {
       }
       return 0
     })
-  }, [projects, sorts, ragFilters, areaFilters, statusFilters, tagFilters, activeQuickFilter, query, priorities, productAreas, projectStatuses, taskCountsByProject, stalenessMap, overdueTaskProjectIds, allTasks])
+  }, [projects, sorts, ragFilters, areaFilters, priorityFilters, statusFilters, tagFilters, activeQuickFilter, query, priorities, productAreas, projectStatuses, taskCountsByProject, stalenessMap, overdueTaskProjectIds, allTasks])
 
   // ── Metrics (single pass) ────────────────────────────────────────────────────
 
@@ -446,7 +449,7 @@ export default function ReportingView() {
   const saveCurrentView = async () => {
     const name = saveViewName.trim()
     if (!name) return
-    const view: SavedView = { name, ragFilters, areaFilters, statusFilters, tagFilters, sorts }
+    const view: SavedView = { name, ragFilters, areaFilters, priorityFilters, statusFilters, tagFilters, sorts }
     await upsertSavedView('reporting', name, JSON.stringify(view))
     setSavedViews(prev => [...prev.filter(v => v.name !== name), view])
     setSaveViewName('')
@@ -457,6 +460,7 @@ export default function ReportingView() {
   const applyView = (view: SavedView) => {
     setRagFilters(view.ragFilters)
     setAreaFilters(view.areaFilters)
+    setPriorityFilters(view.priorityFilters ?? [])
     setStatusFilters(view.statusFilters)
     setTagFilters(view.tagFilters)
     setSorts(() => {
@@ -482,7 +486,7 @@ export default function ReportingView() {
   }
 
   const thClass = 'relative px-3 py-1.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer select-none hover:text-foreground whitespace-nowrap'
-  const filtersActive = ragFilters.length > 0 || areaFilters.length > 0 || statusFilters.length > 0 || tagFilters.length > 0 || activeQuickFilter !== null
+  const filtersActive = ragFilters.length > 0 || areaFilters.length > 0 || priorityFilters.length > 0 || statusFilters.length > 0 || tagFilters.length > 0 || activeQuickFilter !== null
 
   // ── Column resizing ────────────────────────────────────────────────────────
   const COL_KEYS = ['staleness', 'ragStatus', 'workItem', 'productArea', 'priority', 'projectStatus', 'openTasks', 'latestStatus', 'latestUpdate'] as const
@@ -566,15 +570,6 @@ export default function ReportingView() {
           width="w-32"
         />
 
-        {/* Product Area filter */}
-        <MultiSelectFilter
-          options={productAreas.map(a => ({ value: String(a.id), label: a.label }))}
-          value={areaFilters}
-          onChange={setAreaFilters}
-          placeholder="All Areas"
-          width="w-40"
-        />
-
         {/* Status filter */}
         <MultiSelectFilter
           options={projectStatuses.map(s => ({
@@ -612,7 +607,7 @@ export default function ReportingView() {
             variant="ghost"
             size="sm"
             className="h-8 text-xs text-muted-foreground hover:text-foreground"
-            onClick={() => { setRagFilters([]); setAreaFilters([]); setStatusFilters([]); setTagFilters([]); setActiveQuickFilter(null) }}
+            onClick={() => { setRagFilters([]); setAreaFilters([]); setPriorityFilters([]); setStatusFilters([]); setTagFilters([]); setActiveQuickFilter(null) }}
           >
             ✕ Reset filters
           </Button>
@@ -671,6 +666,66 @@ export default function ReportingView() {
           </button>
         </div>
       </div>
+
+      {/* ── Area + Priority pill filters ────────────────────────────────── */}
+      {(productAreas.length > 0 || priorities.length > 0) && (
+        <div className="flex items-center gap-4 px-6 py-2 border-b bg-background shrink-0 flex-wrap">
+
+          {/* Area pills */}
+          {productAreas.length > 0 && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-xs text-muted-foreground font-medium shrink-0">Area:</span>
+              {[{ id: 'all', label: 'All Areas', color: '' }, ...productAreas.map(a => ({ id: String(a.id), label: a.label, color: a.color }))].map(opt => {
+                const isAll = opt.id === 'all'
+                const isActive = isAll ? areaFilters.length === 0 : areaFilters.includes(opt.id)
+                const anyActive = areaFilters.length > 0
+                const cls = isActive
+                  ? (opt.color ? pillClassActive(opt.color) : 'bg-primary text-primary-foreground border-primary')
+                  : anyActive && !isAll
+                    ? 'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-500 dark:border-slate-700'
+                    : (opt.color ? pillClass(opt.color) : 'border-input bg-background hover:bg-accent hover:text-accent-foreground')
+                return (
+                  <button
+                    key={opt.id}
+                    onClick={() => isAll ? setAreaFilters([]) : setAreaFilters(prev => prev.length === 1 && prev[0] === opt.id ? [] : [opt.id])}
+                    className={`h-6 px-2.5 text-xs rounded-full border transition-colors ${cls}`}
+                  >
+                    {opt.label}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Priority pills */}
+          {priorities.length > 0 && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-xs text-muted-foreground font-medium shrink-0">Priority:</span>
+              {[{ id: 'all', label: 'All', color: '' }, ...priorities.map(p => ({ id: String(p.id), label: p.label, color: p.color }))].map(opt => {
+                const isAll = opt.id === 'all'
+                const isActive = isAll ? priorityFilters.length === 0 : priorityFilters.includes(opt.id)
+                const anyActive = priorityFilters.length > 0
+                const cls = isActive
+                  ? (opt.color ? pillClassActive(opt.color) : 'bg-primary text-primary-foreground border-primary')
+                  : anyActive && !isAll
+                    ? 'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-500 dark:border-slate-700'
+                    : (opt.color ? pillClass(opt.color) : 'border-input bg-background hover:bg-accent hover:text-accent-foreground')
+                return (
+                  <button
+                    key={opt.id}
+                    onClick={() => isAll ? setPriorityFilters([]) : setPriorityFilters(prev => prev.length === 1 && prev[0] === opt.id ? [] : [opt.id])}
+                    className={`h-6 px-2.5 text-xs rounded-full border transition-colors ${cls}`}
+                  >
+                    {!isAll && opt.color && <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${dotClass(opt.color)}`} />}
+                    {opt.label}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+        </div>
+      )}
 
       {/* ── Saved views row ─────────────────────────────────────────────── */}
       {savedViews.length > 0 && (

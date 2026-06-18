@@ -90,6 +90,7 @@ export default function ProjectForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!workItem.trim()) { toast.error('Work Item is required'); return }
+    if (!productAreaId)   { toast.error('Area is required'); return }
 
     setSaving(true)
     try {
@@ -215,7 +216,7 @@ export default function ProjectForm() {
         {/* Area + Project Status */}
         <div className={sectionClass}>
           <div className={fieldClass}>
-            <Label>Area</Label>
+            <Label>Area <span className="text-destructive">*</span></Label>
             <Select value={productAreaId || 'none'} onValueChange={v => setProductAreaId(v === 'none' ? '' : v)}>
               <SelectTrigger>
                 <SelectValue placeholder="Select area" />
