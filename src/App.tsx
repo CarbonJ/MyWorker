@@ -18,35 +18,19 @@ import DailyDigestView from '@/pages/DailyDigestView'
 import WeeklyReportView from '@/pages/WeeklyReportView'
 import { CommandPalette } from '@/components/CommandPalette'
 
-function DueDateBanner() {
-  const [count, setCount] = useState(0)
-
+function DueDateTitleUpdater() {
   useEffect(() => {
     const refresh = () => {
       getDueSoonTasks().then(tasks => {
         const n = tasks.length
-        setCount(n)
         document.title = n > 0 ? `(${n}) MyWorker` : 'MyWorker'
-      }).catch(() => {
-        // Non-critical — banner simply won't show if this fails
-      })
+      }).catch(() => {})
     }
     refresh()
     window.addEventListener('myworker:task-saved', refresh)
     return () => window.removeEventListener('myworker:task-saved', refresh)
   }, [])
-
-  if (count === 0) return null
-
-  return (
-    <a
-      href="/?filter=due"
-      className="bg-amber-50 border-b border-amber-200 px-6 py-1.5 text-xs text-amber-800 flex items-center gap-2 hover:bg-amber-100 transition-colors cursor-pointer dark:bg-slate-700 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-600"
-    >
-      <span>⚠</span>
-      <span>{count} task{count !== 1 ? 's' : ''} overdue or due today — click to view</span>
-    </a>
-  )
+  return null
 }
 
 function NavBar({ isDark, onToggleDark }: { isDark: boolean; onToggleDark: () => void }) {
@@ -151,7 +135,7 @@ function AppInner() {
     <SearchProvider>
     <div className="min-h-screen bg-background flex flex-col">
       <NavBar isDark={isDark} onToggleDark={toggleDark} />
-      <DueDateBanner />
+      <DueDateTitleUpdater />
       <main className="flex-1 overflow-hidden">
         <Routes>
           <Route path="/" element={<Prime />} />

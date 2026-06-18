@@ -13,7 +13,7 @@ import { useSearch } from '@/contexts/SearchContext'
 import { MultiSelectFilter } from '@/components/ui/MultiSelectFilter'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
-import { Check, Bookmark, X as XIcon } from 'lucide-react'
+import { Check, Bookmark, X as XIcon, ChevronDown } from 'lucide-react'
 import { pillClass, dotClass, pillClassActive, RAG_ORDER } from '@/lib/colors'
 import { loadGuiSettings, buttonStyle } from '@/lib/guiSettings'
 import { fmtDate, isOverdue, isDueToday } from '@/lib/utils'
@@ -104,7 +104,7 @@ export default function Prime() {
 
   // Due filter from URL (?filter=due)
   const dueFilter = searchParams.get('filter') === 'due'
-  const clearDueFilter = () => setSearchParams({})
+  const toggleDueFilter = () => dueFilter ? setSearchParams({}) : setSearchParams({ filter: 'due' })
 
   // ── Project filter state (multi-select, empty = All) ──────────────────────
   const [ragFilters,      setRagFilters]      = useState<RagStatus[]>(() => loadArr('myworker:prime-rag2', []) as RagStatus[])
@@ -115,7 +115,7 @@ export default function Prime() {
   const [areaFilterButtons]                   = useState(() => localStorage.getItem('myworker:area-filter-buttons-projects') !== 'false')
   const [savedViews,      setSavedViews]      = useState<SavedView[]>([])
   const [saveViewName,    setSaveViewName]    = useState('')
-  const [saveViewOpen,    setSaveViewOpen]    = useState(false)
+  const [viewsOpen,       setViewsOpen]       = useState(false)
 
   // ── Project sort (multi-sort stack) ───────────────────────────────────────
   const [projectSorts, setProjectSorts] = useState<ProjectSortEntry[]>(() =>
@@ -294,6 +294,14 @@ export default function Prime() {
         ids.add(t.projectId)
     }
     return ids
+  }, [allTasks])
+
+  const dueTaskCount = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10)
+    return allTasks.filter(t =>
+      t.status !== 'done' &&
+      ((t.dueDate && t.dueDate <= today) || (t.startDate && t.startDate <= today))
+    ).length
   }, [allTasks])
 
   // Auto-expand projects with due/overdue tasks when the due filter is active
@@ -581,7 +589,7 @@ export default function Prime() {
     await upsertSavedView('prime', name, JSON.stringify(view))
     setSavedViews(prev => [...prev.filter(v => v.name !== name), view])
     setSaveViewName('')
-    setSaveViewOpen(false)
+    setViewsOpen(false)
     toast.success(`View "${name}" saved`)
   }
 
@@ -591,6 +599,10 @@ export default function Prime() {
     setStatusFilters(view.statusFilters)
     setAreaFilters(view.areaFilters)
     setTagFilters(view.tagFilters)
+    // Clear modes that bypass the filter logic in filteredProjects
+    setUpcomingMode(null)
+    localStorage.setItem('myworker:upcoming-mode', '')
+    setViewsOpen(false)
   }
 
   const deleteView = async (name: string) => {
@@ -634,16 +646,20 @@ export default function Prime() {
         <Button onClick={() => setProjectModalOpen(true)} className="h-8 px-3 text-sm" style={btnStyle}>+ Project</Button>
         <Button onClick={() => { setEditingTask(null); setTaskModalOpen(true) }} className="h-8 px-3 text-sm" style={btnStyle}>+ Task</Button>
 
-        {/* Due filter indicator */}
-        {dueFilter && (
-          <button
-            onClick={clearDueFilter}
-            className="h-8 px-3 text-sm rounded-md bg-amber-100 border border-amber-300 text-amber-800 hover:bg-amber-200 transition-colors flex items-center gap-2"
-          >
-            <span>⚠ Due/Overdue Tasks</span>
-            <span className="text-amber-600">✕</span>
-          </button>
-        )}
+        {/* Due/Overdue toggle button */}
+        <button
+          onClick={toggleDueFilter}
+          className={`h-8 px-3 text-sm rounded-md border font-medium transition-colors whitespace-nowrap ${
+            dueFilter
+              ? 'bg-amber-200 border-amber-400 text-amber-900 hover:bg-amber-300'
+              : dueTaskCount > 0
+                ? 'bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100'
+                : 'bg-background border-input text-muted-foreground hover:bg-accent'
+          }`}
+          title={dueFilter ? 'Clear due/overdue filter' : 'Show due and overdue tasks'}
+        >
+          ⚠ Due/Overdue{dueTaskCount > 0 ? ` (${dueTaskCount})` : ''}
+        </button>
 
         {/* RAG filter */}
         <MultiSelectFilter
@@ -692,26 +708,57 @@ export default function Prime() {
           </Button>
         )}
 
-        {/* Save view */}
-        <Popover open={saveViewOpen} onOpenChange={setSaveViewOpen}>
+        {/* Views dropdown — save + apply */}
+        <Popover open={viewsOpen} onOpenChange={setViewsOpen}>
           <PopoverTrigger asChild>
             <button
               className="h-8 px-2 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border rounded-md hover:bg-accent transition-colors"
-              title="Save current filters as a named view"
+              title="Saved views"
             >
               <Bookmark className="h-3.5 w-3.5" />
-              Save view
+              {savedViews.length > 0 ? (
+                <span className="font-medium">{savedViews.length} view{savedViews.length !== 1 ? 's' : ''}</span>
+              ) : (
+                <span>Views</span>
+              )}
+              <ChevronDown className="h-3 w-3 opacity-60" />
             </button>
           </PopoverTrigger>
-          <PopoverContent className="w-56 p-3" align="start">
-            <p className="text-xs font-medium mb-2">Name this view</p>
+          <PopoverContent className="w-56 p-2" align="start">
+            {savedViews.length > 0 && (
+              <>
+                <p className="text-xs text-muted-foreground px-1 mb-1">Apply a view</p>
+                <div className="flex flex-col gap-0.5 mb-2">
+                  {savedViews.map(view => (
+                    <div key={view.name} className="flex items-center gap-0.5 group/view rounded hover:bg-accent transition-colors">
+                      <button
+                        onClick={() => applyView(view)}
+                        className="flex-1 text-left text-xs px-2 py-1.5 truncate"
+                        title={`Apply view: ${view.name}`}
+                      >
+                        {view.name}
+                      </button>
+                      <button
+                        onClick={() => deleteView(view.name)}
+                        className="p-1.5 text-muted-foreground/40 hover:text-destructive opacity-0 group-hover/view:opacity-100 transition-all rounded shrink-0"
+                        title={`Delete "${view.name}"`}
+                      >
+                        <XIcon className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="border-t mb-2" />
+              </>
+            )}
+            <p className="text-xs font-medium px-1 mb-1.5">Save current filters</p>
             <div className="flex gap-1.5">
               <Input
                 value={saveViewName}
                 onChange={e => setSaveViewName(e.target.value)}
                 placeholder="e.g. Red + Platform"
                 className="h-7 text-xs flex-1"
-                onKeyDown={e => { if (e.key === 'Enter') saveCurrentView(); if (e.key === 'Escape') setSaveViewOpen(false) }}
+                onKeyDown={e => { if (e.key === 'Enter') saveCurrentView(); if (e.key === 'Escape') setViewsOpen(false) }}
                 autoFocus
               />
               <Button size="sm" className="h-7 px-2 text-xs" onClick={saveCurrentView} disabled={!saveViewName.trim()}>
@@ -804,31 +851,6 @@ export default function Prime() {
           ))}
         </div>
       </div>
-
-      {/* ── Toolbar row 3 — Saved views (only when views exist) ── */}
-      {savedViews.length > 0 && (
-        <div className="flex items-center gap-1.5 px-6 py-1.5 border-b bg-background shrink-0 flex-wrap">
-          <span className="text-xs text-muted-foreground mr-0.5">Views:</span>
-          {savedViews.map(view => (
-            <div key={view.name} className="flex items-center gap-0 border rounded-full overflow-hidden h-6">
-              <button
-                onClick={() => applyView(view)}
-                className="px-2.5 text-xs hover:bg-accent transition-colors h-full"
-                title={`Apply view: ${view.name}`}
-              >
-                {view.name}
-              </button>
-              <button
-                onClick={() => deleteView(view.name)}
-                className="pr-1.5 pl-0.5 text-muted-foreground hover:text-destructive transition-colors h-full flex items-center"
-                title={`Delete view "${view.name}"`}
-              >
-                <XIcon className="h-3 w-3" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* ── Split pane ── */}
       <SplitPane
