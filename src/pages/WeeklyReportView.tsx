@@ -205,7 +205,7 @@ export default function WeeklyReportView() {
       </div>
 
       {/* Report body */}
-      <div className="flex-1 overflow-y-auto px-6 py-4 max-w-3xl">
+      <div className="flex-1 overflow-y-auto px-6 py-4">
         {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
 
         {!loading && entries.length === 0 && (
