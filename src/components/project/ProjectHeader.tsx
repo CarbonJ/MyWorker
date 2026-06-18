@@ -15,9 +15,11 @@ import { ProjectStats } from '@/components/project/ProjectStats'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Check } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp } from 'lucide-react'
 import { pillClass, dotClass } from '@/lib/colors'
 import { DESC_EXPAND_CHAR_THRESHOLD, DESC_EXPAND_LINE_THRESHOLD } from '@/lib/constants'
+
+const COLLAPSED_KEY = 'myworker:header-collapsed'
 
 interface Props {
   project: Project
@@ -38,10 +40,17 @@ export function ProjectHeader({
   isArchived, onSaveField, onMarkComplete, onReopen,
 }: Props) {
   const navigate = useNavigate()
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSED_KEY) === 'true')
   const [descExpanded, setDescExpanded] = useState(false)
   const [editingStatus, setEditingStatus] = useState(false)
   const [statusDraft, setStatusDraft] = useState('')
   const statusInputRef = useRef<HTMLInputElement>(null)
+
+  const toggleCollapsed = () => setCollapsed(c => {
+    const next = !c
+    localStorage.setItem(COLLAPSED_KEY, String(next))
+    return next
+  })
 
   const openStatusEdit = () => {
     setStatusDraft(project.latestStatus)
@@ -65,11 +74,47 @@ export function ProjectHeader({
     { value: 'Red',   label: 'Red',   color: 'bg-red-500' },
   ]
 
+  // ── Collapsed bar ────────────────────────────────────────────────────────
+  if (collapsed) {
+    return (
+      <div className="shrink-0 px-6 py-2 border-b bg-background flex items-center gap-3">
+        <button onClick={() => navigate(-1)} className="text-sm text-muted-foreground hover:text-foreground shrink-0">
+          ← Back
+        </button>
+        <span className="text-sm font-semibold truncate">{project.workItem}</span>
+        <RagBadge status={project.ragStatus} />
+        {project.latestStatus && (
+          <span className="text-sm text-muted-foreground truncate hidden md:block">{project.latestStatus}</span>
+        )}
+        <div className="ml-auto flex items-center gap-2 shrink-0">
+          {isArchived ? (
+            <Button size="sm" variant="outline" onClick={onReopen} className="text-green-700 border-green-300 hover:bg-green-50">
+              ↩ Reopen
+            </Button>
+          ) : (
+            <Button size="sm" variant="outline" onClick={onMarkComplete} className="text-slate-600 hover:text-green-700 hover:border-green-300">
+              ✓ Mark Complete
+            </Button>
+          )}
+          <button onClick={toggleCollapsed} title="Expand header" className="text-muted-foreground hover:text-foreground p-1 rounded transition-colors">
+            <ChevronDown className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Full header ───────────────────────────────────────────────────────────
   return (
     <div className="shrink-0 px-6 py-4 border-b bg-background">
-      <button onClick={() => navigate(-1)} className="text-sm text-muted-foreground hover:text-foreground mb-3 block">
-        ← Back
-      </button>
+      <div className="flex items-center justify-between mb-3">
+        <button onClick={() => navigate(-1)} className="text-sm text-muted-foreground hover:text-foreground">
+          ← Back
+        </button>
+        <button onClick={toggleCollapsed} title="Collapse header" className="text-muted-foreground hover:text-foreground p-1 rounded transition-colors">
+          <ChevronUp className="h-4 w-4" />
+        </button>
+      </div>
 
       {isProjectOverdue && (
         <div className="mb-3 px-3 py-2 rounded-md bg-red-50 border border-red-200 text-red-700 text-sm flex items-center gap-2">
