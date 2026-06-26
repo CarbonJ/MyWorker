@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react'
-import { createPortal } from 'react-dom'
 import { useEditor, EditorContent } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import StarterKit from '@tiptap/starter-kit'
@@ -245,47 +244,45 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
             Editing in fullscreen…
           </div>
         </div>
-        {createPortal(
-          <div className="fixed inset-0 z-50 bg-background flex flex-col">
-            <div className="flex items-center border-b px-4 py-2 gap-2">
-              {(headerLabel || label) && (
-                <span className="text-sm font-medium">{headerLabel ?? label}</span>
-              )}
-              <div className="ml-auto flex items-center gap-2">
-                {rawBtn}
-                <button
-                  type="button"
-                  onClick={() => setSizeMode('default')}
-                  title="Exit fullscreen (Esc)"
-                  className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded"
-                >
-                  <Minimize2 size={16} />
-                </button>
-              </div>
-            </div>
-            {rawMode ? (
-              <textarea
-                value={value}
-                onChange={e => onChange(e.target.value)}
-                onKeyDown={onKeyDown}
-                placeholder={placeholder}
-                className="flex-1 p-4 font-mono text-base resize-none outline-none bg-background"
-                spellCheck
-              />
-            ) : (
-              <div
-                className="flex-1 overflow-y-auto p-4 cursor-text"
-                onClick={() => editor?.chain().focus().run()}
-              >
-                <EditorContent editor={editor} className="text-base min-h-full break-words" />
-              </div>
+        {/* Render inline (not portal) so Radix Dialog's focus trap includes this element */}
+        <div className="fixed inset-0 z-[100] bg-background flex flex-col">
+          <div className="flex items-center border-b px-4 py-2 gap-2">
+            {(headerLabel || label) && (
+              <span className="text-sm font-medium">{headerLabel ?? label}</span>
             )}
-            <div className="border-t px-4 py-1.5 text-xs text-muted-foreground/50">
-              Esc · exit fullscreen
+            <div className="ml-auto flex items-center gap-2">
+              {rawBtn}
+              <button
+                type="button"
+                onClick={() => setSizeMode('default')}
+                title="Exit fullscreen (Esc)"
+                className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded"
+              >
+                <Minimize2 size={16} />
+              </button>
             </div>
-          </div>,
-          document.body
-        )}
+          </div>
+          {rawMode ? (
+            <textarea
+              value={value}
+              onChange={e => onChange(e.target.value)}
+              onKeyDown={onKeyDown}
+              placeholder={placeholder}
+              className="flex-1 p-4 font-mono text-base resize-none outline-none bg-background"
+              spellCheck
+            />
+          ) : (
+            <div
+              className="flex-1 overflow-y-auto p-4 cursor-text"
+              onClick={() => editor?.chain().focus().run()}
+            >
+              <EditorContent editor={editor} className="text-base min-h-full break-words" />
+            </div>
+          )}
+          <div className="border-t px-4 py-1.5 text-xs text-muted-foreground/50">
+            Esc · exit fullscreen
+          </div>
+        </div>
       </>
     )
   }
