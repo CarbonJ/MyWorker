@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, NavLink, useNavigate, useLocation } from 
 import { Toaster } from '@/components/ui/sonner'
 import { DbProvider } from '@/hooks/useDb'
 import { TaskModal } from '@/components/TaskModal'
+import { ProjectModal } from '@/components/ProjectModal'
 import { SearchProvider, useSearch } from '@/contexts/SearchContext'
 import { Input } from '@/components/ui/input'
 import { X, Moon, Sun } from 'lucide-react'
@@ -10,7 +11,6 @@ import { getDueSoonTasks } from '@/db/tasks'
 import { loadGuiSettings, buttonStyle } from '@/lib/guiSettings'
 import Prime from '@/pages/Prime'
 import ProjectDetail from '@/pages/ProjectDetail'
-import ProjectForm from '@/pages/ProjectForm'
 import ReportingView from '@/pages/ReportingView'
 import ArchiveView from '@/pages/ArchiveView'
 import Settings from '@/pages/Settings'
@@ -98,6 +98,7 @@ function AppInner() {
   const navigate = useNavigate()
   const [quickTaskOpen, setQuickTaskOpen] = useState(false)
   const [quickTaskAreaId, setQuickTaskAreaId] = useState<number | null>(null)
+  const [quickProjectOpen, setQuickProjectOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'))
   const toggleDark = () => {
@@ -140,9 +141,7 @@ function AppInner() {
       <main className="flex-1 overflow-hidden">
         <Routes>
           <Route path="/" element={<Prime />} />
-          <Route path="/projects/new" element={<ProjectForm />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />
-          <Route path="/projects/:id/edit" element={<ProjectForm />} />
           <Route path="/reporting" element={<ReportingView />} />
           <Route path="/digest" element={<DailyDigestView />} />
           <Route path="/weekly" element={<WeeklyReportView />} />
@@ -155,6 +154,12 @@ function AppInner() {
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
         onNewTask={() => { setQuickTaskAreaId(null); setQuickTaskOpen(true) }}
+        onNewProject={() => setQuickProjectOpen(true)}
+      />
+      <ProjectModal
+        open={quickProjectOpen}
+        onClose={() => setQuickProjectOpen(false)}
+        onSaved={(id) => { setQuickProjectOpen(false); if (id > 0) navigate(`/projects/${id}`) }}
       />
       <TaskModal
         open={quickTaskOpen}

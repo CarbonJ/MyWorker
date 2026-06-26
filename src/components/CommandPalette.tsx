@@ -13,9 +13,10 @@ interface Props {
   open: boolean
   onClose: () => void
   onNewTask: () => void
+  onNewProject: () => void
 }
 
-export function CommandPalette({ open, onClose, onNewTask }: Props) {
+export function CommandPalette({ open, onClose, onNewTask, onNewProject }: Props) {
   const navigate = useNavigate()
   const [projects, setProjects] = useState<Project[]>([])
 
@@ -60,7 +61,7 @@ export function CommandPalette({ open, onClose, onNewTask }: Props) {
             <CommandSeparator />
 
             <CommandGroup heading="Actions">
-              <CommandItem value="new project create" onSelect={() => go('/projects/new')}>
+              <CommandItem value="new project create" onSelect={() => { onNewProject(); onClose() }}>
                 <Plus className="text-muted-foreground" /> New Project
               </CommandItem>
               <CommandItem value="new task create" onSelect={() => { onNewTask(); onClose() }}>

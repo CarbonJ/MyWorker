@@ -26,7 +26,6 @@ function rowToTask(row: Record<string, unknown>): Task {
     notes: row.notes as string,
     status: row.status as TaskStatus,
     priorityId: row.priority_id as number | null,
-    owner: row.owner as string,
     tags: parseTags(row.tags as string),
     startDate: row.start_date as string | null,
     dueDate: row.due_date as string | null,

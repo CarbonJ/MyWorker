@@ -47,7 +47,6 @@ export interface Task {
   notes: string
   status: TaskStatus
   priorityId: number | null
-  owner: string
   tags: string[]
   startDate: string | null
   dueDate: string | null

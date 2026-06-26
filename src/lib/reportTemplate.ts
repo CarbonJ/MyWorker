@@ -125,7 +125,7 @@ export function renderTemplate(
         stakeholders: p.stakeholders.map(s => s.name).join(', ') || '—',
         linkedJiras: p.linkedJiras.map(j => j.label || j.url).join(', ') || '—',
         tasksHeader: (openTasks.length + inProgressTasks.length) > 0
-          ? '| Task | Owner | Due | Status |\n|---|---|---|---|'
+          ? '| Task | Due | Status |\n|---|---|---|'
           : '',
       }
 
@@ -138,7 +138,6 @@ export function renderTemplate(
             projectOut += tok(projectLines[i], {
               ...projectTokens,
               taskTitle: t.title,
-              taskOwner: t.owner || '—',
               taskDueDate: t.dueDate ? fmtDate(t.dueDate) : '—',
               taskStatus: t.status.replace('_', ' '),
             }) + '\n'

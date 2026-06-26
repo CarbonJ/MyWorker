@@ -719,11 +719,6 @@ export default function Settings() {
                     desc: 'Open quick task creation modal (global)',
                   },
                   {
-                    keys: ['⌘', 'Shift', 'L'],
-                    alt:  'Ctrl+Shift+L',
-                    desc: 'Open quick work log entry modal (global)',
-                  },
-                  {
                     keys: ['Esc'],
                     alt:  null,
                     desc: 'Return to main screen when no modal is open',

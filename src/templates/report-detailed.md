@@ -21,7 +21,7 @@ _Generated {{date}}_
 | Linked JIRAs | {{linkedJiras}} |
 
 {{tasksHeader}}
-| {{taskTitle}} | {{taskOwner}} | {{taskDueDate}} | {{taskStatus}} |
+| {{taskTitle}} | {{taskDueDate}} | {{taskStatus}} |
 
 ---
 

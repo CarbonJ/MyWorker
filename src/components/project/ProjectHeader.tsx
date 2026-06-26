@@ -23,7 +23,6 @@ const COLLAPSED_KEY = 'myworker:header-collapsed'
 
 interface Props {
   project: Project
-  projectId: number
   priorities: DropdownOption[]
   productAreas: DropdownOption[]
   projectStatuses: DropdownOption[]
@@ -32,12 +31,13 @@ interface Props {
   onSaveField: (patch: Partial<Omit<Project, 'id'>>) => void
   onMarkComplete: () => void
   onReopen: () => void
+  onEdit: () => void
 }
 
 
 export function ProjectHeader({
-  project, projectId, priorities, productAreas, projectStatuses, tasks,
-  isArchived, onSaveField, onMarkComplete, onReopen,
+  project, priorities, productAreas, projectStatuses, tasks,
+  isArchived, onSaveField, onMarkComplete, onReopen, onEdit,
 }: Props) {
   const navigate = useNavigate()
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSED_KEY) === 'true')
@@ -130,7 +130,7 @@ export function ProjectHeader({
         <div className="min-w-0 space-y-2 border rounded-lg p-3">
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-semibold truncate">{project.workItem}</h1>
-            <Button variant="outline" size="sm" onClick={() => navigate(`/projects/${projectId}/edit`)} className="shrink-0">
+            <Button variant="outline" size="sm" onClick={onEdit} className="shrink-0">
               Edit
             </Button>
             {isArchived ? (
@@ -303,6 +303,23 @@ export function ProjectHeader({
                 <span key={i} className="bg-white border rounded-full px-2.5 py-0.5 text-xs text-slate-900 shadow-sm">
                   {s.name}
                 </span>
+              ))}
+            </div>
+          )}
+
+          {project.linkedJiras.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 items-center">
+              <span className="font-medium text-foreground text-sm">JIRAs:</span>
+              {project.linkedJiras.map((j, i) => (
+                <a
+                  key={i}
+                  href={j.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-white border rounded-full px-2.5 py-0.5 text-xs text-blue-600 hover:text-blue-800 shadow-sm"
+                >
+                  {j.label || j.url}
+                </a>
               ))}
             </div>
           )}

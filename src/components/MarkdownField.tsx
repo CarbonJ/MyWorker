@@ -50,7 +50,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
       StarterKit,
       Markdown.configure({ html: false, tightLists: true }),
       Placeholder.configure({ placeholder: placeholder ?? '' }),
-      Link.configure({ openOnClick: false, autolink: true }),
+      Link.configure({ openOnClick: false, autolink: false }),
     ],
     content: value,
     autofocus: initialFocused,

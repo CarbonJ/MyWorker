@@ -190,7 +190,7 @@ export async function importFromJson(file: File): Promise<void> {
           t.id as number, (t.project_id as number | null) ?? null,
           (t.product_area_id as number | null) ?? null,
           t.title as string, t.description as string, t.notes as string,
-          t.status as string, t.owner as string,
+          t.status as string, (t.owner as string | undefined) ?? '',
           t.start_date as string | null, t.due_date as string | null,
           t.priority_id as number | null,
           t.is_recurring ? 1 : 0,

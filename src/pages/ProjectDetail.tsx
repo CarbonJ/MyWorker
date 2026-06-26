@@ -20,6 +20,7 @@ import type { Project, Task, WorkLogEntry, DropdownOption } from '@/types'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { TaskModal } from '@/components/TaskModal'
+import { ProjectModal } from '@/components/ProjectModal'
 import { ProjectHeader } from '@/components/project/ProjectHeader'
 import { TaskPane, type SortEntry, type TaskSortField } from '@/components/project/TaskPane'
 import { WorkLogPane } from '@/components/project/WorkLogPane'
@@ -64,6 +65,9 @@ export default function ProjectDetail() {
   useEffect(() => { localStorage.setItem(LS_TASK_FILTER_STATUSES,   JSON.stringify(filterStatuses)) },   [filterStatuses])
   useEffect(() => { localStorage.setItem(LS_TASK_FILTER_PRIORITIES, JSON.stringify(filterPriorities)) }, [filterPriorities])
   useEffect(() => { localStorage.setItem(LS_TASK_SORTS, JSON.stringify(sorts)) }, [sorts])
+
+  // ── Edit project modal ────────────────────────────────────────────────────
+  const [editModalOpen, setEditModalOpen] = useState(false)
 
   // ── Task modal ────────────────────────────────────────────────────────────
   const [taskModalOpen, setTaskModalOpen] = useState(false)
@@ -181,7 +185,6 @@ export default function ProjectDetail() {
     <div className="flex flex-col h-[calc(100vh-57px)]">
       <ProjectHeader
         project={project}
-        projectId={projectId}
         priorities={priorities}
         productAreas={productAreas}
         projectStatuses={projectStatuses}
@@ -190,6 +193,7 @@ export default function ProjectDetail() {
         onSaveField={saveField}
         onMarkComplete={markComplete}
         onReopen={reopenProject}
+        onEdit={() => setEditModalOpen(true)}
       />
 
       <SplitPane
@@ -216,6 +220,13 @@ export default function ProjectDetail() {
             onSaved={load}
           />
         }
+      />
+
+      <ProjectModal
+        project={project}
+        open={editModalOpen}
+        onClose={() => setEditModalOpen(false)}
+        onSaved={() => { setEditModalOpen(false); load() }}
       />
 
       <TaskModal

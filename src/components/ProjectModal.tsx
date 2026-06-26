@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { toast } from 'sonner'
 import { createProject, updateProject, deleteProject, getAllStakeholderNames, getAllTagNames } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
-import type { Project, DropdownOption, RagStatus, Stakeholder } from '@/types'
+import type { Project, DropdownOption, RagStatus, Stakeholder, JiraLink } from '@/types'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -38,6 +38,7 @@ export function ProjectModal({ project, open, onClose, onSaved }: Props) {
   const [productAreaId, setProductAreaId] = useState<string>('')
   const [statusId, setStatusId] = useState<string>('')
   const [stakeholders, setStakeholders] = useState<Stakeholder[]>([])
+  const [linkedJiras, setLinkedJiras] = useState<JiraLink[]>([])
   const [tags, setTags] = useState<string[]>([])
   const [dueDate, setDueDate] = useState<string>('')
   const [knownStakeholders, setKnownStakeholders] = useState<string[]>([])
@@ -74,10 +75,10 @@ export function ProjectModal({ project, open, onClose, onSaved }: Props) {
       setProductAreaId(project.productAreaId?.toString() ?? '')
       setStatusId(project.statusId?.toString() ?? '')
       setStakeholders(project.stakeholders ?? [])
+      setLinkedJiras(project.linkedJiras ?? [])
       setTags(project.tags ?? [])
       setDueDate(project.dueDate ?? '')
     } else {
-      // Reset for create mode
       setWorkItem('')
       setWorkDescription('')
       setRagStatus('Green')
@@ -86,6 +87,7 @@ export function ProjectModal({ project, open, onClose, onSaved }: Props) {
       setProductAreaId('')
       setStatusId('')
       setStakeholders([])
+      setLinkedJiras([])
       setTags([])
       setDueDate('')
     }
@@ -120,6 +122,7 @@ export function ProjectModal({ project, open, onClose, onSaved }: Props) {
         productAreaId: productAreaId ? Number(productAreaId) : null,
         statusId: statusId ? Number(statusId) : null,
         stakeholders,
+        linkedJiras: linkedJiras.filter(j => j.url.trim()),
         tags,
         dueDate: dueDate || null,
       }
@@ -148,22 +151,21 @@ export function ProjectModal({ project, open, onClose, onSaved }: Props) {
       await deleteProject(project.id)
       toast.success('Project deleted')
       onClose()
-      onSaved(-1) // Signal deletion
+      onSaved(-1)
     } catch (err) {
       toast.error(`Failed to delete project: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
-  const addStakeholder = () =>
-    setStakeholders(prev => [...prev, { name: '' }])
+  const addStakeholder = () => setStakeholders(prev => [...prev, { name: '' }])
+  const removeStakeholder = (i: number) => setStakeholders(prev => prev.filter((_, idx) => idx !== i))
+  const updateStakeholder = (i: number, value: string) =>
+    setStakeholders(prev => prev.map((entry, idx) => idx === i ? { name: value } : entry))
 
-  const removeStakeholder = (index: number) =>
-    setStakeholders(prev => prev.filter((_, i) => i !== index))
-
-  const updateStakeholder = (index: number, value: string) =>
-    setStakeholders(prev =>
-      prev.map((entry, i) => i === index ? { name: value } : entry)
-    )
+  const addJira = () => setLinkedJiras(prev => [...prev, { url: '', label: '' }])
+  const removeJira = (i: number) => setLinkedJiras(prev => prev.filter((_, idx) => idx !== i))
+  const updateJira = (i: number, field: 'url' | 'label', value: string) =>
+    setLinkedJiras(prev => prev.map((j, idx) => idx === i ? { ...j, [field]: value } : j))
 
   const fieldClass = 'space-y-1.5'
   const sectionClass = 'grid grid-cols-2 gap-4'
@@ -213,9 +215,9 @@ export function ProjectModal({ project, open, onClose, onSaved }: Props) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Green">Green</SelectItem>
-                  <SelectItem value="Amber">Amber</SelectItem>
-                  <SelectItem value="Red">Red</SelectItem>
+                  <SelectItem value="Green">🟢 Green</SelectItem>
+                  <SelectItem value="Amber">🟡 Amber</SelectItem>
+                  <SelectItem value="Red">🔴 Red</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -342,14 +344,45 @@ export function ProjectModal({ project, open, onClose, onSaved }: Props) {
                 ))}
               </div>
             )}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={addStakeholder}
-              className="mt-1"
-            >
+            <Button type="button" variant="outline" size="sm" onClick={addStakeholder} className="mt-1">
               + Add Stakeholder
+            </Button>
+          </div>
+
+          {/* Linked JIRAs */}
+          <div className={fieldClass}>
+            <Label>Linked JIRAs</Label>
+            {linkedJiras.length > 0 && (
+              <div className="space-y-2">
+                {linkedJiras.map((jira, i) => (
+                  <div key={i} className="flex gap-2 items-center">
+                    <Input
+                      value={jira.url}
+                      onChange={e => updateJira(i, 'url', e.target.value)}
+                      placeholder="URL or JIRA ID"
+                      className="flex-1"
+                    />
+                    <Input
+                      value={jira.label}
+                      onChange={e => updateJira(i, 'label', e.target.value)}
+                      placeholder="Label (optional)"
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeJira(i)}
+                      className="shrink-0 text-muted-foreground hover:text-destructive"
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <Button type="button" variant="outline" size="sm" onClick={addJira} className="mt-1">
+              + Add JIRA
             </Button>
           </div>
 
