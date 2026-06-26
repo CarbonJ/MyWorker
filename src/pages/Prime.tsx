@@ -15,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar'
 import { Check, Bookmark, X as XIcon, ChevronDown } from 'lucide-react'
 import { pillClass, dotClass, pillClassActive, RAG_ORDER } from '@/lib/colors'
-import { loadGuiSettings, buttonStyle } from '@/lib/guiSettings'
+import { loadGuiSettings, buttonStyle, workItemStyle } from '@/lib/guiSettings'
 import { fmtDate, isOverdue, isDueToday } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { useDataLoader } from '@/hooks/useDataLoader'
@@ -577,8 +577,9 @@ export default function Prime() {
     }
   }
 
-  const { buttonColor, buttonOpacity } = loadGuiSettings()
-  const btnStyle = buttonStyle(buttonColor, buttonOpacity)
+  const guiSettings = loadGuiSettings()
+  const btnStyle    = buttonStyle(guiSettings.buttonColor, guiSettings.buttonOpacity)
+  const wiStyle     = workItemStyle(guiSettings)
 
   const hasActiveFilters = ragFilters.length > 0 || priorityFilters.length > 0 || areaFilters.length > 0 || statusFilters.length > 0 || tagFilters.length > 0
 
@@ -998,7 +999,7 @@ export default function Prime() {
           </td>
           <td className="px-3 py-1 font-medium max-w-[18rem]">
             <div className="flex flex-col gap-0.5 min-w-0">
-              <span className="truncate">{p.workItem}</span>
+              <span className="truncate" style={wiStyle}>{p.workItem}</span>
               {(hasOverdue || (!isExpanded && counts && (counts.open > 0 || counts.inProgress > 0))) && (
                 <span className="flex items-center gap-1.5 font-normal">
                   {hasOverdue && (

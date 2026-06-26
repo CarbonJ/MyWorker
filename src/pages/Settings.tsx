@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { ROW_COLOR_RGB, buttonStyle } from '@/lib/guiSettings'
+import { ROW_COLOR_RGB, TEXT_COLOR_HEX, buttonStyle, workItemStyle } from '@/lib/guiSettings'
 import { toast } from 'sonner'
 import {
   getDropdownOptions,
@@ -297,10 +297,16 @@ export default function Settings() {
   }
 
   // GUI color settings
-  const [guiRowColor,      setGuiRowColor]      = useState(() => localStorage.getItem('myworker:gui-row-color')           ?? '')
-  const [guiRowOpacity,    setGuiRowOpacity]    = useState(() => Number(localStorage.getItem('myworker:gui-row-opacity')  ?? '20'))
-  const [guiButtonColor,   setGuiButtonColor]   = useState(() => localStorage.getItem('myworker:gui-button-color')        ?? '')
+  const [guiRowColor,      setGuiRowColor]      = useState(() => localStorage.getItem('myworker:gui-row-color')            ?? '')
+  const [guiRowOpacity,    setGuiRowOpacity]    = useState(() => Number(localStorage.getItem('myworker:gui-row-opacity')   ?? '20'))
+  const [guiButtonColor,   setGuiButtonColor]   = useState(() => localStorage.getItem('myworker:gui-button-color')         ?? '')
   const [guiButtonOpacity, setGuiButtonOpacity] = useState(() => Number(localStorage.getItem('myworker:gui-button-opacity') ?? '20'))
+
+  // Work Item font settings
+  const [workItemSize,   setWorkItemSize]   = useState(() => Number(localStorage.getItem('myworker:workitem-size')   ?? '14'))
+  const [workItemWeight, setWorkItemWeight] = useState(() => localStorage.getItem('myworker:workitem-weight')        ?? 'medium')
+  const [workItemItalic, setWorkItemItalic] = useState(() => localStorage.getItem('myworker:workitem-italic')        === 'true')
+  const [workItemColor,  setWorkItemColor]  = useState(() => localStorage.getItem('myworker:workitem-color')         ?? '')
 
   const [dueFilterShowAll, setDueFilterShowAll] = useState(
     () => localStorage.getItem('myworker:due-filter-show-all') === 'true'
@@ -322,6 +328,22 @@ export default function Settings() {
     localStorage.setItem('myworker:gui-button-opacity', String(guiButtonOpacity))
     window.dispatchEvent(new Event('myworker:gui-settings-changed'))
   }, [guiButtonOpacity])
+  useEffect(() => {
+    localStorage.setItem('myworker:workitem-size', String(workItemSize))
+    window.dispatchEvent(new Event('myworker:gui-settings-changed'))
+  }, [workItemSize])
+  useEffect(() => {
+    localStorage.setItem('myworker:workitem-weight', workItemWeight)
+    window.dispatchEvent(new Event('myworker:gui-settings-changed'))
+  }, [workItemWeight])
+  useEffect(() => {
+    localStorage.setItem('myworker:workitem-italic', String(workItemItalic))
+    window.dispatchEvent(new Event('myworker:gui-settings-changed'))
+  }, [workItemItalic])
+  useEffect(() => {
+    localStorage.setItem('myworker:workitem-color', workItemColor)
+    window.dispatchEvent(new Event('myworker:gui-settings-changed'))
+  }, [workItemColor])
 
   useEffect(() => {
     Promise.all([
@@ -536,6 +558,83 @@ export default function Settings() {
                           Colored
                         </span>
                       </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Work Item Style */}
+                <div className="space-y-2">
+                  <h3 className="font-medium text-sm">Work Item Style</h3>
+                  <div className="border rounded-md p-3 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground w-16 shrink-0">Size</span>
+                      <input
+                        type="range"
+                        min="11"
+                        max="20"
+                        step="1"
+                        value={workItemSize}
+                        onChange={e => setWorkItemSize(Number(e.target.value))}
+                        className="flex-1 cursor-pointer accent-primary h-1.5"
+                      />
+                      <span className="text-xs text-muted-foreground w-8 text-right tabular-nums">{workItemSize}px</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground w-16 shrink-0">Weight</span>
+                      <div className="flex gap-1">
+                        {(['normal', 'medium', 'semibold', 'bold'] as const).map(w => (
+                          <button
+                            key={w}
+                            type="button"
+                            onClick={() => setWorkItemWeight(w)}
+                            className={`px-2 py-0.5 rounded text-xs border transition-colors capitalize ${workItemWeight === w ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-accent'}`}
+                          >
+                            {w}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground w-16 shrink-0">Style</span>
+                      <button
+                        type="button"
+                        onClick={() => setWorkItemItalic(!workItemItalic)}
+                        className={`px-2 py-0.5 rounded text-xs border italic transition-colors ${workItemItalic ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-accent'}`}
+                      >
+                        Italic
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground w-16 shrink-0">Color</span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          title="Default (theme color)"
+                          onClick={() => setWorkItemColor('')}
+                          className={`w-4 h-4 rounded-full border border-dashed border-slate-400 bg-transparent flex items-center justify-center text-slate-400 text-[9px] leading-none ${workItemColor === '' ? 'ring-2 ring-offset-1 ring-foreground' : 'opacity-60 hover:opacity-100'}`}
+                        >
+                          ×
+                        </button>
+                        {Object.entries(TEXT_COLOR_HEX).map(([name, hex]) => (
+                          <button
+                            key={name}
+                            type="button"
+                            title={name.charAt(0).toUpperCase() + name.slice(1)}
+                            onClick={() => setWorkItemColor(name)}
+                            className={`w-4 h-4 rounded-full border-2 transition-all ${workItemColor === name ? 'ring-2 ring-offset-1 ring-foreground scale-110' : 'opacity-70 hover:opacity-100 border-transparent'}`}
+                            style={{ backgroundColor: hex }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground w-16 shrink-0">Preview</span>
+                      <span
+                        className="truncate"
+                        style={workItemStyle({ workItemSize, workItemWeight, workItemItalic, workItemColor })}
+                      >
+                        My Work Item Title
+                      </span>
                     </div>
                   </div>
                 </div>

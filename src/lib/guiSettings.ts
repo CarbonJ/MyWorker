@@ -11,19 +11,52 @@ export const ROW_COLOR_RGB: Record<string, string> = {
   grey:   '148, 163, 184',
 }
 
+/** Maps color names to hex values suitable for use as text color. */
+export const TEXT_COLOR_HEX: Record<string, string> = {
+  red:    '#ef4444',
+  orange: '#f97316',
+  amber:  '#f59e0b',
+  green:  '#22c55e',
+  blue:   '#3b82f6',
+  purple: '#a855f7',
+  grey:   '#94a3b8',
+}
+
+const FONT_WEIGHTS: Record<string, number> = {
+  normal: 400, medium: 500, semibold: 600, bold: 700,
+}
+
 export interface GuiSettings {
-  rowColor:      string   // '' or a color name key
-  rowOpacity:    number   // 10 | 20 | 30 | 50 | 75
-  buttonColor:   string   // '' or a color name key (stored, not yet applied)
-  buttonOpacity: number
+  rowColor:        string   // '' or a color name key
+  rowOpacity:      number
+  buttonColor:     string
+  buttonOpacity:   number
+  workItemSize:    number   // font-size in px, default 14
+  workItemWeight:  string   // 'normal' | 'medium' | 'semibold' | 'bold', default 'medium'
+  workItemItalic:  boolean  // default false
+  workItemColor:   string   // '' or a color name key, default ''
 }
 
 export function loadGuiSettings(): GuiSettings {
   return {
-    rowColor:      localStorage.getItem('myworker:gui-row-color')           ?? '',
-    rowOpacity:    Number(localStorage.getItem('myworker:gui-row-opacity')  ?? '20'),
-    buttonColor:   localStorage.getItem('myworker:gui-button-color')        ?? '',
-    buttonOpacity: Number(localStorage.getItem('myworker:gui-button-opacity') ?? '20'),
+    rowColor:        localStorage.getItem('myworker:gui-row-color')            ?? '',
+    rowOpacity:      Number(localStorage.getItem('myworker:gui-row-opacity')   ?? '20'),
+    buttonColor:     localStorage.getItem('myworker:gui-button-color')         ?? '',
+    buttonOpacity:   Number(localStorage.getItem('myworker:gui-button-opacity') ?? '20'),
+    workItemSize:    Number(localStorage.getItem('myworker:workitem-size')      ?? '14'),
+    workItemWeight:  localStorage.getItem('myworker:workitem-weight')           ?? 'medium',
+    workItemItalic:  localStorage.getItem('myworker:workitem-italic')           === 'true',
+    workItemColor:   localStorage.getItem('myworker:workitem-color')            ?? '',
+  }
+}
+
+/** Returns an inline style for the Work Item title span in the project list. */
+export function workItemStyle(s: Pick<GuiSettings, 'workItemSize' | 'workItemWeight' | 'workItemItalic' | 'workItemColor'>): CSSProperties {
+  return {
+    fontSize:   `${s.workItemSize}px`,
+    fontWeight: FONT_WEIGHTS[s.workItemWeight] ?? 500,
+    fontStyle:  s.workItemItalic ? 'italic' : 'normal',
+    ...(s.workItemColor ? { color: TEXT_COLOR_HEX[s.workItemColor] } : {}),
   }
 }
 
