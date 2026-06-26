@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, startTransition } from 'react'
 import { toast } from 'sonner'
 import { createTask, updateTask, deleteTask } from '@/db/tasks'
 import { getAllProjects, getAllTagNames } from '@/db/projects'
@@ -53,15 +53,16 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
   const [productAreas,  setProductAreas]  = useState<DropdownOption[]>([])
   const [productAreaId, setProductAreaId] = useState<string>('')
 
-  // Load options whenever modal opens
+  // Load options whenever modal opens.
+  // startTransition defers these setState calls so they can't interrupt an
+  // in-progress dropdown interaction and confuse Radix UI's pointer-events counter.
   useEffect(() => {
     if (!open) return
-    getDropdownOptions('priority').then(setPriorities)
-    getDropdownOptions('product_area').then(setProductAreas)
-    getAllTagNames().then(setKnownTags)
-    // Only fetch projects if they weren't passed in as a prop
+    getDropdownOptions('priority').then(data => startTransition(() => setPriorities(data)))
+    getDropdownOptions('product_area').then(data => startTransition(() => setProductAreas(data)))
+    getAllTagNames().then(data => startTransition(() => setKnownTags(data)))
     if (!propProjects) {
-      getAllProjects().then(setProjects)
+      getAllProjects().then(data => startTransition(() => setProjects(data)))
     }
   }, [open, propProjects])
 
@@ -173,6 +174,10 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
       <DialogContent
         className="max-w-lg flex flex-col max-h-[90vh]"
+        // Prevent Radix from treating clicks inside Select/Popover portals (rendered
+        // outside the Dialog DOM) as "interact outside" — that path triggers dialog-close
+        // cleanup which can leave body pointer-events stuck and freeze the form.
+        onInteractOutside={e => e.preventDefault()}
         onKeyDown={e => {
           if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') handleSave()
         }}

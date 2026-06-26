@@ -769,17 +769,20 @@ export default function Prime() {
         </Popover>
 
         {/* Expand / Collapse all — right side */}
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-1">
           <button
-            onClick={() =>
-              allExpanded
-                ? setExpandedProjects(new Set())
-                : setExpandedProjects(new Set(projectsWithTasks.map(p => p.id)))
-            }
-            className="h-8 w-8 flex items-center justify-center border rounded-md text-sm hover:bg-accent transition-colors"
-            title={allExpanded ? 'Collapse all projects' : 'Expand all projects'}
+            onClick={() => setExpandedProjects(new Set(projectsWithTasks.map(p => p.id)))}
+            className="h-8 px-2 flex items-center justify-center border rounded-md text-sm hover:bg-accent transition-colors"
+            title="Expand all projects"
           >
-            {allExpanded ? '−' : '+'}
+            +
+          </button>
+          <button
+            onClick={() => setExpandedProjects(new Set())}
+            className="h-8 px-2 flex items-center justify-center border rounded-md text-sm hover:bg-accent transition-colors"
+            title="Collapse all projects"
+          >
+            −
           </button>
         </div>
       </div>
