@@ -46,7 +46,7 @@ export function CommandPalette({ open, onClose, onNewTask }: Props) {
               <CommandItem value="monthly report status" onSelect={() => go('/monthly')}>
                 <FileText className="text-muted-foreground" /> Monthly Report
               </CommandItem>
-              <CommandItem value="reporting view" onSelect={() => go('/reporting')}>
+              <CommandItem value="reporting" onSelect={() => go('/reporting')}>
                 <BarChart2 className="text-muted-foreground" /> Reporting
               </CommandItem>
               <CommandItem value="archive" onSelect={() => go('/archive')}>
