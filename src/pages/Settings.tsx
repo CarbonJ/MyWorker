@@ -670,7 +670,8 @@ export default function Settings() {
                 {[
                   { label: 'Prime',          desc: 'Project list — your main working view' },
                   { label: 'Daily Digest',   desc: 'A focused daily summary of your active projects and open tasks' },
-                  { label: 'Weekly Report',  desc: 'Auto-generated status report for the current week, ready to copy' },
+                  { label: 'Weekly Report',  desc: 'Work log entries grouped by project for the current week, ready to copy' },
+                  { label: 'Monthly Report', desc: 'Same as Weekly Report but spanning a full calendar month' },
                   { label: 'Reporting',      desc: 'Dense read-only table for on-screen use during meetings' },
                   { label: 'Archive',        desc: 'Closed / completed projects' },
                   { label: 'Settings',       desc: 'This page' },

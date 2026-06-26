@@ -16,6 +16,7 @@ import ArchiveView from '@/pages/ArchiveView'
 import Settings from '@/pages/Settings'
 import DailyDigestView from '@/pages/DailyDigestView'
 import WeeklyReportView from '@/pages/WeeklyReportView'
+import MonthlyReportView from '@/pages/MonthlyReportView'
 import { CommandPalette } from '@/components/CommandPalette'
 
 function DueDateTitleUpdater() {
@@ -145,6 +146,7 @@ function AppInner() {
           <Route path="/reporting" element={<ReportingView />} />
           <Route path="/digest" element={<DailyDigestView />} />
           <Route path="/weekly" element={<WeeklyReportView />} />
+          <Route path="/monthly" element={<MonthlyReportView />} />
           <Route path="/archive" element={<ArchiveView />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
