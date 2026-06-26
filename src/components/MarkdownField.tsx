@@ -42,6 +42,9 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
   const [sizeMode, setSizeMode] = useState<SizeMode>('default')
   const sizeModeRef = useRef(sizeMode)
   sizeModeRef.current = sizeMode
+  // Always-current ref so the TipTap closure never goes stale
+  const onKeyDownRef = useRef(onKeyDown)
+  onKeyDownRef.current = onKeyDown
 
   const cycleSize = () => setSizeMode(m => m === 'default' ? 'large' : m === 'large' ? 'fullscreen' : 'default')
 
@@ -65,7 +68,11 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
           setSizeMode('default')
           return true
         }
-        onKeyDown?.(event as unknown as React.KeyboardEvent<HTMLTextAreaElement>)
+        if (onKeyDownRef.current) {
+          onKeyDownRef.current(event as unknown as React.KeyboardEvent<HTMLTextAreaElement>)
+          // If the parent handled the event, stop TipTap from also processing it
+          if (event.defaultPrevented) return true
+        }
         return false
       },
     },
@@ -73,7 +80,11 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
     onBlur: () => setFocused(false),
     onUpdate: ({ editor }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      onChange((editor.storage as any).markdown.getMarkdown())
+      let md: string = (editor.storage as any).markdown.getMarkdown()
+      // prosemirror-markdown escapes [ and ] in plain text; unescape patterns
+      // that look like markdown links so they render correctly downstream.
+      md = md.replace(/\\\[([^\]\\]+)\\\]\(([^)]+)\)/g, '[$1]($2)')
+      onChange(md)
     },
   })
 

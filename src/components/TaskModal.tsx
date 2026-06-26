@@ -179,7 +179,7 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
         // cleanup which can leave body pointer-events stuck and freeze the form.
         onInteractOutside={e => e.preventDefault()}
         onKeyDown={e => {
-          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') handleSave()
+          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); handleSave() }
         }}
       >
         <DialogHeader className="shrink-0">

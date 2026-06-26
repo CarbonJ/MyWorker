@@ -64,7 +64,9 @@ export function WorkLogPane({ projectId, projectName, workLog, onSaved }: Props)
   const saveEdit = async (id: number) => {
     if (!editDraft.trim()) return
     try {
-      await updateWorkLogEntry(id, editDraft.trim())
+      const raw = editDraft.trim()
+      const text = raw.replace(/\\\[([^\]\\]+)\\\]\(([^)]+)\)/g, '[$1]($2)')
+      await updateWorkLogEntry(id, text)
       onSaved()
       setEditingId(null)
       setEditDraft('')
@@ -176,7 +178,7 @@ export function WorkLogPane({ projectId, projectName, workLog, onSaved }: Props)
                   expandable
                   initialFocused
                   onKeyDown={e => {
-                    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') saveEdit(entry.id)
+                    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); saveEdit(entry.id) }
                     if (e.key === 'Escape') cancelEdit()
                   }}
                 />

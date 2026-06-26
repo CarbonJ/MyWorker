@@ -19,7 +19,9 @@ export function WorkLogEntryForm({ projectId, projectName, onSaved }: Props) {
     if (!note.trim()) return
     setSaving(true)
     try {
-      await addWorkLogEntry(projectId, note.trim())
+      const raw = note.trim()
+      const text = raw.replace(/\\\[([^\]\\]+)\\\]\(([^)]+)\)/g, '[$1]($2)')
+      await addWorkLogEntry(projectId, text)
       setNote('')
       onSaved()
     } catch (err) {
@@ -40,7 +42,7 @@ export function WorkLogEntryForm({ projectId, projectName, onSaved }: Props) {
         rows={3}
         expandable
         onKeyDown={e => {
-          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') handleSubmit(e as unknown as React.FormEvent)
+          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); handleSubmit(e as unknown as React.FormEvent) }
         }}
       />
       <div className="flex items-center justify-between">

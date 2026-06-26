@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, startTransition } from 'react'
 import { toast } from 'sonner'
 import { createProject, updateProject, deleteProject, getAllStakeholderNames, getAllTagNames } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
@@ -55,11 +55,13 @@ export function ProjectModal({ project, open, onClose, onSaved }: Props) {
       getAllStakeholderNames(),
       getAllTagNames(),
     ]).then(([pris, areas, statuses, names, tagNames]) => {
-      setPriorities(pris)
-      setProductAreas(areas)
-      setProjectStatuses(statuses)
-      setKnownStakeholders(names)
-      setKnownTags(tagNames)
+      startTransition(() => {
+        setPriorities(pris)
+        setProductAreas(areas)
+        setProjectStatuses(statuses)
+        setKnownStakeholders(names)
+        setKnownTags(tagNames)
+      })
     })
   }, [open])
 
@@ -163,7 +165,7 @@ export function ProjectModal({ project, open, onClose, onSaved }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto" onInteractOutside={e => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Edit Project' : 'New Project'}</DialogTitle>
           <DialogDescription>
