@@ -183,6 +183,12 @@ export default function Prime() {
     return () => window.removeEventListener('myworker:gui-settings-changed', handler)
   }, [])
 
+  // Reload when a task is saved via the global modal (Cmd+Shift+T / Command Palette)
+  useEffect(() => {
+    window.addEventListener('myworker:task-saved', reload)
+    return () => window.removeEventListener('myworker:task-saved', reload)
+  }, [reload])
+
   // Persist filter/sort state
   useEffect(() => { localStorage.setItem('myworker:prime-rag2',         JSON.stringify(ragFilters))      }, [ragFilters])
   useEffect(() => { localStorage.setItem('myworker:prime-priority2',    JSON.stringify(priorityFilters)) }, [priorityFilters])
