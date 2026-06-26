@@ -7,9 +7,12 @@ import { Markdown } from 'tiptap-markdown'
 import Placeholder from '@tiptap/extension-placeholder'
 import Link from '@tiptap/extension-link'
 import { Label } from '@/components/ui/label'
-import { Maximize2, Fullscreen, Minimize2, Bold, Italic, Heading1, Heading2, Heading3, Pilcrow } from 'lucide-react'
+import { Maximize2, Fullscreen, Minimize2, Bold, Italic, Heading1, Heading2, Heading3, Pilcrow, Code2 } from 'lucide-react'
 
 type SizeMode = 'default' | 'large' | 'fullscreen'
+
+// Unescape markdown link patterns that prosemirror-markdown bracket-escapes in plain text.
+const unescapeLinks = (s: string) => s.replace(/\\\[([^\]\\]+)\\\]\(([^)]+)\)/g, '[$1]($2)')
 
 function ToolbarBtn({ active, onClick, title, children }: { active: boolean; onClick: () => void; title: string; children: React.ReactNode }) {
   return (
@@ -40,13 +43,21 @@ interface Props {
 export function MarkdownField({ id, label, headerLabel, value, onChange, placeholder, rows = 2, onKeyDown, initialFocused = false, expandable = false }: Props) {
   const [focused, setFocused] = useState(initialFocused)
   const [sizeMode, setSizeMode] = useState<SizeMode>('default')
+  const [rawMode, setRawMode] = useState(false)
   const sizeModeRef = useRef(sizeMode)
   sizeModeRef.current = sizeMode
-  // Always-current ref so the TipTap closure never goes stale
   const onKeyDownRef = useRef(onKeyDown)
   onKeyDownRef.current = onKeyDown
 
   const cycleSize = () => setSizeMode(m => m === 'default' ? 'large' : m === 'large' ? 'fullscreen' : 'default')
+
+  const toggleRaw = () => {
+    if (rawMode) {
+      // Switching back to rich: sync current textarea value into editor
+      editor?.commands.setContent(value, { emitUpdate: false })
+    }
+    setRawMode(r => !r)
+  }
 
   const editor = useEditor({
     extensions: [
@@ -61,7 +72,8 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
       attributes: {
         id,
         spellcheck: 'true',
-        class: 'prose prose-sm dark:prose-invert max-w-none focus:outline-none',
+        // break-words prevents long URLs from causing horizontal overflow
+        class: 'prose prose-sm dark:prose-invert max-w-none focus:outline-none break-words',
       },
       handleKeyDown: (_view, event) => {
         if (event.key === 'Escape' && sizeModeRef.current === 'fullscreen') {
@@ -70,7 +82,6 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
         }
         if (onKeyDownRef.current) {
           onKeyDownRef.current(event as unknown as React.KeyboardEvent<HTMLTextAreaElement>)
-          // If the parent handled the event, stop TipTap from also processing it
           if (event.defaultPrevented) return true
         }
         return false
@@ -81,27 +92,29 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
     onUpdate: ({ editor }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let md: string = (editor.storage as any).markdown.getMarkdown()
-      // prosemirror-markdown escapes [ and ] in plain text; unescape patterns
-      // that look like markdown links so they render correctly downstream.
-      md = md.replace(/\\\[([^\]\\]+)\\\]\(([^)]+)\)/g, '[$1]($2)')
+      md = unescapeLinks(md)
       onChange(md)
     },
   })
 
-  // Sync external value changes (e.g. form reset after save) without clobbering cursor
+  // Sync external value changes without clobbering the cursor.
+  // Use normalised comparison so bracket-escaped link patterns don't trigger
+  // a setContent that would convert typed [text](url) into a hidden link node.
   useEffect(() => {
-    if (!editor) return
+    if (!editor || rawMode) return
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const current = (editor.storage as any).markdown.getMarkdown()
-    if (current !== value) editor.commands.setContent(value, { emitUpdate: false })
-  }, [value, editor])
+    if (unescapeLinks(current) !== unescapeLinks(value)) {
+      editor.commands.setContent(value, { emitUpdate: false })
+    }
+  }, [value, editor, rawMode])
 
   // Focus editor when entering fullscreen
   useEffect(() => {
-    if (sizeMode === 'fullscreen') {
+    if (sizeMode === 'fullscreen' && !rawMode) {
       requestAnimationFrame(() => editor?.commands.focus())
     }
-  }, [sizeMode, editor])
+  }, [sizeMode, editor, rawMode])
 
   const sizeIcon = sizeMode === 'default'
     ? <Maximize2 size={14} />
@@ -114,6 +127,17 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
     : sizeMode === 'large'
       ? 'Enter fullscreen'
       : 'Collapse editor'
+
+  const rawBtn = (
+    <button
+      type="button"
+      onClick={toggleRaw}
+      title={rawMode ? 'Switch to rich editor' : 'Edit raw markdown (view/edit URLs and source)'}
+      className={`transition-colors p-0.5 rounded ${rawMode ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+    >
+      <Code2 size={14} />
+    </button>
+  )
 
   const expandBtn = expandable && (
     <button
@@ -129,25 +153,41 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
   const labelRow = (label || expandable) && (
     <div className="flex items-center justify-between">
       {label ? <Label htmlFor={id}>{label}</Label> : <span />}
-      {expandBtn}
+      <div className="flex items-center gap-1">
+        {rawBtn}
+        {expandBtn}
+      </div>
     </div>
   )
 
   const minHeight = `${rows * 1.5 + 1}rem`
 
   const containerClass = [
-    'rounded-md border px-3 py-2 text-sm cursor-text transition-colors overflow-y-auto',
+    'rounded-md border px-3 py-2 text-sm cursor-text transition-colors overflow-y-auto overflow-x-hidden',
     focused
       ? 'border-ring ring-1 ring-ring bg-background'
       : 'border-input bg-background hover:border-ring/50',
     sizeMode === 'large' ? 'h-64 overflow-y-auto' : '',
   ].filter(Boolean).join(' ')
 
-  const toolbar = editor && (
+  const rawTextarea = (
+    <textarea
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      onKeyDown={onKeyDown}
+      placeholder={placeholder}
+      className={containerClass + ' font-mono resize-none w-full'}
+      style={{ minHeight }}
+      spellCheck
+    />
+  )
+
+  const toolbar = editor && !rawMode && (
     <BubbleMenu
       editor={editor}
       shouldShow={({ editor: e, state }) => {
-        // Show on any text selection, or when cursor is inside a heading
         const { empty } = state.selection
         return !empty || e.isActive('heading')
       }}
@@ -205,21 +245,35 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
               {(headerLabel || label) && (
                 <span className="text-sm font-medium">{headerLabel ?? label}</span>
               )}
-              <button
-                type="button"
-                onClick={() => setSizeMode('default')}
-                title="Exit fullscreen (Esc)"
-                className="ml-auto text-muted-foreground hover:text-foreground transition-colors p-1 rounded"
+              <div className="ml-auto flex items-center gap-2">
+                {rawBtn}
+                <button
+                  type="button"
+                  onClick={() => setSizeMode('default')}
+                  title="Exit fullscreen (Esc)"
+                  className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded"
+                >
+                  <Minimize2 size={16} />
+                </button>
+              </div>
+            </div>
+            {rawMode ? (
+              <textarea
+                value={value}
+                onChange={e => onChange(e.target.value)}
+                onKeyDown={onKeyDown}
+                placeholder={placeholder}
+                className="flex-1 p-4 font-mono text-base resize-none outline-none bg-background"
+                spellCheck
+              />
+            ) : (
+              <div
+                className="flex-1 overflow-y-auto p-4 cursor-text"
+                onClick={() => editor?.chain().focus().run()}
               >
-                <Minimize2 size={16} />
-              </button>
-            </div>
-            <div
-              className="flex-1 overflow-y-auto p-4 cursor-text"
-              onClick={() => editor?.chain().focus().run()}
-            >
-              <EditorContent editor={editor} className="text-base min-h-full" />
-            </div>
+                <EditorContent editor={editor} className="text-base min-h-full break-words" />
+              </div>
+            )}
             <div className="border-t px-4 py-1.5 text-xs text-muted-foreground/50">
               Esc · exit fullscreen
             </div>
@@ -234,13 +288,15 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
     <div className="space-y-1.5">
       {toolbar}
       {labelRow}
-      <div
-        className={containerClass}
-        style={{ minHeight }}
-        onClick={() => editor?.chain().focus().run()}
-      >
-        <EditorContent editor={editor} />
-      </div>
+      {rawMode ? rawTextarea : (
+        <div
+          className={containerClass}
+          style={{ minHeight }}
+          onClick={() => editor?.chain().focus().run()}
+        >
+          <EditorContent editor={editor} />
+        </div>
+      )}
     </div>
   )
 }
