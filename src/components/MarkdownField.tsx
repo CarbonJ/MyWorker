@@ -154,7 +154,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
     <div className="flex items-center justify-between">
       {label ? <Label htmlFor={id}>{label}</Label> : <span />}
       <div className="flex items-center gap-1">
-        {rawBtn}
+        {rawMode && rawBtn}
         {expandBtn}
       </div>
     </div>
@@ -189,7 +189,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
       editor={editor}
       shouldShow={({ editor: e, state }) => {
         const { empty } = state.selection
-        return !empty || e.isActive('heading')
+        return e.isFocused || !empty || e.isActive('heading')
       }}
       options={{ placement: 'top-start' }}
     >
@@ -225,6 +225,12 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
           onClick={() => editor.chain().focus().setParagraph().run()}
           title="Plain text"
         ><Pilcrow size={13} /></ToolbarBtn>
+        <div className="w-px h-4 bg-border mx-0.5" />
+        <ToolbarBtn
+          active={false}
+          onClick={toggleRaw}
+          title="Edit raw markdown (view/edit URLs and source)"
+        ><Code2 size={13} /></ToolbarBtn>
       </div>
     </BubbleMenu>
   )
