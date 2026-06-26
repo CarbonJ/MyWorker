@@ -18,7 +18,6 @@ _Generated {{date}}_
 | Latest Update | **{{latestLogDate}}:** {{latestLogNote}} |
 | Open / In Progress | {{openTaskCount}} open / {{inProgressTaskCount}} in progress |
 | Stakeholders | {{stakeholders}} |
-| Linked JIRAs | {{linkedJiras}} |
 
 {{tasksHeader}}
 | {{taskTitle}} | {{taskDueDate}} | {{taskStatus}} |

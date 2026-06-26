@@ -165,7 +165,7 @@ export async function importFromJson(file: File): Promise<void> {
           (p.status_id as number | null) ?? null,
           (p.due_date as string | null) ?? null,
           (p.is_archived as number) ?? 0,
-          p.stakeholders as string, p.linked_jiras as string,
+          p.stakeholders as string, (p.linked_jiras as string | undefined) ?? '',
           p.created_at as string, p.updated_at as string,
         ],
       )

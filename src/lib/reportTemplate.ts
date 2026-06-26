@@ -123,7 +123,6 @@ export function renderTemplate(
         '# days since last touched': staleness !== undefined ? `${staleness}d` : 'no log',
         daysSinceLastLog: staleness !== undefined ? staleness : 'no log',
         stakeholders: p.stakeholders.map(s => s.name).join(', ') || '—',
-        linkedJiras: p.linkedJiras.map(j => j.label || j.url).join(', ') || '—',
         tasksHeader: (openTasks.length + inProgressTasks.length) > 0
           ? '| Task | Due | Status |\n|---|---|---|'
           : '',

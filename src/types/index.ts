@@ -1,10 +1,5 @@
 export type RagStatus = 'Red' | 'Amber' | 'Green'
 
-export interface JiraLink {
-  url: string
-  label: string
-}
-
 export interface Stakeholder {
   name: string
 }
@@ -21,7 +16,6 @@ export interface Project {
   productAreaId: number | null
   statusId: number | null
   stakeholders: Stakeholder[]
-  linkedJiras: JiraLink[]
   tags: string[]
   dueDate: string | null
   isArchived: boolean

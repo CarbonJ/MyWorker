@@ -307,23 +307,6 @@ export function ProjectHeader({
             </div>
           )}
 
-          {project.linkedJiras.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 items-center">
-              <span className="font-medium text-foreground text-sm">JIRAs:</span>
-              {project.linkedJiras.map((j, i) => (
-                <a
-                  key={i}
-                  href={j.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bg-white border rounded-full px-2.5 py-0.5 text-xs text-blue-600 hover:text-blue-800 shadow-sm"
-                >
-                  {j.label || j.url}
-                </a>
-              ))}
-            </div>
-          )}
-
           {project.tags.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {project.tags.map((tag, i) => (

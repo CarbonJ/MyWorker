@@ -1,5 +1,5 @@
 import { query, run, lastInsertId } from './index'
-import type { Project, RagStatus, JiraLink, Stakeholder } from '@/types'
+import type { Project, RagStatus, Stakeholder } from '@/types'
 
 
 function parseTags(raw: string): string[] {
@@ -15,21 +15,6 @@ function parseTags(raw: string): string[] {
 
 function stringifyTags(tags: string[]): string {
   return tags.length === 0 ? '' : JSON.stringify(tags)
-}
-
-function parseLinkedJiras(raw: string): JiraLink[] {
-  if (!raw || raw.trim() === '') return []
-  try {
-    const parsed = JSON.parse(raw)
-    if (Array.isArray(parsed)) return parsed as JiraLink[]
-    return []
-  } catch {
-    return []
-  }
-}
-
-function stringifyLinkedJiras(jiras: JiraLink[]): string {
-  return jiras.length === 0 ? '' : JSON.stringify(jiras)
 }
 
 function parseStakeholders(raw: string): Stakeholder[] {
@@ -59,7 +44,6 @@ function rowToProject(row: Record<string, unknown>): Project {
     productAreaId: row.product_area_id as number | null,
     statusId: row.status_id as number | null,
     stakeholders: parseStakeholders(row.stakeholders as string),
-    linkedJiras: parseLinkedJiras(row.linked_jiras as string),
     tags: parseTags(row.tags as string),
     dueDate: (row.due_date as string | null) ?? null,
     isArchived: !!(row.is_archived as number),
@@ -110,7 +94,6 @@ export interface CreateProjectInput {
   productAreaId?: number | null
   statusId?: number | null
   stakeholders?: Stakeholder[]
-  linkedJiras?: JiraLink[]
   tags?: string[]
   dueDate?: string | null
 }
@@ -118,8 +101,8 @@ export interface CreateProjectInput {
 export async function createProject(input: CreateProjectInput): Promise<number> {
   await run(
     `INSERT INTO projects
-      (work_item, work_desc, rag_status, priority_id, latest_status, product_area_id, status_id, stakeholders, linked_jiras, tags, due_date)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (work_item, work_desc, rag_status, priority_id, latest_status, product_area_id, status_id, stakeholders, tags, due_date)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.workItem,
       input.workDescription ?? '',
@@ -129,7 +112,6 @@ export async function createProject(input: CreateProjectInput): Promise<number> 
       input.productAreaId ?? null,
       input.statusId ?? null,
       stringifyStakeholders(input.stakeholders ?? []),
-      stringifyLinkedJiras(input.linkedJiras ?? []),
       stringifyTags(input.tags ?? []),
       input.dueDate ?? null,
     ],
@@ -155,7 +137,6 @@ export async function updateProject(input: UpdateProjectInput): Promise<void> {
       product_area_id = ?,
       status_id       = ?,
       stakeholders    = ?,
-      linked_jiras    = ?,
       tags            = ?,
       due_date        = ?
      WHERE id = ?`,
@@ -168,9 +149,6 @@ export async function updateProject(input: UpdateProjectInput): Promise<void> {
       input.productAreaId !== undefined ? input.productAreaId : current.productAreaId,
       input.statusId !== undefined ? input.statusId : current.statusId,
       stringifyStakeholders(input.stakeholders !== undefined ? input.stakeholders : current.stakeholders),
-      input.linkedJiras !== undefined
-        ? stringifyLinkedJiras(input.linkedJiras)
-        : stringifyLinkedJiras(current.linkedJiras),
       stringifyTags(input.tags !== undefined ? input.tags : current.tags),
       input.dueDate !== undefined ? input.dueDate : current.dueDate,
       input.id,
