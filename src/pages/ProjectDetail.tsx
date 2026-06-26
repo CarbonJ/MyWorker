@@ -104,6 +104,12 @@ export default function ProjectDetail() {
 
   useEffect(() => { load() }, [load])
 
+  // Reload when a task is saved via the global modal (Cmd+Shift+T / Command Palette)
+  useEffect(() => {
+    window.addEventListener('myworker:task-saved', load)
+    return () => window.removeEventListener('myworker:task-saved', load)
+  }, [load])
+
   // ── Project actions ───────────────────────────────────────────────────────
   const saveField = useCallback(async (patch: Partial<Omit<Project, 'id'>>) => {
     if (!project) return

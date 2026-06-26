@@ -513,8 +513,10 @@ export default function Prime() {
     await updateTask({ id: t.id, status: next })
     if (next === 'done' && t.projectId) {
       await addWorkLogEntry(t.projectId, `✓ Completed: ${t.title}`)
+      // Full reload needed to refresh latestLogByProject after the work log entry is added
+      reload()
+      return
     }
-    window.dispatchEvent(new Event('myworker:task-saved'))
     patchData(prev => ({ ...prev, allTasks: prev.allTasks.map(task => task.id === t.id ? { ...task, status: next } : task) }))
   }
 
@@ -1005,7 +1007,7 @@ export default function Prime() {
           </td>
           <td className="px-3 py-1 font-medium max-w-[18rem]">
             <div className="flex flex-col gap-0.5 min-w-0">
-              <span className="truncate" style={wiStyle}>{p.workItem}</span>
+              <span className="truncate" style={wiStyle} title={p.workItem}>{p.workItem}</span>
               {(hasOverdue || (!isExpanded && counts && (counts.open > 0 || counts.inProgress > 0))) && (
                 <span className="flex items-center gap-1.5 font-normal">
                   {hasOverdue && (
@@ -1201,10 +1203,10 @@ export default function Prime() {
                         title={taskPriority.label}
                       />
                     )}
-                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate min-w-0">{t.title}</span>
+                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate min-w-0" title={t.title}>{t.title}</span>
                   </div>
                   {t.notes && (
-                    <p className="text-xs text-muted-foreground truncate leading-tight pl-5">{t.notes.split('\n')[0]}</p>
+                    <p className="text-xs text-muted-foreground truncate leading-tight pl-5" title={t.notes}>{t.notes.split('\n')[0]}</p>
                   )}
                 </div>
               </td>

@@ -29,5 +29,3 @@ export const DESC_EXPAND_CHAR_THRESHOLD = 200
  */
 export const DESC_EXPAND_LINE_THRESHOLD = 3
 
-/** Debounce delay (ms) applied to the full-text search input. */
-export const SEARCH_DEBOUNCE_MS = 200

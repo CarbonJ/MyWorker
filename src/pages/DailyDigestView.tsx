@@ -42,6 +42,17 @@ export default function DailyDigestView() {
       .finally(() => setLoading(false))
   }, [date])
 
+  // Refresh when a task is completed via global modal — completing a task adds a work log entry
+  useEffect(() => {
+    const handler = () => {
+      if (date === today) {
+        getWorkLogByDate(date).then(setEntries).catch(() => {})
+      }
+    }
+    window.addEventListener('myworker:task-saved', handler)
+    return () => window.removeEventListener('myworker:task-saved', handler)
+  }, [date, today])
+
   const shiftDay = (delta: number) => {
     const [y, m, d] = date.split('-').map(Number)
     const next = new Date(y, m - 1, d + delta)

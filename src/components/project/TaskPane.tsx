@@ -254,11 +254,11 @@ export function TaskPane({
                 <StatusCircle status={task.status} />
               </button>
               <div className="min-w-0">
-                <p className={`text-sm font-medium leading-tight truncate ${isDone ? 'line-through' : ''}`}>
+                <p className={`text-sm font-medium leading-tight truncate ${isDone ? 'line-through' : ''}`} title={task.title}>
                   {task.title}
                 </p>
                 {task.notes && (
-                  <p className="text-xs text-muted-foreground truncate leading-tight mt-0.5">{task.notes}</p>
+                  <p className="text-xs text-muted-foreground truncate leading-tight mt-0.5" title={task.notes}>{task.notes}</p>
                 )}
               </div>
               <Popover>
