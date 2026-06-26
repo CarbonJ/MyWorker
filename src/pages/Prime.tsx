@@ -619,7 +619,6 @@ export default function Prime() {
   }, [projects, allTasks])
 
   const projectsWithTasks = filteredProjects.filter(p => (tasksByProject.get(p.id)?.length ?? 0) > 0)
-  const allExpanded = projectsWithTasks.length > 0 && projectsWithTasks.every(p => expandedProjects.has(p.id))
 
   // Options for filter components
   const ragOptions = RAG_OPTIONS.map(o => ({
