@@ -79,6 +79,14 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
           setSizeMode('default')
           return true
         }
+        // Always intercept Cmd/Ctrl+Enter to prevent TipTap inserting a line
+        // break. preventDefault doesn't stop propagation, so window-level save
+        // listeners (e.g. ProjectModal) still fire normally.
+        if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+          event.preventDefault()
+          onKeyDownRef.current?.(event as unknown as React.KeyboardEvent<HTMLTextAreaElement>)
+          return true
+        }
         if (onKeyDownRef.current) {
           onKeyDownRef.current(event as unknown as React.KeyboardEvent<HTMLTextAreaElement>)
           if (event.defaultPrevented) return true
