@@ -642,6 +642,105 @@ export default function Settings() {
               </div>
             </section>
           </div>
+
+          {/* ── Keyboard Shortcuts ─────────────────────────────────────── */}
+          <Separator className="mt-6" />
+          <section className="space-y-4 pt-4">
+            <h2 className={sectionTitle}>Keyboard Shortcuts</h2>
+
+            {/* Command Palette */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <h3 className="font-medium text-sm">Command Palette</h3>
+                <div className="flex items-center gap-1">
+                  <kbd className="inline-flex h-5 items-center rounded border border-border bg-muted px-1.5 font-mono text-[11px] text-muted-foreground">⌘</kbd>
+                  <kbd className="inline-flex h-5 items-center rounded border border-border bg-muted px-1.5 font-mono text-[11px] text-muted-foreground">K</kbd>
+                  <span className="text-xs text-muted-foreground ml-1">/ Ctrl+K</span>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Opens a searchable pop-up giving fast access to every screen and action without using the nav bar.
+                Type any word to filter — results update instantly.
+              </p>
+              <div className="border rounded-md divide-y divide-border text-sm overflow-hidden">
+                {/* Navigate */}
+                <div className="px-3 py-2 bg-muted/40">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Navigate</span>
+                </div>
+                {[
+                  { label: 'Prime',          desc: 'Project list — your main working view' },
+                  { label: 'Daily Digest',   desc: 'A focused daily summary of your active projects and open tasks' },
+                  { label: 'Weekly Report',  desc: 'Auto-generated status report for the current week, ready to copy' },
+                  { label: 'Reporting',      desc: 'Dense read-only table for on-screen use during meetings' },
+                  { label: 'Archive',        desc: 'Closed / completed projects' },
+                  { label: 'Settings',       desc: 'This page' },
+                ].map(({ label, desc }) => (
+                  <div key={label} className="flex items-baseline gap-3 px-3 py-2">
+                    <span className="w-28 shrink-0 font-medium text-sm">{label}</span>
+                    <span className="text-xs text-muted-foreground">{desc}</span>
+                  </div>
+                ))}
+
+                {/* Actions */}
+                <div className="px-3 py-2 bg-muted/40">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Actions</span>
+                </div>
+                {[
+                  { label: 'New Project', desc: 'Opens the project creation form' },
+                  { label: 'New Task',    desc: 'Opens the quick task creation modal' },
+                ].map(({ label, desc }) => (
+                  <div key={label} className="flex items-baseline gap-3 px-3 py-2">
+                    <span className="w-28 shrink-0 font-medium text-sm">{label}</span>
+                    <span className="text-xs text-muted-foreground">{desc}</span>
+                  </div>
+                ))}
+
+                {/* Projects */}
+                <div className="px-3 py-2 bg-muted/40">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Projects</span>
+                </div>
+                <div className="px-3 py-2">
+                  <span className="text-xs text-muted-foreground">
+                    All your projects are listed and searchable by name. Selecting one jumps directly to its detail page.
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Other shortcuts */}
+            <div className="space-y-2">
+              <h3 className="font-medium text-sm">Other Shortcuts</h3>
+              <div className="border rounded-md divide-y divide-border overflow-hidden">
+                {[
+                  {
+                    keys: ['⌘', 'Shift', 'T'],
+                    alt:  'Ctrl+Shift+T',
+                    desc: 'Open quick task creation modal (global)',
+                  },
+                  {
+                    keys: ['⌘', 'Shift', 'L'],
+                    alt:  'Ctrl+Shift+L',
+                    desc: 'Open quick work log entry modal (global)',
+                  },
+                  {
+                    keys: ['Esc'],
+                    alt:  null,
+                    desc: 'Return to main screen when no modal is open',
+                  },
+                ].map(({ keys, alt, desc }) => (
+                  <div key={desc} className="flex items-center gap-4 px-3 py-2">
+                    <div className="flex items-center gap-1 shrink-0 w-44">
+                      {keys.map(k => (
+                        <kbd key={k} className="inline-flex h-5 items-center rounded border border-border bg-muted px-1.5 font-mono text-[11px] text-muted-foreground">{k}</kbd>
+                      ))}
+                      {alt && <span className="text-xs text-muted-foreground ml-1">/ {alt}</span>}
+                    </div>
+                    <span className="text-xs text-muted-foreground">{desc}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
         </TabsContent>
 
         {/* ── Data tab ────────────────────────────────────────────────── */}
