@@ -1,7 +1,7 @@
 import { query } from './index'
 import type { SQLiteCompatibleType } from './index'
 
-export type SearchSourceType = 'project' | 'task' | 'work_log'
+export type SearchSourceType = 'project' | 'task' | 'work_log' | 'notebook'
 
 export interface SearchResult {
   sourceType: SearchSourceType
@@ -75,6 +75,7 @@ export async function searchProjectIds(rawQuery: string): Promise<number[]> {
   const seen = new Set<number>()
   const ids: number[] = []
   for (const r of results) {
+    if (r.sourceType === 'notebook') continue
     if (!seen.has(r.projectId)) {
       seen.add(r.projectId)
       ids.push(r.projectId)
@@ -137,9 +138,15 @@ export async function searchEnriched(
   }))
 
   // Bulk-fetch display metadata for all result rows
-  const projectIds = [...new Set(results.map(r => r.projectId).filter(id => id != null))]
+  const projectIds = [...new Set(
+    results
+      .filter(r => r.sourceType !== 'notebook')
+      .map(r => r.projectId)
+      .filter(id => id != null && id > 0),
+  )]
   const taskIds = results.filter(r => r.sourceType === 'task').map(r => r.sourceId)
   const workLogIds = results.filter(r => r.sourceType === 'work_log').map(r => r.sourceId)
+  const notebookIds = results.filter(r => r.sourceType === 'notebook').map(r => r.sourceId)
 
   const projectMap = new Map<number, Record<string, SQLiteCompatibleType>>()
   if (projectIds.length > 0) {
@@ -171,6 +178,15 @@ export async function searchEnriched(
     wRows.forEach(r => wlMap.set(r.id as number, r))
   }
 
+  const notebookMap = new Map<number, string>()
+  if (notebookIds.length > 0) {
+    const nbRows = await query(
+      `SELECT id, title FROM notebook_pages WHERE id IN (${notebookIds.map(() => '?').join(', ')})`,
+      notebookIds,
+    )
+    nbRows.forEach(r => notebookMap.set(r.id as number, r.title as string))
+  }
+
   return results.map(r => {
     const proj = projectMap.get(r.projectId)
     const projectName = (proj?.work_item as string) ?? ''
@@ -191,6 +207,13 @@ export async function searchEnriched(
         title: (task?.title as string) ?? '',
         projectName,
         taskStatus: (task?.status as string) ?? undefined,
+      }
+    }
+    if (r.sourceType === 'notebook') {
+      return {
+        ...r,
+        title: notebookMap.get(r.sourceId) ?? 'Notebook Page',
+        projectName: '',
       }
     }
     // work_log

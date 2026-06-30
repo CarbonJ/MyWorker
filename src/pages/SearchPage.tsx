@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Link } from 'react-router-dom'
-import { Search, FolderKanban, CheckSquare, ScrollText, ChevronDown, ChevronRight } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Search, FolderKanban, CheckSquare, ScrollText, BookOpen, ChevronDown, ChevronRight } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { searchEnriched, parseSearchQuery } from '@/db/search'
 import type { EnrichedSearchResult, SearchSourceType } from '@/db/search'
@@ -48,15 +48,17 @@ interface GroupState {
   projects: boolean
   task: boolean
   work_log: boolean
+  notebook: boolean
 }
 
 export default function SearchPage() {
+  const navigate = useNavigate()
   const [input, setInput] = useState('')
   const [query, setQuery] = useState('')
   const [scope, setScope] = useState<ScopeFilter>('all')
   const [results, setResults] = useState<EnrichedSearchResult[]>([])
   const [loading, setLoading] = useState(false)
-  const [collapsed, setCollapsed] = useState<GroupState>({ projects: false, task: false, work_log: false })
+  const [collapsed, setCollapsed] = useState<GroupState>({ projects: false, task: false, work_log: false, notebook: false })
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -93,9 +95,10 @@ export default function SearchPage() {
 
   useEffect(() => { runSearch() }, [runSearch])
 
-  const projects = results.filter(r => r.sourceType === 'project')
-  const tasks    = results.filter(r => r.sourceType === 'task')
-  const workLog  = results.filter(r => r.sourceType === 'work_log')
+  const projects  = results.filter(r => r.sourceType === 'project')
+  const tasks     = results.filter(r => r.sourceType === 'task')
+  const workLog   = results.filter(r => r.sourceType === 'work_log')
+  const notebooks = results.filter(r => r.sourceType === 'notebook')
 
   const toggleGroup = (key: keyof GroupState) =>
     setCollapsed(s => ({ ...s, [key]: !s[key] }))
@@ -145,6 +148,7 @@ export default function SearchPage() {
           {scopeBtn('Projects', 'project', projects.length)}
           {scopeBtn('Tasks', 'task', tasks.length)}
           {scopeBtn('Work Log', 'work_log', workLog.length)}
+          {scopeBtn('Notebook', 'notebook', notebooks.length)}
         </div>
       </div>
 
@@ -288,6 +292,40 @@ export default function SearchPage() {
                           <Snippet html={r.snippet} />
                         </div>
                       </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Notebook group */}
+            {(scope === 'all' || scope === 'notebook') && notebooks.length > 0 && (
+              <div>
+                <button
+                  type="button"
+                  onClick={() => toggleGroup('notebook')}
+                  className="w-full flex items-center gap-2 px-6 py-2 bg-muted/40 hover:bg-muted/60 transition-colors"
+                >
+                  {collapsed.notebook ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+                  <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Notebook</span>
+                  <span className="text-xs text-muted-foreground ml-1">({notebooks.length})</span>
+                </button>
+                {!collapsed.notebook && (
+                  <div className="divide-y divide-border/50">
+                    {notebooks.map(r => (
+                      <button
+                        key={`nb-${r.sourceId}`}
+                        type="button"
+                        onClick={() => navigate(`/notebook?page=${r.sourceId}`)}
+                        className="w-full flex items-start gap-3 px-6 py-3 hover:bg-accent/50 transition-colors group text-left"
+                      >
+                        <BookOpen className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                        <div className="min-w-0 flex-1 space-y-0.5">
+                          <span className="text-sm font-medium group-hover:text-primary transition-colors block">{r.title || 'Untitled'}</span>
+                          <Snippet html={r.snippet} />
+                        </div>
+                      </button>
                     ))}
                   </div>
                 )}

@@ -8,6 +8,7 @@ import { MarkdownField } from '@/components/MarkdownField'
 import { TagInput } from '@/components/TagInput'
 import { getAllContacts, createContact, updateContact, deleteContact } from '@/db/contacts'
 import { getAllTagNames } from '@/db/projects'
+import { BacklinksPanel } from '@/components/BacklinksPanel'
 import type { Contact } from '@/types'
 import { isStubContact } from '@/types'
 
@@ -300,64 +301,67 @@ export default function ContactsPage() {
                       />
                     </div>
                   ) : (
-                    <div className="flex items-start gap-3 group">
-                      {/* Avatar */}
-                      <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0 text-sm font-medium text-muted-foreground mt-0.5">
-                        {contact.name.charAt(0).toUpperCase()}
-                      </div>
-
-                      {/* Main content */}
-                      <div className="flex-1 min-w-0 space-y-0.5">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-medium">{contact.name}</span>
-                          {/* Stub indicator */}
-                          {stub && (
-                            <span className="inline-flex items-center gap-1 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
-                              <AlertCircle className="h-3 w-3" />
-                              Name only
-                            </span>
-                          )}
-                          {contact.role && (
-                            <span className="text-xs text-muted-foreground">{contact.role}</span>
-                          )}
-                          {contact.groupName && (
-                            <span className="text-xs border border-border rounded px-1.5 py-0.5 text-muted-foreground">
-                              {contact.groupName}
-                            </span>
-                          )}
-                          {contact.tags.map(tag => (
-                            <span key={tag} className="text-xs bg-muted rounded px-1.5 py-0.5 text-muted-foreground">
-                              {tag}
-                            </span>
-                          ))}
+                    <>
+                      <div className="flex items-start gap-3 group">
+                        {/* Avatar */}
+                        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0 text-sm font-medium text-muted-foreground mt-0.5">
+                          {contact.name.charAt(0).toUpperCase()}
                         </div>
-                        {contact.notes && (
-                          <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
-                            {contact.notes.replace(/[#*_`[\]]/g, '').slice(0, 120)}
-                          </p>
-                        )}
-                      </div>
 
-                      {/* Actions */}
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => setEditingId(contact.id)}
-                          className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                          title="Edit contact"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(contact)}
-                          className="p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-accent transition-colors"
-                          title="Delete contact"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        {/* Main content */}
+                        <div className="flex-1 min-w-0 space-y-0.5">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-medium">{contact.name}</span>
+                            {/* Stub indicator */}
+                            {stub && (
+                              <span className="inline-flex items-center gap-1 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
+                                <AlertCircle className="h-3 w-3" />
+                                Name only
+                              </span>
+                            )}
+                            {contact.role && (
+                              <span className="text-xs text-muted-foreground">{contact.role}</span>
+                            )}
+                            {contact.groupName && (
+                              <span className="text-xs border border-border rounded px-1.5 py-0.5 text-muted-foreground">
+                                {contact.groupName}
+                              </span>
+                            )}
+                            {contact.tags.map(tag => (
+                              <span key={tag} className="text-xs bg-muted rounded px-1.5 py-0.5 text-muted-foreground">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                          {contact.notes && (
+                            <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+                              {contact.notes.replace(/[#*_`[\]]/g, '').slice(0, 120)}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setEditingId(contact.id)}
+                            className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                            title="Edit contact"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(contact)}
+                            className="p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-accent transition-colors"
+                            title="Delete contact"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
-                    </div>
+                      <BacklinksPanel targetType="contact" targetId={contact.id} />
+                    </>
                   )}
                 </div>
               )

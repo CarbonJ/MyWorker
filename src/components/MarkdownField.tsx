@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import StarterKit from '@tiptap/starter-kit'
@@ -6,6 +6,7 @@ import { Markdown } from 'tiptap-markdown'
 import Placeholder from '@tiptap/extension-placeholder'
 import Link from '@tiptap/extension-link'
 import { Label } from '@/components/ui/label'
+import type { WikiEntity } from '@/types'
 import { Maximize2, Fullscreen, Minimize2, Bold, Italic, Heading1, Heading2, Heading3, Pilcrow, Code2 } from 'lucide-react'
 
 type SizeMode = 'default' | 'large' | 'fullscreen'
@@ -37,9 +38,11 @@ interface Props {
   onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void
   initialFocused?: boolean
   expandable?: boolean
+  enableWikiLinks?: boolean
+  wikiEntities?: WikiEntity[]
 }
 
-export function MarkdownField({ id, label, headerLabel, value, onChange, placeholder, rows = 2, onKeyDown, initialFocused = false, expandable = false }: Props) {
+export function MarkdownField({ id, label, headerLabel, value, onChange, placeholder, rows = 2, onKeyDown, initialFocused = false, expandable = false, enableWikiLinks = false, wikiEntities = [] }: Props) {
   const [focused, setFocused] = useState(initialFocused)
   const [sizeMode, setSizeMode] = useState<SizeMode>('default')
   const [rawMode, setRawMode] = useState(false)
@@ -47,6 +50,17 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
   sizeModeRef.current = sizeMode
   const onKeyDownRef = useRef(onKeyDown)
   onKeyDownRef.current = onKeyDown
+
+  // Wiki-link suggestion state + refs (refs keep handleKeyDown inside useEditor free of stale closures)
+  type WikiSuggestState = { active: boolean; partial: string; coords: { left: number; top: number } }
+  const [wikiSuggest, setWikiSuggest] = useState<WikiSuggestState>({ active: false, partial: '', coords: { left: 0, top: 0 } })
+  const [wikiHighlight, setWikiHighlight] = useState(-1)
+  const wikiSuggestRef = useRef(wikiSuggest)
+  const wikiHighlightRef = useRef(wikiHighlight)
+  const wikiSuggestionsRef = useRef<WikiEntity[]>([])
+  const selectWikiSuggestionRef = useRef<((entity: WikiEntity) => void) | null>(null)
+  wikiSuggestRef.current = wikiSuggest
+  wikiHighlightRef.current = wikiHighlight
 
   const cycleSize = () => setSizeMode(m => m === 'default' ? 'large' : m === 'large' ? 'fullscreen' : 'default')
 
@@ -75,6 +89,36 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
         class: 'prose prose-sm dark:prose-invert max-w-none focus:outline-none break-words',
       },
       handleKeyDown: (_view, event) => {
+        // Wiki-link suggestion keyboard navigation (refs prevent stale closure)
+        if (wikiSuggestRef.current.active && wikiSuggestionsRef.current.length > 0) {
+          if (event.key === 'ArrowDown') {
+            event.preventDefault()
+            setWikiHighlight(i => {
+              const next = Math.min(i + 1, wikiSuggestionsRef.current.length - 1)
+              wikiHighlightRef.current = next
+              return next
+            })
+            return true
+          }
+          if (event.key === 'ArrowUp') {
+            event.preventDefault()
+            setWikiHighlight(i => {
+              const next = Math.max(i - 1, -1)
+              wikiHighlightRef.current = next
+              return next
+            })
+            return true
+          }
+          if ((event.key === 'Enter' || event.key === 'Tab') && wikiHighlightRef.current >= 0) {
+            event.preventDefault()
+            selectWikiSuggestionRef.current?.(wikiSuggestionsRef.current[wikiHighlightRef.current])
+            return true
+          }
+          if (event.key === 'Escape') {
+            setWikiSuggest(s => ({ ...s, active: false }))
+            return true
+          }
+        }
         if (event.key === 'Escape' && sizeModeRef.current === 'fullscreen') {
           setSizeMode('default')
           return true
@@ -122,6 +166,58 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
       requestAnimationFrame(() => editor?.commands.focus())
     }
   }, [sizeMode, editor, rawMode])
+
+  // Wiki-link detection: watch cursor position for [[ pattern
+  useEffect(() => {
+    if (!editor || !enableWikiLinks) return
+    const check = () => {
+      const { state } = editor
+      const { $from } = state.selection
+      const textBefore = state.doc.textBetween(
+        Math.max(0, $from.pos - 200), $from.pos, '\n', '\0'
+      )
+      const match = /\[\[([^\[\]\n]*)$/.exec(textBefore)
+      if (match) {
+        const coords = editor.view.coordsAtPos($from.pos)
+        setWikiSuggest({ active: true, partial: match[1], coords: { left: coords.left, top: coords.bottom + 4 } })
+        setWikiHighlight(-1)
+      } else {
+        setWikiSuggest(s => s.active ? { ...s, active: false } : s)
+      }
+    }
+    editor.on('update', check)
+    editor.on('selectionUpdate', check)
+    return () => {
+      editor.off('update', check)
+      editor.off('selectionUpdate', check)
+    }
+  }, [editor, enableWikiLinks])
+
+  // Computed wiki suggestions filtered by partial text
+  const wikiSuggestions = useMemo(() => {
+    if (!wikiSuggest.active || !wikiEntities.length) return []
+    const partial = wikiSuggest.partial.toLowerCase()
+    return wikiEntities
+      .filter(e => !partial || e.name.toLowerCase().includes(partial))
+      .slice(0, 12)
+  }, [wikiSuggest.active, wikiSuggest.partial, wikiEntities])
+  wikiSuggestionsRef.current = wikiSuggestions
+
+  // Insert the chosen entity as a completed [[...]] link
+  const selectWikiSuggestion = useCallback((entity: WikiEntity) => {
+    if (!editor) return
+    const { $from } = editor.state.selection
+    const textBefore = editor.state.doc.textBetween(
+      Math.max(0, $from.pos - 200), $from.pos, '\n', '\0'
+    )
+    const match = /\[\[([^\[\]\n]*)$/.exec(textBefore)
+    if (!match) return
+    const alreadyTyped = match[1]
+    const toInsert = entity.name.slice(alreadyTyped.length) + ']]'
+    editor.commands.insertContent(toInsert)
+    setWikiSuggest(s => ({ ...s, active: false }))
+  }, [editor])
+  selectWikiSuggestionRef.current = selectWikiSuggestion
 
   const sizeIcon = sizeMode === 'default'
     ? <Maximize2 size={14} />
@@ -242,6 +338,31 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
     </BubbleMenu>
   )
 
+  // Wiki-link suggestion dropdown (position: fixed so it renders above everything)
+  const wikiDropdown = enableWikiLinks && wikiSuggest.active && wikiSuggestions.length > 0 && (
+    <div
+      style={{ position: 'fixed', left: wikiSuggest.coords.left, top: wikiSuggest.coords.top, zIndex: 200 }}
+      className="bg-popover border border-border rounded-md shadow-lg w-72 max-h-72 overflow-y-auto"
+    >
+      {wikiSuggestions.map((entity, idx) => (
+        <button
+          key={`${entity.type}-${entity.id}`}
+          type="button"
+          tabIndex={-1}
+          onMouseDown={e => { e.preventDefault(); selectWikiSuggestion(entity) }}
+          className={`w-full text-left px-3 py-1.5 text-sm flex items-center gap-2 transition-colors ${
+            idx === wikiHighlight ? 'bg-accent text-accent-foreground' : 'hover:bg-accent hover:text-accent-foreground'
+          }`}
+        >
+          <span className="text-[10px] text-muted-foreground w-14 shrink-0 uppercase tracking-wide">
+            {entity.type === 'page' ? 'Note' : entity.type === 'project' ? 'Project' : entity.type === 'contact' ? 'Contact' : 'Area'}
+          </span>
+          <span className="truncate">{entity.name}</span>
+        </button>
+      ))}
+    </div>
+  )
+
   if (sizeMode === 'fullscreen') {
     return (
       <>
@@ -291,6 +412,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
             Esc · exit fullscreen
           </div>
         </div>
+        {wikiDropdown}
       </>
     )
   }
@@ -308,6 +430,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
           <EditorContent editor={editor} />
         </div>
       )}
+      {wikiDropdown}
     </div>
   )
 }

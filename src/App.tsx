@@ -6,7 +6,7 @@ import { TaskModal } from '@/components/TaskModal'
 import { ProjectModal } from '@/components/ProjectModal'
 import { SearchProvider, useSearch } from '@/contexts/SearchContext'
 import { Input } from '@/components/ui/input'
-import { X, Moon, Sun, Search as SearchIcon } from 'lucide-react'
+import { X, Moon, Sun, Search as SearchIcon, BookOpen } from 'lucide-react'
 import { getDueSoonTasks } from '@/db/tasks'
 import { loadGuiSettings, buttonStyle } from '@/lib/guiSettings'
 import Prime from '@/pages/Prime'
@@ -19,6 +19,7 @@ import WeeklyReportView from '@/pages/WeeklyReportView'
 import MonthlyReportView from '@/pages/MonthlyReportView'
 import SearchPage from '@/pages/SearchPage'
 import ContactsPage from '@/pages/ContactsPage'
+import NotebookPage from '@/pages/NotebookPage'
 import { CommandPalette } from '@/components/CommandPalette'
 
 function DueDateTitleUpdater() {
@@ -71,6 +72,9 @@ function NavBar({ isDark, onToggleDark }: { isDark: boolean; onToggleDark: () =>
       <NavLink to="/digest" className={linkClass} style={navStyle}>Digest</NavLink>
       <NavLink to="/archive" className={linkClass} style={navStyle}>Archive</NavLink>
       <NavLink to="/contacts" className={linkClass} style={navStyle}>Contacts</NavLink>
+      <NavLink to="/notebook" className={linkClass} style={navStyle}>
+        <span className="flex items-center gap-1.5"><BookOpen className="h-3.5 w-3.5" />Notebook</span>
+      </NavLink>
       <NavLink to="/search" className={linkClass} style={navStyle}>
         <span className="flex items-center gap-1.5"><SearchIcon className="h-3.5 w-3.5" />Search</span>
       </NavLink>
@@ -154,6 +158,7 @@ function AppInner() {
           <Route path="/monthly" element={<MonthlyReportView />} />
           <Route path="/archive" element={<ArchiveView />} />
           <Route path="/contacts" element={<ContactsPage />} />
+          <Route path="/notebook" element={<NotebookPage />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>

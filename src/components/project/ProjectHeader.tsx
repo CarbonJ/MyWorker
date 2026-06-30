@@ -18,6 +18,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Check, ChevronDown, ChevronUp } from 'lucide-react'
 import { pillClass, dotClass } from '@/lib/colors'
 import { DESC_EXPAND_CHAR_THRESHOLD, DESC_EXPAND_LINE_THRESHOLD } from '@/lib/constants'
+import { BacklinksPanel } from '@/components/BacklinksPanel'
 
 const COLLAPSED_KEY = 'myworker:header-collapsed'
 
@@ -316,6 +317,8 @@ export function ProjectHeader({
               ))}
             </div>
           )}
+
+          <BacklinksPanel targetType="project" targetId={project.id} />
         </div>
 
         {/* RIGHT: Stats & Metrics */}

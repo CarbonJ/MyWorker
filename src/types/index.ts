@@ -73,3 +73,23 @@ export interface DropdownOption {
   sortOrder: number
   color: string
 }
+
+export interface NotebookPage {
+  id: number
+  title: string
+  body: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface WikiEntity {
+  type: 'page' | 'project' | 'contact' | 'area'
+  id: number
+  name: string
+}
+
+export interface NotebookBacklink {
+  pageId: number
+  pageTitle: string
+  snippet: string
+}

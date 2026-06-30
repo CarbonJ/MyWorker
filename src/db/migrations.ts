@@ -474,6 +474,51 @@ const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_contacts_name ON contacts(name);
     `,
   },
+  {
+    version: 19,
+    up: `
+      CREATE TABLE notebook_pages (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        title      TEXT NOT NULL DEFAULT 'Untitled',
+        body       TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE TRIGGER notebook_pages_updated_at
+      AFTER UPDATE ON notebook_pages
+      BEGIN
+        UPDATE notebook_pages SET updated_at = datetime('now') WHERE id = NEW.id;
+      END;
+
+      CREATE TABLE notebook_links (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        source_page_id INTEGER NOT NULL REFERENCES notebook_pages(id) ON DELETE CASCADE,
+        target_type    TEXT NOT NULL,
+        target_id      INTEGER,
+        target_name    TEXT NOT NULL,
+        UNIQUE(source_page_id, target_name)
+      );
+
+      CREATE INDEX idx_notebook_links_target ON notebook_links(target_type, target_id);
+      CREATE INDEX idx_notebook_links_source ON notebook_links(source_page_id);
+
+      CREATE TRIGGER fts_notebook_insert AFTER INSERT ON notebook_pages BEGIN
+        INSERT INTO fts_index(content, source_type, source_id, project_id)
+        VALUES (NEW.title || ' ' || NEW.body, 'notebook', NEW.id, 0);
+      END;
+
+      CREATE TRIGGER fts_notebook_update AFTER UPDATE ON notebook_pages BEGIN
+        DELETE FROM fts_index WHERE source_type = 'notebook' AND source_id = OLD.id;
+        INSERT INTO fts_index(content, source_type, source_id, project_id)
+        VALUES (NEW.title || ' ' || NEW.body, 'notebook', NEW.id, 0);
+      END;
+
+      CREATE TRIGGER fts_notebook_delete AFTER DELETE ON notebook_pages BEGIN
+        DELETE FROM fts_index WHERE source_type = 'notebook' AND source_id = OLD.id;
+      END;
+    `,
+  },
 ]
 
 export async function runMigrations(handle: DbHandle): Promise<void> {
