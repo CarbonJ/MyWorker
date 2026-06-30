@@ -300,9 +300,15 @@ export function ProjectHeader({
             <div className="flex flex-wrap gap-1.5 items-center">
               <span className="font-medium text-foreground text-sm">Stakeholders:</span>
               {project.stakeholders.map((s, i) => (
-                <span key={i} className="bg-white border rounded-full px-2.5 py-0.5 text-xs text-slate-900 shadow-sm">
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => navigate(`/contacts?q=${encodeURIComponent(s.name)}`)}
+                  className="bg-white border rounded-full px-2.5 py-0.5 text-xs text-slate-900 shadow-sm hover:bg-slate-50 hover:border-slate-400 transition-colors cursor-pointer"
+                  title={`View contact: ${s.name}`}
+                >
                   {s.name}
-                </span>
+                </button>
               ))}
             </div>
           )}

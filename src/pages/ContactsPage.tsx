@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { toast } from 'sonner'
+import { useSearchParams } from 'react-router-dom'
 import { UserRound, Plus, Pencil, Trash2, Search, X, AlertCircle } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -115,11 +116,13 @@ function ContactForm({
 }
 
 export default function ContactsPage() {
+  const [searchParams] = useSearchParams()
   const [contacts, setContacts] = useState<Contact[]>([])
   const [tagSuggestions, setTagSuggestions] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useState(() => searchParams.get('q') ?? '')
   const [groupFilter, setGroupFilter] = useState<string | null>(null)
+  const highlightRef = useRef<HTMLDivElement | null>(null)
   const [editingId, setEditingId] = useState<number | 'new' | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -136,6 +139,13 @@ export default function ContactsPage() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  // Scroll the highlighted contact into view when arriving via ?q= link
+  useEffect(() => {
+    if (!loading && highlightRef.current && searchParams.get('q')) {
+      highlightRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [loading, searchParams])
 
   const groups = [...new Set(contacts.map(c => c.groupName).filter(Boolean))].sort()
 
@@ -284,11 +294,16 @@ export default function ContactsPage() {
         {/* Contact list */}
         {filtered.length > 0 && (
           <div className="divide-y divide-border">
-            {filtered.map(contact => {
+            {filtered.map((contact, idx) => {
               const stub = isStubContact(contact)
               const isEditing = editingId === contact.id
+              const isHighlighted = idx === 0 && !!searchParams.get('q')
               return (
-                <div key={contact.id} className="px-6 py-3">
+                <div
+                  key={contact.id}
+                  ref={isHighlighted ? highlightRef : undefined}
+                  className={`px-6 py-3${isHighlighted ? ' ring-2 ring-primary/30 ring-inset bg-primary/5 rounded' : ''}`}
+                >
                   {isEditing ? (
                     <div className="space-y-4">
                       <h2 className="text-sm font-medium">Edit — {contact.name}</h2>
