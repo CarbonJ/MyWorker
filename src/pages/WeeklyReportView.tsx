@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { getWorkLogByDateRange, type WorkLogEntryWithProject } from '@/db/workLog'
-import { MarkdownContent } from '@/components/MarkdownContent'
+import { WikiLinkContent } from '@/components/WikiLinkContent'
 import { RagBadge } from '@/components/RagBadge'
 import type { RagStatus } from '@/types'
 import { ChevronLeft, ChevronRight, Copy, Check, FileText } from 'lucide-react'
@@ -262,7 +262,7 @@ export default function WeeklyReportView() {
                   <p className="text-xs text-muted-foreground mb-1">
                     {formatEntryDate(entry.createdAt)} · {formatEntryTime(entry.createdAt)}
                   </p>
-                  <MarkdownContent>{entry.note}</MarkdownContent>
+                  <WikiLinkContent>{entry.note}</WikiLinkContent>
                 </div>
               ))}
             </div>

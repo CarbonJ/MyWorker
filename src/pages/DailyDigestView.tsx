@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getWorkLogByDate, type WorkLogEntryWithProject } from '@/db/workLog'
-import { MarkdownContent } from '@/components/MarkdownContent'
+import { WikiLinkContent } from '@/components/WikiLinkContent'
 import { ChevronLeft, ChevronRight, CalendarDays, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -123,7 +123,7 @@ export default function DailyDigestView() {
                   <p className="text-xs text-muted-foreground mb-1">
                     {new Date(entry.createdAt.replace(' ', 'T').replace(/([^Z])$/, '$1Z')).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
                   </p>
-                  <MarkdownContent>{entry.note}</MarkdownContent>
+                  <WikiLinkContent>{entry.note}</WikiLinkContent>
                 </div>
               ))}
             </div>

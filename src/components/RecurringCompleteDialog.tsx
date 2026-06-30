@@ -8,6 +8,7 @@
  */
 
 import { useState } from 'react'
+import { useWikiEntities } from '@/hooks/useWikiEntities'
 import type { Task } from '@/types'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -25,6 +26,7 @@ interface Props {
 }
 
 export function RecurringCompleteDialog({ task, open, onReschedule, onMarkDone, onCancel }: Props) {
+  const wikiEntities = useWikiEntities()
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined)
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
@@ -114,6 +116,8 @@ export function RecurringCompleteDialog({ task, open, onReschedule, onMarkDone, 
               onChange={setNote}
               placeholder="What was completed? Any context for the next run?"
               rows={2}
+              enableWikiLinks
+              wikiEntities={wikiEntities}
             />
           </div>
         </div>
