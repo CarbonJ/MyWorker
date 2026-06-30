@@ -16,7 +16,8 @@ import { getProjectById, updateProject, archiveProject, restoreProject } from '@
 import { getTasksByProject, archiveTasksByProject, restoreTasksByProject } from '@/db/tasks'
 import { getWorkLogByProject, addWorkLogEntry } from '@/db/workLog'
 import { getDropdownOptions } from '@/db/dropdownOptions'
-import type { Project, Task, WorkLogEntry, DropdownOption } from '@/types'
+import { getBacklinks } from '@/db/notebook'
+import type { Project, Task, WorkLogEntry, DropdownOption, NotebookBacklink } from '@/types'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { TaskModal } from '@/components/TaskModal'
@@ -51,6 +52,7 @@ export default function ProjectDetail() {
   const [project,        setProject]        = useState<Project | null>(null)
   const [tasks,          setTasks]          = useState<Task[]>([])
   const [workLog,        setWorkLog]        = useState<WorkLogEntry[]>([])
+  const [notebookRefs,   setNotebookRefs]   = useState<NotebookBacklink[]>([])
   const [priorities,     setPriorities]     = useState<DropdownOption[]>([])
   const [productAreas,   setProductAreas]   = useState<DropdownOption[]>([])
   const [projectStatuses,setProjectStatuses]= useState<DropdownOption[]>([])
@@ -96,6 +98,8 @@ export default function ProjectDetail() {
       setPriorities(pris)
       setProductAreas(areas)
       setProjectStatuses(statuses)
+      // Fetch notebook backlinks after project is known (needs workItem for fallback scan)
+      getBacklinks('project', projectId, p.workItem).then(setNotebookRefs).catch(() => {})
       // Default task filter to 'done' for archived projects on first load
       if (!initialFilterSet.current) {
         initialFilterSet.current = true
@@ -217,6 +221,7 @@ export default function ProjectDetail() {
             projectId={projectId}
             projectName={project?.workItem}
             workLog={workLog}
+            notebookRefs={notebookRefs}
             onSaved={load}
           />
         }

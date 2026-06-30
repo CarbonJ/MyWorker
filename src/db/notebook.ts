@@ -93,7 +93,7 @@ export async function getBacklinks(
   entityName?: string,
 ): Promise<NotebookBacklink[]> {
   const rows = await query(
-    `SELECT nl.source_page_id, np.title, np.body
+    `SELECT nl.source_page_id, np.title, np.body, np.created_at
      FROM notebook_links nl
      JOIN notebook_pages np ON np.id = nl.source_page_id
      WHERE nl.target_type = ? AND nl.target_id = ?
@@ -105,14 +105,15 @@ export async function getBacklinks(
     return rows.map(row => ({
       pageId: row.source_page_id as number,
       pageTitle: row.title as string,
-      snippet: (row.body as string).replace(/[#*_`[\]]/g, '').slice(0, 120),
+      snippet: (row.body as string).replace(/[#*_`[\]\\]/g, '').slice(0, 120),
+      createdAt: row.created_at as string,
     }))
   }
 
   // Fallback: index is empty — scan bodies directly.
   // Try both the raw form [[name]] and the tiptap-markdown escaped form \[\[name\]\].
   const scanRows = await query(
-    `SELECT id AS source_page_id, title, body FROM notebook_pages
+    `SELECT id AS source_page_id, title, body, created_at FROM notebook_pages
      WHERE body LIKE ? OR body LIKE ?
      ORDER BY updated_at DESC`,
     [`%[[${entityName}]]%`, `%\\[\\[${entityName}\\]\\]%`]
@@ -120,6 +121,7 @@ export async function getBacklinks(
   return scanRows.map(row => ({
     pageId: row.source_page_id as number,
     pageTitle: row.title as string,
-    snippet: (row.body as string).replace(/[#*_`[\]]/g, '').slice(0, 120),
+    snippet: (row.body as string).replace(/[#*_`[\]\\]/g, '').slice(0, 120),
+    createdAt: row.created_at as string,
   }))
 }

@@ -92,4 +92,5 @@ export interface NotebookBacklink {
   pageId: number
   pageTitle: string
   snippet: string
+  createdAt: string
 }

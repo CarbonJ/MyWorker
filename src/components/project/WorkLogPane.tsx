@@ -7,24 +7,31 @@
  * Entries can also be deleted via the trash icon.
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import type { WorkLogEntry } from '@/types'
+import type { WorkLogEntry, NotebookBacklink } from '@/types'
 import { updateWorkLogEntry, deleteWorkLogEntry } from '@/db/workLog'
 import { WorkLogEntryForm } from '@/components/WorkLogEntry'
 import { MarkdownContent } from '@/components/MarkdownContent'
 import { MarkdownField } from '@/components/MarkdownField'
-import { Pencil, Trash2, Filter, Search, X } from 'lucide-react'
+import { Pencil, Trash2, Filter, Search, X, BookOpen } from 'lucide-react'
 import { loadGuiSettings, altRowStyle } from '@/lib/guiSettings'
 
 interface Props {
   projectId: number
   projectName?: string
   workLog: WorkLogEntry[]
+  notebookRefs?: NotebookBacklink[]
   onSaved: () => void
 }
 
-export function WorkLogPane({ projectId, projectName, workLog, onSaved }: Props) {
+type LogItem =
+  | { kind: 'log'; entry: WorkLogEntry; sortKey: string }
+  | { kind: 'note'; ref: NotebookBacklink; sortKey: string }
+
+export function WorkLogPane({ projectId, projectName, workLog, notebookRefs = [], onSaved }: Props) {
+  const navigate = useNavigate()
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editDraft, setEditDraft] = useState('')
   const [filterCompleted, setFilterCompleted] = useState(true)
@@ -45,11 +52,26 @@ export function WorkLogPane({ projectId, projectName, workLog, onSaved }: Props)
   const hiddenCount = workLog.length - filteredByCompletion.length
 
   const searchTerms = searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean)
-  const visibleEntries = searchTerms.length > 0
-    ? filteredByCompletion.filter(e =>
-        searchTerms.every(term => e.note.toLowerCase().includes(term))
-      )
-    : filteredByCompletion
+
+  // Merge work log entries and notebook backlinks into one sorted timeline
+  const mergedItems = useMemo((): LogItem[] => {
+    const logItems: LogItem[] = filteredByCompletion.map(e => ({
+      kind: 'log', entry: e, sortKey: e.createdAt,
+    }))
+    const noteItems: LogItem[] = notebookRefs.map(r => ({
+      kind: 'note', ref: r, sortKey: r.createdAt,
+    }))
+    return [...logItems, ...noteItems].sort((a, b) => b.sortKey.localeCompare(a.sortKey))
+  }, [filteredByCompletion, notebookRefs])
+
+  const visibleItems = searchTerms.length > 0
+    ? mergedItems.filter(item => {
+        const text = item.kind === 'log'
+          ? item.entry.note
+          : `${item.ref.pageTitle} ${item.ref.snippet}`
+        return searchTerms.every(term => text.toLowerCase().includes(term))
+      })
+    : mergedItems
 
   const startEdit = (entry: WorkLogEntry) => {
     setEditingId(entry.id)
@@ -118,10 +140,10 @@ export function WorkLogPane({ projectId, projectName, workLog, onSaved }: Props)
         </div>
         <span className="text-xs text-muted-foreground">
           {searchTerms.length > 0
-            ? `${visibleEntries.length} of ${filteredByCompletion.length} entries`
+            ? `${visibleItems.length} of ${mergedItems.length} entries`
             : filterCompleted && hiddenCount > 0
-              ? `${filteredByCompletion.length} of ${workLog.length} entries`
-              : `${workLog.length} entries`}
+              ? `${filteredByCompletion.length} of ${workLog.length} log entries${notebookRefs.length > 0 ? ` · ${notebookRefs.length} note${notebookRefs.length !== 1 ? 's' : ''}` : ''}`
+              : `${workLog.length} log entries${notebookRefs.length > 0 ? ` · ${notebookRefs.length} note${notebookRefs.length !== 1 ? 's' : ''}` : ''}`}
         </span>
       </div>
 
@@ -130,80 +152,104 @@ export function WorkLogPane({ projectId, projectName, workLog, onSaved }: Props)
       </div>
 
       <div className="flex-1 overflow-y-auto divide-y divide-border min-h-0">
-        {workLog.length === 0 && (
+        {mergedItems.length === 0 && (
           <p className="px-4 py-6 text-sm text-muted-foreground text-center">No entries yet. Add one above to get started.</p>
         )}
-        {workLog.length > 0 && visibleEntries.length === 0 && searchTerms.length > 0 && (
+        {mergedItems.length > 0 && visibleItems.length === 0 && searchTerms.length > 0 && (
           <p className="px-4 py-6 text-sm text-muted-foreground text-center">No entries match your search.</p>
         )}
-        {workLog.length > 0 && visibleEntries.length === 0 && searchTerms.length === 0 && (
+        {mergedItems.length > 0 && visibleItems.length === 0 && searchTerms.length === 0 && (
           <p className="px-4 py-6 text-sm text-muted-foreground text-center">All entries are task completions. Click the filter button to show them.</p>
         )}
-        {visibleEntries.map((entry, index) => {
+        {visibleItems.map((item, index) => {
+          if (item.kind === 'note') {
+            const ref = item.ref
+            const dateStr = new Date(ref.createdAt.replace(' ', 'T').replace(/([^Z])$/, '$1Z')).toLocaleString()
+            return (
+              <div key={`note-${ref.pageId}`} className="px-4 py-3" style={altRowStyle(rowColor, rowOpacity, index)}>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <BookOpen className="h-3 w-3 text-muted-foreground shrink-0" />
+                  <p className="text-xs text-muted-foreground">{dateStr}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/notebook?page=${ref.pageId}`)}
+                  className="text-left group"
+                >
+                  <p className="text-sm font-medium text-primary group-hover:underline">{ref.pageTitle || 'Untitled'}</p>
+                  {ref.snippet && (
+                    <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{ref.snippet}</p>
+                  )}
+                </button>
+              </div>
+            )
+          }
+
+          const entry = item.entry
           const isAutoEntry = entry.note.startsWith('✓ Completed')
           return (
-          <div key={entry.id} className="px-4 py-3" style={altRowStyle(rowColor, rowOpacity, index)}>
-            <div className="flex items-center gap-1.5 mb-1">
-              <p className="text-xs text-muted-foreground">
-                {new Date(entry.createdAt.replace(' ', 'T').replace(/([^Z])$/, '$1Z')).toLocaleString()}
-              </p>
-              {editingId !== entry.id && (
-                <>
-                  <button
-                    onClick={() => startEdit(entry)}
-                    className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors"
-                    title="Edit entry"
-                  >
-                    <Pencil className="h-3 w-3" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(entry)}
-                    className="text-muted-foreground hover:text-destructive p-0.5 rounded transition-colors"
-                    title="Delete entry"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
-                </>
+            <div key={`log-${entry.id}`} className="px-4 py-3" style={altRowStyle(rowColor, rowOpacity, index)}>
+              <div className="flex items-center gap-1.5 mb-1">
+                <p className="text-xs text-muted-foreground">
+                  {new Date(entry.createdAt.replace(' ', 'T').replace(/([^Z])$/, '$1Z')).toLocaleString()}
+                </p>
+                {editingId !== entry.id && (
+                  <>
+                    <button
+                      onClick={() => startEdit(entry)}
+                      className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors"
+                      title="Edit entry"
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(entry)}
+                      className="text-muted-foreground hover:text-destructive p-0.5 rounded transition-colors"
+                      title="Delete entry"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {editingId === entry.id ? (
+                <div className="space-y-2">
+                  <MarkdownField
+                    id={`worklog-edit-${entry.id}`}
+                    headerLabel={projectName}
+                    value={editDraft}
+                    onChange={setEditDraft}
+                    rows={3}
+                    expandable
+                    initialFocused
+                    onKeyDown={e => {
+                      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); saveEdit(entry.id) }
+                      if (e.key === 'Escape') cancelEdit()
+                    }}
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => saveEdit(entry.id)}
+                      className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-primary text-primary-foreground hover:bg-primary/90"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={cancelEdit}
+                      className="flex items-center gap-1 text-xs px-2 py-1 rounded border hover:bg-accent text-muted-foreground"
+                    >
+                      Cancel
+                    </button>
+                    <span className="text-xs text-muted-foreground">⌘/Ctrl+↵ to save · Esc to cancel</span>
+                  </div>
+                </div>
+              ) : (
+                <div className={isAutoEntry ? 'opacity-60' : ''}>
+                  <MarkdownContent>{entry.note}</MarkdownContent>
+                </div>
               )}
             </div>
-
-            {editingId === entry.id ? (
-              <div className="space-y-2">
-                <MarkdownField
-                  id={`worklog-edit-${entry.id}`}
-                  headerLabel={projectName}
-                  value={editDraft}
-                  onChange={setEditDraft}
-                  rows={3}
-                  expandable
-                  initialFocused
-                  onKeyDown={e => {
-                    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); saveEdit(entry.id) }
-                    if (e.key === 'Escape') cancelEdit()
-                  }}
-                />
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => saveEdit(entry.id)}
-                    className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-primary text-primary-foreground hover:bg-primary/90"
-                  >
-                    Save
-                  </button>
-                  <button
-                    onClick={cancelEdit}
-                    className="flex items-center gap-1 text-xs px-2 py-1 rounded border hover:bg-accent text-muted-foreground"
-                  >
-                    Cancel
-                  </button>
-                  <span className="text-xs text-muted-foreground">⌘/Ctrl+↵ to save · Esc to cancel</span>
-                </div>
-              </div>
-            ) : (
-              <div className={isAutoEntry ? 'opacity-60' : ''}>
-                <MarkdownContent>{entry.note}</MarkdownContent>
-              </div>
-            )}
-          </div>
           )
         })}
       </div>
