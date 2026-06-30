@@ -30,7 +30,7 @@ export function WikiLinkContent({ children, className, wikiEntities: propEntitie
     const normalized = children.replace(/\\\[/g, '[').replace(/\\\]/g, ']')
     return normalized.replace(/\[\[([^\]]+)\]\]/g, (_, name: string) => {
       const entity = wikiEntities.find(e => e.name.toLowerCase() === name.trim().toLowerCase())
-      if (entity) return `[${name}](wikilink:${entityToRoute(entity)})`
+      if (entity) return `[${name}](${entityToRoute(entity)})`
       return `**[[${name}]]**`
     })
   }, [children, wikiEntities])
@@ -41,12 +41,12 @@ export function WikiLinkContent({ children, className, wikiEntities: propEntitie
         remarkPlugins={[remarkGfm]}
         components={{
           a({ href, children, ...props }) {
-            if (href?.startsWith('wikilink:')) {
-              const route = href.slice('wikilink:'.length)
+            // Internal app routes start with / — use SPA navigation, never a new tab
+            if (href?.startsWith('/')) {
               return (
                 <button
                   type="button"
-                  onClick={() => navigate(route)}
+                  onClick={() => navigate(href!)}
                   className="text-primary underline decoration-dotted hover:opacity-75 cursor-pointer bg-transparent border-none p-0 font-[inherit] text-[inherit] inline"
                 >
                   {children}
