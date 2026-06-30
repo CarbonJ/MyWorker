@@ -18,6 +18,7 @@ import {
   type ReactNode,
 } from 'react'
 import { initDb, setUserFolderHandle } from '@/db'
+import { rebuildAllLinks } from '@/db/notebook'
 
 type DbStatus = 'loading' | 'needs-folder' | 'ready' | 'error' | 'unsupported'
 
@@ -87,6 +88,9 @@ export function DbProvider({ children }: { children: ReactNode }) {
       setStatus('loading')
       await initDb(handle)
       if (handle) await saveHandle(handle)
+      // Re-index notebook backlinks on every startup — fast and idempotent,
+      // ensures stale link data from earlier bugs is corrected before any page renders.
+      rebuildAllLinks().catch(err => console.warn('[db] rebuildAllLinks:', err))
       setStatus('ready')
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))

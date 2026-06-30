@@ -7,9 +7,10 @@ import type { NotebookBacklink } from '@/types'
 interface Props {
   targetType: 'project' | 'contact'
   targetId: number
+  entityName: string
 }
 
-export function BacklinksPanel({ targetType, targetId }: Props) {
+export function BacklinksPanel({ targetType, targetId, entityName }: Props) {
   const [links, setLinks] = useState<NotebookBacklink[]>([])
   const [open, setOpen] = useState(true)
   const [loaded, setLoaded] = useState(false)
@@ -17,11 +18,11 @@ export function BacklinksPanel({ targetType, targetId }: Props) {
 
   useEffect(() => {
     setLoaded(false)
-    getBacklinks(targetType, targetId).then(l => {
+    getBacklinks(targetType, targetId, entityName).then(l => {
       setLinks(l)
       setLoaded(true)
     })
-  }, [targetType, targetId])
+  }, [targetType, targetId, entityName])
 
   if (!loaded || links.length === 0) return null
 

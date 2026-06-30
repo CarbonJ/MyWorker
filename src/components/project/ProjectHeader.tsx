@@ -318,7 +318,7 @@ export function ProjectHeader({
             </div>
           )}
 
-          <BacklinksPanel targetType="project" targetId={project.id} />
+          <BacklinksPanel targetType="project" targetId={project.id} entityName={project.workItem} />
         </div>
 
         {/* RIGHT: Stats & Metrics */}

@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import { MarkdownField } from '@/components/MarkdownField'
 import {
   getAllNotebookPages, getNotebookPageById, createNotebookPage,
-  updateNotebookPage, deleteNotebookPage, rebuildLinks, rebuildAllLinks,
+  updateNotebookPage, deleteNotebookPage, rebuildLinks,
 } from '@/db/notebook'
 import { getAllProjects } from '@/db/projects'
 import { getAllContacts } from '@/db/contacts'
@@ -63,11 +63,7 @@ export default function NotebookPage() {
   }, [])
 
   useEffect(() => {
-    loadPages().then(p => {
-      loadEntities(p)
-      // Re-index any existing pages whose links may have been saved with stale data
-      rebuildAllLinks().catch(() => {/* non-critical */})
-    })
+    loadPages().then(p => loadEntities(p))
   }, [loadPages, loadEntities])
 
   useEffect(() => {

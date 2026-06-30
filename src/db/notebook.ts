@@ -84,7 +84,11 @@ export async function rebuildAllLinks(): Promise<void> {
   }
 }
 
-export async function getBacklinks(targetType: string, targetId: number): Promise<NotebookBacklink[]> {
+export async function getBacklinks(
+  targetType: string,
+  targetId: number,
+  entityName?: string,
+): Promise<NotebookBacklink[]> {
   const rows = await query(
     `SELECT nl.source_page_id, np.title, np.body
      FROM notebook_links nl
@@ -93,7 +97,22 @@ export async function getBacklinks(targetType: string, targetId: number): Promis
      ORDER BY np.updated_at DESC`,
     [targetType, targetId]
   )
-  return rows.map(row => ({
+
+  if (rows.length > 0 || !entityName) {
+    return rows.map(row => ({
+      pageId: row.source_page_id as number,
+      pageTitle: row.title as string,
+      snippet: (row.body as string).replace(/[#*_`[\]]/g, '').slice(0, 120),
+    }))
+  }
+
+  // Fallback: index is empty but we have the entity name — scan bodies directly.
+  // Handles the case where the link index hasn't been rebuilt yet.
+  const scanRows = await query(
+    `SELECT id AS source_page_id, title, body FROM notebook_pages WHERE body LIKE ? ORDER BY updated_at DESC`,
+    [`%[[${entityName}]]%`]
+  )
+  return scanRows.map(row => ({
     pageId: row.source_page_id as number,
     pageTitle: row.title as string,
     snippet: (row.body as string).replace(/[#*_`[\]]/g, '').slice(0, 120),

@@ -360,7 +360,7 @@ export default function ContactsPage() {
                           </button>
                         </div>
                       </div>
-                      <BacklinksPanel targetType="contact" targetId={contact.id} />
+                      <BacklinksPanel targetType="contact" targetId={contact.id} entityName={contact.name} />
                     </>
                   )}
                 </div>
