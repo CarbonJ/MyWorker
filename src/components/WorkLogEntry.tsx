@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { addWorkLogEntry } from '@/db/workLog'
 import { Button } from '@/components/ui/button'
 import { MarkdownField } from '@/components/MarkdownField'
+import { useWikiEntities } from '@/hooks/useWikiEntities'
 
 interface Props {
   projectId: number
@@ -13,6 +14,7 @@ interface Props {
 export function WorkLogEntryForm({ projectId, projectName, onSaved }: Props) {
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
+  const wikiEntities = useWikiEntities()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -41,6 +43,8 @@ export function WorkLogEntryForm({ projectId, projectName, onSaved }: Props) {
         placeholder="Add a work log entry…"
         rows={3}
         expandable
+        enableWikiLinks
+        wikiEntities={wikiEntities}
         onKeyDown={e => {
           if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); handleSubmit(e as unknown as React.FormEvent) }
         }}

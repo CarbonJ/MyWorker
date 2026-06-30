@@ -10,7 +10,8 @@ import { TagInput } from '@/components/TagInput'
 import { getAllContacts, createContact, updateContact, deleteContact } from '@/db/contacts'
 import { getAllTagNames } from '@/db/projects'
 import { BacklinksPanel } from '@/components/BacklinksPanel'
-import type { Contact } from '@/types'
+import { useWikiEntities } from '@/hooks/useWikiEntities'
+import type { Contact, WikiEntity } from '@/types'
 import { isStubContact } from '@/types'
 
 interface FormState {
@@ -28,12 +29,14 @@ function ContactForm({
   onSave,
   onCancel,
   tagSuggestions,
+  wikiEntities,
   saving,
 }: {
   initial: FormState
   onSave: (f: FormState) => void
   onCancel: () => void
   tagSuggestions: string[]
+  wikiEntities: WikiEntity[]
   saving: boolean
 }) {
   const [form, setForm] = useState<FormState>(initial)
@@ -100,6 +103,8 @@ function ContactForm({
         placeholder="Any context, preferences, or background…"
         rows={3}
         expandable
+        enableWikiLinks
+        wikiEntities={wikiEntities}
       />
 
       <div className="flex items-center gap-2 pt-1">
@@ -125,6 +130,8 @@ export default function ContactsPage() {
   const highlightRef = useRef<HTMLDivElement | null>(null)
   const [editingId, setEditingId] = useState<number | 'new' | null>(null)
   const [saving, setSaving] = useState(false)
+
+  const wikiEntities = useWikiEntities()
 
   const load = useCallback(async () => {
     try {
@@ -268,6 +275,7 @@ export default function ContactsPage() {
               onSave={handleSave}
               onCancel={() => setEditingId(null)}
               tagSuggestions={tagSuggestions}
+              wikiEntities={wikiEntities}
               saving={saving}
             />
           </div>
@@ -312,6 +320,7 @@ export default function ContactsPage() {
                         onSave={handleSave}
                         onCancel={() => setEditingId(null)}
                         tagSuggestions={tagSuggestions}
+                        wikiEntities={wikiEntities}
                         saving={saving}
                       />
                     </div>

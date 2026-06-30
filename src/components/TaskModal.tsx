@@ -1,4 +1,5 @@
 import { useEffect, useState, startTransition } from 'react'
+import { useWikiEntities } from '@/hooks/useWikiEntities'
 import { toast } from 'sonner'
 import { createTask, updateTask, deleteTask } from '@/db/tasks'
 import { getAllProjects, getAllTagNames } from '@/db/projects'
@@ -30,6 +31,7 @@ interface Props {
 
 export function TaskModal({ projectId: initialProjectId, initialProductAreaId, task, open, onClose, onSaved, projects: propProjects }: Props) {
   const isEdit = !!task
+  const wikiEntities = useWikiEntities()
 
   const [title,       setTitle]       = useState('')
   const [description, setDescription] = useState('')
@@ -292,6 +294,8 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
             onChange={setDescription}
             placeholder="What needs to be done?"
             rows={2}
+            enableWikiLinks
+            wikiEntities={wikiEntities}
           />
 
           {/* Notes */}
@@ -302,6 +306,8 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
             onChange={setNotes}
             placeholder="Additional notes, links, context…"
             rows={2}
+            enableWikiLinks
+            wikiEntities={wikiEntities}
           />
 
           {/* Status + Priority */}

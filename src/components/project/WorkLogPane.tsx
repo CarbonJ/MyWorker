@@ -17,6 +17,7 @@ import { MarkdownContent } from '@/components/MarkdownContent'
 import { MarkdownField } from '@/components/MarkdownField'
 import { Pencil, Trash2, Filter, Search, X, BookOpen } from 'lucide-react'
 import { loadGuiSettings, altRowStyle } from '@/lib/guiSettings'
+import { useWikiEntities } from '@/hooks/useWikiEntities'
 
 interface Props {
   projectId: number
@@ -32,6 +33,7 @@ type LogItem =
 
 export function WorkLogPane({ projectId, projectName, workLog, notebookRefs = [], onSaved }: Props) {
   const navigate = useNavigate()
+  const wikiEntities = useWikiEntities()
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editDraft, setEditDraft] = useState('')
   const [filterCompleted, setFilterCompleted] = useState(true)
@@ -223,6 +225,8 @@ export function WorkLogPane({ projectId, projectName, workLog, notebookRefs = []
                     rows={3}
                     expandable
                     initialFocused
+                    enableWikiLinks
+                    wikiEntities={wikiEntities}
                     onKeyDown={e => {
                       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); saveEdit(entry.id) }
                       if (e.key === 'Escape') cancelEdit()

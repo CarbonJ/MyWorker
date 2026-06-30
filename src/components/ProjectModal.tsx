@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, startTransition } from 'react'
+import { useWikiEntities } from '@/hooks/useWikiEntities'
 import { toast } from 'sonner'
 import { createProject, updateProject, deleteProject, getAllStakeholderNames, getAllTagNames } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
@@ -24,6 +25,7 @@ interface Props {
 export function ProjectModal({ project, open, onClose, onSaved }: Props) {
   const isEdit = !!project
 
+  const wikiEntities = useWikiEntities()
   const [priorities, setPriorities] = useState<DropdownOption[]>([])
   const [productAreas, setProductAreas] = useState<DropdownOption[]>([])
   const [projectStatuses, setProjectStatuses] = useState<DropdownOption[]>([])
@@ -196,6 +198,8 @@ export function ProjectModal({ project, open, onClose, onSaved }: Props) {
               placeholder="What is this project about?"
               rows={3}
               expandable
+              enableWikiLinks
+              wikiEntities={wikiEntities}
             />
           </div>
 
