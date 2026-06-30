@@ -150,7 +150,10 @@ export default function NotebookPage() {
   const filteredPages = useMemo(() => {
     const q = listSearch.trim().toLowerCase()
     if (!q) return pages
-    return pages.filter(p => (p.title || 'Untitled').toLowerCase().includes(q))
+    return pages.filter(p =>
+      (p.title || 'Untitled').toLowerCase().includes(q) ||
+      p.body.toLowerCase().includes(q)
+    )
   }, [pages, listSearch])
 
   const showEditor = isNew || selectedId !== null

@@ -1,13 +1,50 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useEditor, EditorContent } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from 'tiptap-markdown'
 import Placeholder from '@tiptap/extension-placeholder'
 import Link from '@tiptap/extension-link'
+import { Extension } from '@tiptap/core'
+import { Plugin, PluginKey } from '@tiptap/pm/state'
+import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { Label } from '@/components/ui/label'
 import type { WikiEntity } from '@/types'
 import { Maximize2, Fullscreen, Minimize2, Bold, Italic, Heading1, Heading2, Heading3, Pilcrow, Code2 } from 'lucide-react'
+
+// ProseMirror decoration plugin: highlights [[Name]] text as styled links in the editor
+const WikiLinkDecorationExtension = Extension.create({
+  name: 'wikiLinkDecoration',
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey('wikiLinkDecoration'),
+        props: {
+          decorations(state) {
+            const decorations: Decoration[] = []
+            const pattern = /\[\[([^\]]+)\]\]/g
+            state.doc.descendants((node, pos) => {
+              if (!node.isText || !node.text) return
+              pattern.lastIndex = 0
+              let match: RegExpExecArray | null
+              while ((match = pattern.exec(node.text)) !== null) {
+                decorations.push(
+                  Decoration.inline(
+                    pos + match.index,
+                    pos + match.index + match[0].length,
+                    { class: 'wiki-link', title: `Go to: ${match[1]}` }
+                  )
+                )
+              }
+            })
+            return DecorationSet.create(state.doc, decorations)
+          },
+        },
+      }),
+    ]
+  },
+})
 
 type SizeMode = 'default' | 'large' | 'fullscreen'
 
@@ -51,6 +88,15 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
   const onKeyDownRef = useRef(onKeyDown)
   onKeyDownRef.current = onKeyDown
 
+  // Navigation + entity refs (used in handleClick inside useEditor — stale-closure safe via refs)
+  const navigate = useNavigate()
+  const navigateRef = useRef(navigate)
+  navigateRef.current = navigate
+  const wikiEntitiesRef = useRef(wikiEntities)
+  wikiEntitiesRef.current = wikiEntities
+  const enableWikiLinksRef = useRef(enableWikiLinks)
+  enableWikiLinksRef.current = enableWikiLinks
+
   // Wiki-link suggestion state + refs (refs keep handleKeyDown inside useEditor free of stale closures)
   type WikiSuggestState = { active: boolean; partial: string; coords: { left: number; top: number } }
   const [wikiSuggest, setWikiSuggest] = useState<WikiSuggestState>({ active: false, partial: '', coords: { left: 0, top: 0 } })
@@ -78,6 +124,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
       Markdown.configure({ html: false, tightLists: true }),
       Placeholder.configure({ placeholder: placeholder ?? '' }),
       Link.configure({ openOnClick: false, autolink: false }),
+      ...(enableWikiLinks ? [WikiLinkDecorationExtension] : []),
     ],
     content: value,
     autofocus: initialFocused,
@@ -87,6 +134,22 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
         spellcheck: 'true',
         // break-words prevents long URLs from causing horizontal overflow
         class: 'prose prose-sm dark:prose-invert max-w-none focus:outline-none break-words',
+      },
+      handleClick: (_view, _pos, event) => {
+        if (!enableWikiLinksRef.current) return false
+        // Ignore if suggestion dropdown is active (user may be clicking into editor to dismiss)
+        if (wikiSuggestRef.current.active) return false
+        const target = event.target as HTMLElement
+        if (!target.classList.contains('wiki-link')) return false
+        const name = target.getAttribute('title')?.replace('Go to: ', '') ?? ''
+        if (!name) return false
+        const entity = wikiEntitiesRef.current.find(e => e.name.toLowerCase() === name.toLowerCase())
+        if (!entity) return false
+        const route = entity.type === 'page' ? `/notebook?page=${entity.id}` :
+                      entity.type === 'project' ? `/projects/${entity.id}` :
+                      entity.type === 'contact' ? `/contacts` : `/`
+        navigateRef.current(route)
+        return true
       },
       handleKeyDown: (_view, event) => {
         // Wiki-link suggestion keyboard navigation (refs prevent stale closure)
@@ -212,9 +275,13 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
     )
     const match = /\[\[([^\[\]\n]*)$/.exec(textBefore)
     if (!match) return
-    const alreadyTyped = match[1]
-    const toInsert = entity.name.slice(alreadyTyped.length) + ']]'
-    editor.commands.insertContent(toInsert)
+    const partial = match[1]
+    const pos = $from.pos
+    // Delete the partial text the user has typed so far, then insert the full entity name + ]]
+    editor.chain()
+      .deleteRange({ from: pos - partial.length, to: pos })
+      .insertContent(entity.name + ']]')
+      .run()
     setWikiSuggest(s => ({ ...s, active: false }))
   }, [editor])
   selectWikiSuggestionRef.current = selectWikiSuggestion
@@ -405,7 +472,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
               className="flex-1 overflow-y-auto p-4 cursor-text"
               onClick={() => editor?.chain().focus().run()}
             >
-              <EditorContent editor={editor} className="text-base min-h-full break-words" />
+              <EditorContent editor={editor} className="text-base min-h-full break-words [&_.wiki-link]:text-primary [&_.wiki-link]:underline [&_.wiki-link]:cursor-pointer [&_.wiki-link]:decoration-dotted" />
             </div>
           )}
           <div className="border-t px-4 py-1.5 text-xs text-muted-foreground/50">
@@ -427,7 +494,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
           style={{ minHeight }}
           onClick={() => editor?.chain().focus().run()}
         >
-          <EditorContent editor={editor} />
+          <EditorContent editor={editor} className="[&_.wiki-link]:text-primary [&_.wiki-link]:underline [&_.wiki-link]:cursor-pointer [&_.wiki-link]:decoration-dotted" />
         </div>
       )}
       {wikiDropdown}
