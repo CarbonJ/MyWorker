@@ -10,7 +10,7 @@ import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { Project, DropdownOption, Task, RagStatus } from '@/types'
 import { RagBadge } from '@/components/RagBadge'
-import { MarkdownContent } from '@/components/MarkdownContent'
+import { WikiLinkContent } from '@/components/WikiLinkContent'
 import { ProjectStats } from '@/components/project/ProjectStats'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -146,7 +146,7 @@ export function ProjectHeader({
           {project.workDescription && (
             <div>
               <div className={descExpanded ? undefined : 'line-clamp-3'}>
-                <MarkdownContent className="text-sm text-muted-foreground">{project.workDescription}</MarkdownContent>
+                <WikiLinkContent className="text-sm text-muted-foreground">{project.workDescription}</WikiLinkContent>
               </div>
               {(project.workDescription.length > DESC_EXPAND_CHAR_THRESHOLD || project.workDescription.split('\n').length > DESC_EXPAND_LINE_THRESHOLD) && (
                 <button

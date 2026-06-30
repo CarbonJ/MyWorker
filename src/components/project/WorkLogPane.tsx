@@ -13,7 +13,7 @@ import { toast } from 'sonner'
 import type { WorkLogEntry, NotebookBacklink } from '@/types'
 import { updateWorkLogEntry, deleteWorkLogEntry } from '@/db/workLog'
 import { WorkLogEntryForm } from '@/components/WorkLogEntry'
-import { MarkdownContent } from '@/components/MarkdownContent'
+import { WikiLinkContent } from '@/components/WikiLinkContent'
 import { MarkdownField } from '@/components/MarkdownField'
 import { Pencil, Trash2, Filter, Search, X, BookOpen } from 'lucide-react'
 import { loadGuiSettings, altRowStyle } from '@/lib/guiSettings'
@@ -250,7 +250,7 @@ export function WorkLogPane({ projectId, projectName, workLog, notebookRefs = []
                 </div>
               ) : (
                 <div className={isAutoEntry ? 'opacity-60' : ''}>
-                  <MarkdownContent>{entry.note}</MarkdownContent>
+                  <WikiLinkContent>{entry.note}</WikiLinkContent>
                 </div>
               )}
             </div>
