@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { BookOpen, ChevronDown, ChevronRight } from 'lucide-react'
+import { BookOpen, FolderOpen, ChevronRight } from 'lucide-react'
 import { getBacklinks } from '@/db/notebook'
-import type { NotebookBacklink } from '@/types'
+import { getProjectsByStakeholder } from '@/db/projects'
+import type { NotebookBacklink, Project } from '@/types'
 
 interface Props {
   targetType: 'project' | 'contact'
@@ -10,36 +11,75 @@ interface Props {
   entityName: string
 }
 
+type ActivePanel = 'notes' | 'projects' | null
+
 export function BacklinksPanel({ targetType, targetId, entityName }: Props) {
-  const [links, setLinks] = useState<NotebookBacklink[]>([])
-  const [open, setOpen] = useState(true)
+  const [notes, setNotes] = useState<NotebookBacklink[]>([])
+  const [projects, setProjects] = useState<Project[]>([])
+  const [active, setActive] = useState<ActivePanel>(null)
   const [loaded, setLoaded] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => {
     setLoaded(false)
-    getBacklinks(targetType, targetId, entityName).then(l => {
-      setLinks(l)
+    setActive(null)
+    Promise.all([
+      getBacklinks(targetType, targetId, entityName),
+      targetType === 'contact' ? getProjectsByStakeholder(entityName) : Promise.resolve([]),
+    ]).then(([n, p]) => {
+      setNotes(n)
+      setProjects(p as Project[])
       setLoaded(true)
     })
   }, [targetType, targetId, entityName])
 
-  if (!loaded || links.length === 0) return null
+  if (!loaded || (notes.length === 0 && projects.length === 0)) return null
+
+  const toggle = (panel: ActivePanel) =>
+    setActive(prev => (prev === panel ? null : panel))
 
   return (
     <div className="mt-3 pt-3 border-t">
-      <button
-        type="button"
-        onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors w-full text-left"
-      >
-        {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-        <BookOpen className="h-3 w-3" />
-        Notebook references ({links.length})
-      </button>
-      {open && (
+      <div className="flex items-center gap-3">
+        {notes.length > 0 && (
+          <button
+            type="button"
+            onClick={() => toggle('notes')}
+            className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${
+              active === 'notes' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {active === 'notes' ? (
+              <ChevronRight className="h-3 w-3 rotate-90 transition-transform" />
+            ) : (
+              <ChevronRight className="h-3 w-3 transition-transform" />
+            )}
+            <BookOpen className="h-3 w-3" />
+            Notebook ({notes.length})
+          </button>
+        )}
+        {targetType === 'contact' && projects.length > 0 && (
+          <button
+            type="button"
+            onClick={() => toggle('projects')}
+            className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${
+              active === 'projects' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {active === 'projects' ? (
+              <ChevronRight className="h-3 w-3 rotate-90 transition-transform" />
+            ) : (
+              <ChevronRight className="h-3 w-3 transition-transform" />
+            )}
+            <FolderOpen className="h-3 w-3" />
+            Projects ({projects.length})
+          </button>
+        )}
+      </div>
+
+      {active === 'notes' && (
         <div className="mt-2 space-y-1">
-          {links.map(l => (
+          {notes.map(l => (
             <button
               key={l.pageId}
               type="button"
@@ -49,6 +89,24 @@ export function BacklinksPanel({ targetType, targetId, entityName }: Props) {
               <div className="font-medium text-foreground">{l.pageTitle || 'Untitled'}</div>
               {l.snippet && (
                 <div className="text-muted-foreground line-clamp-1 mt-0.5">{l.snippet}</div>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {active === 'projects' && (
+        <div className="mt-2 space-y-1">
+          {projects.map(p => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => navigate(`/projects/${p.id}`)}
+              className="w-full text-left px-2 py-1.5 rounded text-xs hover:bg-accent transition-colors block"
+            >
+              <div className="font-medium text-foreground">{p.workItem}</div>
+              {p.latestStatus && (
+                <div className="text-muted-foreground line-clamp-1 mt-0.5">{p.latestStatus}</div>
               )}
             </button>
           ))}

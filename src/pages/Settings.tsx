@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { ROW_COLOR_RGB, TEXT_COLOR_HEX, buttonStyle, workItemStyle } from '@/lib/guiSettings'
+import { TEXT_COLOR_HEX, buttonStyle, workItemStyle } from '@/lib/guiSettings'
 import { toast } from 'sonner'
 import {
   getDropdownOptions,
@@ -221,8 +221,6 @@ export default function Settings() {
   }
 
   // GUI color settings
-  const [guiRowColor,      setGuiRowColor]      = useState(() => localStorage.getItem('myworker:gui-row-color')            ?? '')
-  const [guiRowOpacity,    setGuiRowOpacity]    = useState(() => Number(localStorage.getItem('myworker:gui-row-opacity')   ?? '20'))
   const [guiButtonColor,   setGuiButtonColor]   = useState(() => localStorage.getItem('myworker:gui-button-color')         ?? '')
   const [guiButtonOpacity, setGuiButtonOpacity] = useState(() => Number(localStorage.getItem('myworker:gui-button-opacity') ?? '20'))
 
@@ -236,14 +234,17 @@ export default function Settings() {
     () => localStorage.getItem('myworker:due-filter-show-all') === 'true'
   )
 
+  const [proseSpacing, setProseSpacing] = useState(
+    () => localStorage.getItem('myworker:prose-spacing') ?? 'normal'
+  )
+  const applyProseSpacing = (val: string) => {
+    const map: Record<string, string> = { compact: '0.4em', normal: '1em', relaxed: '1.75em' }
+    document.documentElement.style.setProperty('--prose-p-spacing', map[val] ?? '1em')
+  }
   useEffect(() => {
-    localStorage.setItem('myworker:gui-row-color', guiRowColor)
-    window.dispatchEvent(new Event('myworker:gui-settings-changed'))
-  }, [guiRowColor])
-  useEffect(() => {
-    localStorage.setItem('myworker:gui-row-opacity', String(guiRowOpacity))
-    window.dispatchEvent(new Event('myworker:gui-settings-changed'))
-  }, [guiRowOpacity])
+    applyProseSpacing(proseSpacing)
+  }, [proseSpacing])
+
   useEffect(() => {
     localStorage.setItem('myworker:gui-button-color', guiButtonColor)
     window.dispatchEvent(new Event('myworker:gui-settings-changed'))
@@ -353,6 +354,7 @@ export default function Settings() {
         <TabsList>
           <TabsTrigger value="customization">Customization</TabsTrigger>
           <TabsTrigger value="data">Data</TabsTrigger>
+          <TabsTrigger value="license">License</TabsTrigger>
         </TabsList>
 
         {/* ── Customization tab ───────────────────────────────────────── */}
@@ -406,47 +408,35 @@ export default function Settings() {
                   </label>
                 </div>
               </div>
+
+              <Separator className="my-2" />
+              <h2 className={sectionTitle}>Markdown</h2>
+              <div className="space-y-1.5">
+                <label className="text-sm text-muted-foreground">Paragraph spacing</label>
+                <div className="flex gap-1">
+                  {(['compact', 'normal', 'relaxed'] as const).map(v => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => {
+                        setProseSpacing(v)
+                        localStorage.setItem('myworker:prose-spacing', v)
+                        applyProseSpacing(v)
+                      }}
+                      className={`px-2 py-0.5 rounded text-xs border transition-colors capitalize ${proseSpacing === v ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-accent'}`}
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">Controls vertical gap between paragraphs in markdown fields.</p>
+              </div>
             </section>
 
             {/* ── GUI column ─────────────────────────────────────── */}
             <section className={section}>
               <h2 className={sectionTitle}>GUI</h2>
               <div className="space-y-5">
-
-                {/* Row Color */}
-                <div className="space-y-2">
-                  <h3 className="font-medium text-sm">Row Color</h3>
-                  <div className="border rounded-md p-3 space-y-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground w-16 shrink-0">Color</span>
-                      <ColorPicker value={guiRowColor} onChange={setGuiRowColor} />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground w-16 shrink-0">Opacity</span>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        value={guiRowOpacity}
-                        onChange={e => setGuiRowOpacity(Number(e.target.value))}
-                        className="flex-1 cursor-pointer accent-primary h-1.5"
-                      />
-                      <span className="text-xs text-muted-foreground w-8 text-right tabular-nums">{guiRowOpacity}%</span>
-                    </div>
-                    {guiRowColor && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground w-16 shrink-0">Preview</span>
-                        <div className="flex gap-1">
-                          <div className="h-5 w-16 rounded border" />
-                          <div
-                            className="h-5 w-16 rounded border"
-                            style={{ backgroundColor: `rgba(${ROW_COLOR_RGB[guiRowColor] ?? ''}, ${guiRowOpacity / 100})` }}
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
 
                 {/* Button Color */}
                 <div className="space-y-2">
@@ -597,6 +587,8 @@ export default function Settings() {
                   { label: 'Monthly Report', desc: 'Same as Weekly Report but spanning a full calendar month' },
                   { label: 'Reporting',      desc: 'Dense read-only table for on-screen use during meetings' },
                   { label: 'Archive',        desc: 'Closed / completed projects' },
+                  { label: 'Contacts',       desc: 'People and stakeholder directory' },
+                  { label: 'Notebook',       desc: 'Personal notes and knowledge base with wiki-links' },
                   { label: 'Settings',       desc: 'This page' },
                 ].map(({ label, desc }) => (
                   <div key={label} className="flex items-baseline gap-3 px-3 py-2">
@@ -612,6 +604,7 @@ export default function Settings() {
                 {[
                   { label: 'New Project', desc: 'Opens the project creation form' },
                   { label: 'New Task',    desc: 'Opens the quick task creation modal' },
+                  { label: 'New Note',    desc: 'Opens the Notebook with a blank new page ready to write' },
                 ].map(({ label, desc }) => (
                   <div key={label} className="flex items-baseline gap-3 px-3 py-2">
                     <span className="w-28 shrink-0 font-medium text-sm">{label}</span>
@@ -755,6 +748,39 @@ export default function Settings() {
             />
           </section>
 
+        </TabsContent>
+
+        {/* ── License tab ─────────────────────────────────────────────── */}
+        <TabsContent value="license" className="space-y-4 pt-4 max-w-2xl">
+          <h2 className={sectionTitle}>License</h2>
+          <p className="text-sm text-muted-foreground">
+            MyWorker is released into the public domain under the <strong>Unlicense</strong> — the most permissive open-source license available.
+            You are free to use, copy, modify, publish, sell, or distribute this software for any purpose, with no restrictions.
+          </p>
+          <pre className="text-xs text-muted-foreground bg-muted rounded-md p-4 whitespace-pre-wrap font-mono leading-relaxed">
+{`This is free and unencumbered software released into the public domain.
+
+Anyone is free to copy, modify, publish, use, compile, sell, or
+distribute this software, either in source code form or as a compiled
+binary, for any purpose, commercial or non-commercial, and by any means.
+
+In jurisdictions that recognize copyright laws, the author or authors
+of this software dedicate any and all copyright interest in the software
+to the public domain. We make this dedication for the benefit of the
+public at large and to the detriment of our heirs and successors.
+We intend this dedication to be an overt act of relinquishment in
+perpetuity of all present and future rights to this software under
+copyright law.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+For more information, please refer to <https://unlicense.org>`}
+          </pre>
         </TabsContent>
 
       </Tabs>

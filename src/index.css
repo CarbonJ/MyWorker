@@ -158,6 +158,13 @@
     }
 }
 
+/* Configurable paragraph spacing (controlled by Settings → Markdown → Paragraph spacing) */
+:root { --prose-p-spacing: 1em; }
+.prose p {
+  margin-top: var(--prose-p-spacing);
+  margin-bottom: var(--prose-p-spacing);
+}
+
 /* Tighter list spacing in prose (editor + read-only renderer) */
 .prose ul, .prose ol {
   margin-top: 0.25em;
@@ -170,6 +177,42 @@
 .prose li > p {
   margin-top: 0;
   margin-bottom: 0;
+}
+
+/* TipTap table styles in editor */
+.tiptap table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.75em 0;
+  font-size: 0.875em;
+}
+.tiptap table td,
+.tiptap table th {
+  border: 1px solid var(--border);
+  padding: 0.3em 0.6em;
+  vertical-align: top;
+}
+.tiptap table th {
+  background: var(--muted);
+  font-weight: 600;
+}
+.tiptap table .selectedCell::after {
+  background: var(--accent);
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.3;
+  pointer-events: none;
+  z-index: 2;
+}
+.tiptap table .column-resize-handle {
+  background-color: var(--primary);
+  bottom: -2px;
+  pointer-events: none;
+  position: absolute;
+  right: -2px;
+  top: 0;
+  width: 4px;
 }
 
 /* TipTap placeholder */

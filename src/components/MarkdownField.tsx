@@ -11,7 +11,8 @@ import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { Label } from '@/components/ui/label'
 import type { WikiEntity } from '@/types'
-import { Maximize2, Fullscreen, Minimize2, Bold, Italic, Heading1, Heading2, Heading3, Pilcrow, Code2 } from 'lucide-react'
+import { Maximize2, Fullscreen, Minimize2, Bold, Italic, Heading1, Heading2, Heading3, Pilcrow, Code2, Table } from 'lucide-react'
+import { Table as TipTapTable, TableCell, TableHeader, TableRow } from '@tiptap/extension-table'
 
 // ProseMirror decoration plugin: highlights [[Name]] text as styled links in the editor
 const WikiLinkDecorationExtension = Extension.create({
@@ -146,6 +147,10 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
       Markdown.configure({ html: false, tightLists: true }),
       Placeholder.configure({ placeholder: placeholder ?? '' }),
       Link.configure({ openOnClick: false, autolink: false }),
+      TipTapTable.configure({ resizable: false }),
+      TableRow,
+      TableHeader,
+      TableCell,
       ...(enableWikiLinks ? [WikiLinkDecorationExtension] : []),
     ],
     content: value,
@@ -413,6 +418,18 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
           onClick={() => editor.chain().focus().setParagraph().run()}
           title="Plain text"
         ><Pilcrow size={13} /></ToolbarBtn>
+        <div className="w-px h-4 bg-border mx-0.5" />
+        <ToolbarBtn
+          active={editor.isActive('table')}
+          onClick={() => {
+            if (editor.isActive('table')) {
+              editor.chain().focus().deleteTable().run()
+            } else {
+              editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
+            }
+          }}
+          title={editor.isActive('table') ? 'Remove table' : 'Insert table (3×3)'}
+        ><Table size={13} /></ToolbarBtn>
         <div className="w-px h-4 bg-border mx-0.5" />
         <ToolbarBtn
           active={false}

@@ -7,7 +7,7 @@ import {
 } from '@/components/ui/command'
 import { getAllProjects } from '@/db/projects'
 import type { Project } from '@/types'
-import { LayoutDashboard, BarChart2, Archive, Settings, BookOpen, FolderOpen, Plus, ClipboardList, FileText } from 'lucide-react'
+import { LayoutDashboard, BarChart2, Archive, Settings, BookOpen, FolderOpen, Plus, ClipboardList, FileText, UserRound, NotebookPen } from 'lucide-react'
 
 interface Props {
   open: boolean
@@ -53,6 +53,12 @@ export function CommandPalette({ open, onClose, onNewTask, onNewProject }: Props
               <CommandItem value="archive" onSelect={() => go('/archive')}>
                 <Archive className="text-muted-foreground" /> Archive
               </CommandItem>
+              <CommandItem value="contacts people" onSelect={() => go('/contacts')}>
+                <UserRound className="text-muted-foreground" /> Contacts
+              </CommandItem>
+              <CommandItem value="notebook notes pages" onSelect={() => go('/notebook')}>
+                <BookOpen className="text-muted-foreground" /> Notebook
+              </CommandItem>
               <CommandItem value="settings" onSelect={() => go('/settings')}>
                 <Settings className="text-muted-foreground" /> Settings
               </CommandItem>
@@ -66,6 +72,9 @@ export function CommandPalette({ open, onClose, onNewTask, onNewProject }: Props
               </CommandItem>
               <CommandItem value="new task create" onSelect={() => { onNewTask(); onClose() }}>
                 <ClipboardList className="text-muted-foreground" /> New Task
+              </CommandItem>
+              <CommandItem value="new note notebook page create" onSelect={() => { go('/notebook?new=1') }}>
+                <NotebookPen className="text-muted-foreground" /> New Note
               </CommandItem>
             </CommandGroup>
 

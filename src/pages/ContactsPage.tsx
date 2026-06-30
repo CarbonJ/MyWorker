@@ -1,18 +1,20 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { toast } from 'sonner'
 import { useSearchParams } from 'react-router-dom'
-import { UserRound, Plus, Pencil, Trash2, Search, X, AlertCircle } from 'lucide-react'
+import { UserRound, Plus, Pencil, Trash2, Search, X, ChevronDown, ChevronRight, Check, ChevronsUpDown } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { MarkdownField } from '@/components/MarkdownField'
+import { MarkdownContent } from '@/components/MarkdownContent'
 import { TagInput } from '@/components/TagInput'
 import { getAllContacts, createContact, updateContact, deleteContact } from '@/db/contacts'
 import { getAllTagNames } from '@/db/projects'
 import { BacklinksPanel } from '@/components/BacklinksPanel'
 import { useWikiEntities } from '@/hooks/useWikiEntities'
 import type { Contact, WikiEntity } from '@/types'
-import { isStubContact } from '@/types'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Command, CommandInput, CommandList, CommandItem, CommandEmpty } from '@/components/ui/command'
 
 interface FormState {
   name: string
@@ -23,6 +25,65 @@ interface FormState {
 }
 
 const EMPTY_FORM: FormState = { name: '', role: '', groupName: '', notes: '', tags: [] }
+
+function SearchableSelect({
+  value,
+  onChange,
+  options,
+  placeholder,
+  allLabel,
+}: {
+  value: string | null
+  onChange: (v: string | null) => void
+  options: string[]
+  placeholder: string
+  allLabel: string
+}) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={`h-8 pl-3 pr-2 rounded-md border text-sm flex items-center gap-1.5 transition-colors min-w-[110px] ${
+            value ? 'bg-primary text-primary-foreground border-primary' : 'border-input text-muted-foreground hover:text-foreground hover:bg-accent'
+          }`}
+        >
+          <span className="flex-1 text-left truncate">{value ?? allLabel}</span>
+          <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="p-0 w-48" align="start">
+        <Command>
+          <CommandInput placeholder={placeholder} className="h-8 text-sm" />
+          <CommandList>
+            <CommandEmpty>No results.</CommandEmpty>
+            <CommandItem
+              value={allLabel}
+              onSelect={() => { onChange(null); setOpen(false) }}
+              className="text-sm"
+            >
+              <Check className={`h-3.5 w-3.5 mr-2 ${value === null ? 'opacity-100' : 'opacity-0'}`} />
+              {allLabel}
+            </CommandItem>
+            {options.map(opt => (
+              <CommandItem
+                key={opt}
+                value={opt}
+                onSelect={() => { onChange(opt === value ? null : opt); setOpen(false) }}
+                className="text-sm"
+              >
+                <Check className={`h-3.5 w-3.5 mr-2 ${value === opt ? 'opacity-100' : 'opacity-0'}`} />
+                {opt}
+              </CommandItem>
+            ))}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  )
+}
 
 function ContactForm({
   initial,
@@ -67,7 +128,7 @@ function ContactForm({
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="contact-role">Role / Title</Label>
+          <Label htmlFor="contact-role">Title | Role</Label>
           <Input
             id="contact-role"
             value={form.role}
@@ -127,8 +188,10 @@ export default function ContactsPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState(() => searchParams.get('q') ?? '')
   const [groupFilter, setGroupFilter] = useState<string | null>(null)
+  const [tagFilter, setTagFilter] = useState<string | null>(null)
   const highlightRef = useRef<HTMLDivElement | null>(null)
   const [editingId, setEditingId] = useState<number | 'new' | null>(null)
+  const [expandedId, setExpandedId] = useState<number | null>(null)
   const [saving, setSaving] = useState(false)
 
   const wikiEntities = useWikiEntities()
@@ -147,7 +210,6 @@ export default function ContactsPage() {
 
   useEffect(() => { load() }, [load])
 
-  // Scroll the highlighted contact into view when arriving via ?q= link
   useEffect(() => {
     if (!loading && highlightRef.current && searchParams.get('q')) {
       highlightRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -155,6 +217,7 @@ export default function ContactsPage() {
   }, [loading, searchParams])
 
   const groups = [...new Set(contacts.map(c => c.groupName).filter(Boolean))].sort()
+  const allTags = [...new Set(contacts.flatMap(c => c.tags))].sort()
 
   const filtered = contacts.filter(c => {
     const q = search.trim().toLowerCase()
@@ -164,7 +227,8 @@ export default function ContactsPage() {
       c.groupName.toLowerCase().includes(q) ||
       c.tags.some(t => t.toLowerCase().includes(q))
     const matchesGroup = !groupFilter || c.groupName === groupFilter
-    return matchesSearch && matchesGroup
+    const matchesTag = !tagFilter || c.tags.includes(tagFilter)
+    return matchesSearch && matchesGroup && matchesTag
   })
 
   const handleSave = async (form: FormState) => {
@@ -205,6 +269,9 @@ export default function ContactsPage() {
     tags: c.tags,
   })
 
+  const toggleExpand = (id: number) =>
+    setExpandedId(prev => (prev === id ? null : id))
+
   return (
     <div className="flex flex-col h-[calc(100vh-57px)]">
       {/* Header toolbar */}
@@ -227,31 +294,37 @@ export default function ContactsPage() {
           )}
         </div>
 
-        {/* Group filter pills */}
+        {/* Group filter — searchable dropdown */}
         {groups.length > 0 && (
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <button
-              type="button"
-              onClick={() => setGroupFilter(null)}
-              className={`h-7 px-2.5 rounded-full border text-xs font-medium transition-colors ${
-                !groupFilter ? 'bg-primary text-primary-foreground border-primary' : 'border-input text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              All
-            </button>
-            {groups.map(g => (
-              <button
-                key={g}
-                type="button"
-                onClick={() => setGroupFilter(prev => prev === g ? null : g)}
-                className={`h-7 px-2.5 rounded-full border text-xs font-medium transition-colors ${
-                  groupFilter === g ? 'bg-primary text-primary-foreground border-primary' : 'border-input text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {g}
-              </button>
-            ))}
-          </div>
+          <SearchableSelect
+            value={groupFilter}
+            onChange={setGroupFilter}
+            options={groups}
+            placeholder="Search groups…"
+            allLabel="All Groups"
+          />
+        )}
+
+        {/* Tag filter — searchable dropdown */}
+        {allTags.length > 0 && (
+          <SearchableSelect
+            value={tagFilter}
+            onChange={setTagFilter}
+            options={allTags}
+            placeholder="Search tags…"
+            allLabel="All Tags"
+          />
+        )}
+
+        {/* Clear filters */}
+        {(groupFilter || tagFilter) && (
+          <button
+            type="button"
+            onClick={() => { setGroupFilter(null); setTagFilter(null) }}
+            className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+          >
+            <X className="h-3 w-3" /> Clear
+          </button>
         )}
 
         <Button
@@ -303,17 +376,21 @@ export default function ContactsPage() {
         {filtered.length > 0 && (
           <div className="divide-y divide-border">
             {filtered.map((contact, idx) => {
-              const stub = isStubContact(contact)
               const isEditing = editingId === contact.id
+              const isExpanded = expandedId === contact.id
               const isHighlighted = idx === 0 && !!searchParams.get('q')
+              const firstNoteLine = contact.notes
+                ? contact.notes.replace(/[#*_`[\]]/g, '').split('\n').find(l => l.trim()) ?? ''
+                : ''
+
               return (
                 <div
                   key={contact.id}
                   ref={isHighlighted ? highlightRef : undefined}
-                  className={`px-6 py-3${isHighlighted ? ' ring-2 ring-primary/30 ring-inset bg-primary/5 rounded' : ''}`}
+                  className={isHighlighted ? 'ring-2 ring-primary/30 ring-inset bg-primary/5 rounded' : ''}
                 >
                   {isEditing ? (
-                    <div className="space-y-4">
+                    <div className="px-6 py-4 space-y-4">
                       <h2 className="text-sm font-medium">Edit — {contact.name}</h2>
                       <ContactForm
                         initial={initialForEdit(contact)}
@@ -326,65 +403,94 @@ export default function ContactsPage() {
                     </div>
                   ) : (
                     <>
-                      <div className="flex items-start gap-3 group">
-                        {/* Avatar */}
-                        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0 text-sm font-medium text-muted-foreground mt-0.5">
-                          {contact.name.charAt(0).toUpperCase()}
+                      {/* Contact row — 3-column layout */}
+                      <div
+                        className="grid grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_minmax(0,2.5fr)] gap-4 px-6 py-2.5 group cursor-pointer hover:bg-accent/40 transition-colors items-center"
+                        onClick={() => { if (editingId === null) toggleExpand(contact.id) }}
+                      >
+                        {/* Col 1: Avatar + Name + Role */}
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center shrink-0 text-xs font-semibold text-muted-foreground">
+                            {contact.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              {isExpanded
+                                ? <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
+                                : <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                              }
+                              <span className="text-sm font-medium truncate">{contact.name}</span>
+                            </div>
+                            {contact.role && (
+                              <div className="text-xs text-muted-foreground truncate ml-4.5 pl-0.5">{contact.role}</div>
+                            )}
+                          </div>
                         </div>
 
-                        {/* Main content */}
-                        <div className="flex-1 min-w-0 space-y-0.5">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm font-medium">{contact.name}</span>
-                            {/* Stub indicator */}
-                            {stub && (
-                              <span className="inline-flex items-center gap-1 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
-                                <AlertCircle className="h-3 w-3" />
-                                Name only
-                              </span>
-                            )}
-                            {contact.role && (
-                              <span className="text-xs text-muted-foreground">{contact.role}</span>
-                            )}
-                            {contact.groupName && (
-                              <span className="text-xs border border-border rounded px-1.5 py-0.5 text-muted-foreground">
-                                {contact.groupName}
-                              </span>
-                            )}
-                            {contact.tags.map(tag => (
-                              <span key={tag} className="text-xs bg-muted rounded px-1.5 py-0.5 text-muted-foreground">
-                                {tag}
-                              </span>
-                            ))}
-                          </div>
-                          {contact.notes && (
-                            <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
-                              {contact.notes.replace(/[#*_`[\]]/g, '').slice(0, 120)}
-                            </p>
+                        {/* Col 2: Group */}
+                        <div className="min-w-0">
+                          {contact.groupName && (
+                            <span className="inline-block text-xs border border-border rounded px-1.5 py-0.5 text-muted-foreground truncate max-w-full">
+                              {contact.groupName}
+                            </span>
                           )}
                         </div>
 
-                        {/* Actions */}
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => setEditingId(contact.id)}
-                            className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                            title="Edit contact"
+                        {/* Col 3: Tags + Notes first line + Actions */}
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="flex-1 min-w-0">
+                            {contact.tags.length > 0 && (
+                              <div className="flex gap-1 flex-wrap mb-0.5">
+                                {contact.tags.map(tag => (
+                                  <span key={tag} className="text-xs bg-muted rounded px-1.5 py-0.5 text-muted-foreground">
+                                    {tag}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            {firstNoteLine && (
+                              <p className="text-xs text-muted-foreground truncate">{firstNoteLine}</p>
+                            )}
+                          </div>
+
+                          {/* Action buttons */}
+                          <div
+                            className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                            onClick={e => e.stopPropagation()}
                           >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(contact)}
-                            className="p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-accent transition-colors"
-                            title="Delete contact"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                            <button
+                              type="button"
+                              onClick={() => { setExpandedId(null); setEditingId(contact.id) }}
+                              className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                              title="Edit contact"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(contact)}
+                              className="p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-accent transition-colors"
+                              title="Delete contact"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         </div>
                       </div>
-                      <BacklinksPanel targetType="contact" targetId={contact.id} entityName={contact.name} />
+
+                      {/* Expanded detail panel */}
+                      {isExpanded && (
+                        <div className="px-6 pb-4 pt-1 border-t border-border/50 bg-muted/20">
+                          <div className="ml-9 space-y-3">
+                            {contact.notes ? (
+                              <MarkdownContent>{contact.notes}</MarkdownContent>
+                            ) : (
+                              <p className="text-xs text-muted-foreground italic">No notes.</p>
+                            )}
+                            <BacklinksPanel targetType="contact" targetId={contact.id} entityName={contact.name} />
+                          </div>
+                        </div>
+                      )}
                     </>
                   )}
                 </div>

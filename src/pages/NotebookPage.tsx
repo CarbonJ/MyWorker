@@ -67,7 +67,12 @@ export default function NotebookPage() {
     // are correctly indexed before BacklinksPanel queries run on project pages.
     rebuildAllLinks().catch(() => {})
     loadPages().then(p => loadEntities(p))
-  }, [loadPages, loadEntities])
+    // ?new=1 from CommandPalette "New Note" action
+    if (searchParams.get('new') === '1') {
+      handleNewPage()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (selectedId === null) {

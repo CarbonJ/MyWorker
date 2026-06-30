@@ -184,6 +184,15 @@ export async function deleteStakeholder(name: string): Promise<void> {
   }
 }
 
+/** Returns active projects where the named contact appears as a stakeholder, newest first. */
+export async function getProjectsByStakeholder(contactName: string): Promise<Project[]> {
+  const rows = await query(
+    `SELECT * FROM projects WHERE is_archived = 0 AND stakeholders LIKE ? ORDER BY updated_at DESC`,
+    [`%"name":"${contactName.replace(/"/g, '\\"')}"%`]
+  )
+  return rows.map(rowToProject)
+}
+
 /** Returns a sorted, deduplicated list of all stakeholder names — from projects and the contacts table. */
 export async function getAllStakeholderNames(): Promise<string[]> {
   const [projectRows, contactRows] = await Promise.all([
