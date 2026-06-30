@@ -137,11 +137,14 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
       },
       handleClick: (_view, _pos, event) => {
         if (!enableWikiLinksRef.current) return false
-        // Ignore if suggestion dropdown is active (user may be clicking into editor to dismiss)
         if (wikiSuggestRef.current.active) return false
         const target = event.target as HTMLElement
-        if (!target.classList.contains('wiki-link')) return false
-        const name = target.getAttribute('title')?.replace('Go to: ', '') ?? ''
+        // Walk up from the click target in case the text node's parent is the span
+        const wikiEl = target.classList.contains('wiki-link')
+          ? target
+          : (target.closest?.('.wiki-link') as HTMLElement | null)
+        if (!wikiEl) return false
+        const name = wikiEl.getAttribute('title')?.replace('Go to: ', '') ?? ''
         if (!name) return false
         const entity = wikiEntitiesRef.current.find(e => e.name.toLowerCase() === name.toLowerCase())
         if (!entity) return false

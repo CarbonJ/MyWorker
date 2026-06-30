@@ -1,5 +1,5 @@
 import { query, run, lastInsertId } from './index'
-import type { NotebookPage, WikiEntity, NotebookBacklink } from '@/types'
+import type { NotebookPage, NotebookBacklink } from '@/types'
 
 function rowToPage(row: Record<string, unknown>): NotebookPage {
   return {
@@ -34,21 +34,53 @@ export async function deleteNotebookPage(id: number): Promise<void> {
   await run(`DELETE FROM notebook_pages WHERE id = ?`, [id])
 }
 
-export async function rebuildLinks(pageId: number, body: string, entities: WikiEntity[]): Promise<void> {
+// Loads all entity names directly from the DB so it's never dependent on
+// component-side state that may not have loaded yet when a save fires.
+async function loadAllEntities(): Promise<Array<{ type: string; id: number; name: string }>> {
+  const [projects, contacts, areas, pages] = await Promise.all([
+    query(`SELECT id, work_item AS name FROM projects WHERE is_archived = 0`),
+    query(`SELECT id, name FROM contacts`),
+    query(`SELECT id, label AS name FROM dropdown_options WHERE type = 'product_area'`),
+    query(`SELECT id, title AS name FROM notebook_pages`),
+  ])
+  return [
+    ...projects.map(r => ({ type: 'project', id: r.id as number, name: r.name as string })),
+    ...contacts.map(r => ({ type: 'contact', id: r.id as number, name: r.name as string })),
+    ...areas.map(r => ({ type: 'area', id: r.id as number, name: r.name as string })),
+    ...pages.map(r => ({ type: 'page', id: r.id as number, name: r.name as string })),
+  ]
+}
+
+export async function rebuildLinks(pageId: number, body: string): Promise<void> {
   await run(`DELETE FROM notebook_links WHERE source_page_id = ?`, [pageId])
   const pattern = /\[\[([^\]]+)\]\]/g
   const seen = new Set<string>()
+  const names: string[] = []
   let match: RegExpExecArray | null
   while ((match = pattern.exec(body)) !== null) {
     const name = match[1].trim()
-    const key = name.toLowerCase()
-    if (seen.has(key)) continue
-    seen.add(key)
-    const entity = entities.find(e => e.name.toLowerCase() === key)
+    if (!seen.has(name.toLowerCase())) {
+      seen.add(name.toLowerCase())
+      names.push(name)
+    }
+  }
+  if (names.length === 0) return
+
+  const entities = await loadAllEntities()
+  for (const name of names) {
+    const entity = entities.find(e => e.name.toLowerCase() === name.toLowerCase())
     await run(
       `INSERT OR IGNORE INTO notebook_links (source_page_id, target_type, target_id, target_name) VALUES (?, ?, ?, ?)`,
       [pageId, entity?.type ?? 'unknown', entity?.id ?? null, name]
     )
+  }
+}
+
+// Re-indexes every page — call once on mount to fix any stale link data.
+export async function rebuildAllLinks(): Promise<void> {
+  const pages = await getAllNotebookPages()
+  for (const page of pages) {
+    await rebuildLinks(page.id, page.body)
   }
 }
 

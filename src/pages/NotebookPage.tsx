@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import { MarkdownField } from '@/components/MarkdownField'
 import {
   getAllNotebookPages, getNotebookPageById, createNotebookPage,
-  updateNotebookPage, deleteNotebookPage, rebuildLinks,
+  updateNotebookPage, deleteNotebookPage, rebuildLinks, rebuildAllLinks,
 } from '@/db/notebook'
 import { getAllProjects } from '@/db/projects'
 import { getAllContacts } from '@/db/contacts'
@@ -63,7 +63,11 @@ export default function NotebookPage() {
   }, [])
 
   useEffect(() => {
-    loadPages().then(p => loadEntities(p))
+    loadPages().then(p => {
+      loadEntities(p)
+      // Re-index any existing pages whose links may have been saved with stale data
+      rebuildAllLinks().catch(() => {/* non-critical */})
+    })
   }, [loadPages, loadEntities])
 
   useEffect(() => {
@@ -93,14 +97,14 @@ export default function NotebookPage() {
       if (currentPageId.current === null) {
         const id = await createNotebookPage(newTitle || 'Untitled', newBody)
         currentPageId.current = id
+        await rebuildLinks(id, newBody)
         const freshPages = await loadPages()
         await loadEntities(freshPages)
-        await rebuildLinks(id, newBody, wikiEntities)
         setIsNew(false)
         setSearchParams({ page: String(id) })
       } else {
         await updateNotebookPage(currentPageId.current, newTitle || 'Untitled', newBody)
-        await rebuildLinks(currentPageId.current, newBody, wikiEntities)
+        await rebuildLinks(currentPageId.current, newBody)
         const freshPages = await loadPages()
         await loadEntities(freshPages)
       }
@@ -109,13 +113,17 @@ export default function NotebookPage() {
       toast.error(`Failed to save: ${err instanceof Error ? err.message : String(err)}`)
       setSaveStatus('unsaved')
     }
-  }, [wikiEntities, loadPages, loadEntities, setSearchParams])
+  }, [loadPages, loadEntities, setSearchParams])
+
+  // Use a ref so the timer always calls the latest doSave (avoids stale closure)
+  const doSaveRef = useRef(doSave)
+  doSaveRef.current = doSave
 
   const scheduleSave = useCallback((newTitle: string, newBody: string) => {
     setSaveStatus('unsaved')
     if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(() => doSave(newTitle, newBody), 800)
-  }, [doSave])
+    saveTimer.current = setTimeout(() => doSaveRef.current(newTitle, newBody), 800)
+  }, [])
 
   const handleNewPage = useCallback(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current)
