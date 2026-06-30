@@ -118,6 +118,28 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
     setRawMode(r => !r)
   }
 
+  // Wiki-link navigation via mousedown (fires before cursor repositioning,
+  // so preventDefault() stops the cursor from moving into the [[Name]] text
+  // and triggering the suggestion dropdown).
+  const handleWikiLinkMouseDown = (e: React.MouseEvent) => {
+    if (!enableWikiLinks) return
+    const target = e.target as HTMLElement
+    const wikiEl = target.classList.contains('wiki-link')
+      ? target
+      : (target.closest?.('.wiki-link') as HTMLElement | null)
+    if (!wikiEl) return
+    e.preventDefault()
+    const name = wikiEl.getAttribute('title')?.replace('Go to: ', '') ?? ''
+    if (!name) return
+    const entity = wikiEntities.find(en => en.name.toLowerCase() === name.toLowerCase())
+    if (!entity) return
+    navigate(
+      entity.type === 'page' ? `/notebook?page=${entity.id}` :
+      entity.type === 'project' ? `/projects/${entity.id}` :
+      entity.type === 'contact' ? `/contacts` : `/`
+    )
+  }
+
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -134,25 +156,6 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
         spellcheck: 'true',
         // break-words prevents long URLs from causing horizontal overflow
         class: 'prose prose-sm dark:prose-invert max-w-none focus:outline-none break-words',
-      },
-      handleClick: (_view, _pos, event) => {
-        if (!enableWikiLinksRef.current) return false
-        if (wikiSuggestRef.current.active) return false
-        const target = event.target as HTMLElement
-        // Walk up from the click target in case the text node's parent is the span
-        const wikiEl = target.classList.contains('wiki-link')
-          ? target
-          : (target.closest?.('.wiki-link') as HTMLElement | null)
-        if (!wikiEl) return false
-        const name = wikiEl.getAttribute('title')?.replace('Go to: ', '') ?? ''
-        if (!name) return false
-        const entity = wikiEntitiesRef.current.find(e => e.name.toLowerCase() === name.toLowerCase())
-        if (!entity) return false
-        const route = entity.type === 'page' ? `/notebook?page=${entity.id}` :
-                      entity.type === 'project' ? `/projects/${entity.id}` :
-                      entity.type === 'contact' ? `/contacts` : `/`
-        navigateRef.current(route)
-        return true
       },
       handleKeyDown: (_view, event) => {
         // Wiki-link suggestion keyboard navigation (refs prevent stale closure)
@@ -244,6 +247,18 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
       )
       const match = /\[\[([^\[\]\n]*)$/.exec(textBefore)
       if (match) {
+        // Suppress suggestion when cursor is inside a completed [[Name]] — look
+        // for a closing ]] before any opening [[ in the text after the cursor.
+        const textAfter = state.doc.textBetween(
+          $from.pos, Math.min(state.doc.content.size, $from.pos + 200), '\n', '\0'
+        )
+        const closingIdx = textAfter.indexOf(']]')
+        const openingIdx = textAfter.indexOf('[[')
+        const insideCompletedLink = closingIdx !== -1 && (openingIdx === -1 || closingIdx < openingIdx)
+        if (insideCompletedLink) {
+          setWikiSuggest(s => s.active ? { ...s, active: false } : s)
+          return
+        }
         const coords = editor.view.coordsAtPos($from.pos)
         setWikiSuggest({ active: true, partial: match[1], coords: { left: coords.left, top: coords.bottom + 4 } })
         setWikiHighlight(-1)
@@ -474,6 +489,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
             <div
               className="flex-1 overflow-y-auto p-4 cursor-text"
               onClick={() => editor?.chain().focus().run()}
+              onMouseDown={handleWikiLinkMouseDown}
             >
               <EditorContent editor={editor} className="text-base min-h-full break-words [&_.wiki-link]:text-primary [&_.wiki-link]:underline [&_.wiki-link]:cursor-pointer [&_.wiki-link]:decoration-dotted" />
             </div>
@@ -496,6 +512,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
           className={containerClass}
           style={{ minHeight }}
           onClick={() => editor?.chain().focus().run()}
+          onMouseDown={handleWikiLinkMouseDown}
         >
           <EditorContent editor={editor} className="[&_.wiki-link]:text-primary [&_.wiki-link]:underline [&_.wiki-link]:cursor-pointer [&_.wiki-link]:decoration-dotted" />
         </div>
