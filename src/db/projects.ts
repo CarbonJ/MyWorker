@@ -184,25 +184,33 @@ export async function deleteStakeholder(name: string): Promise<void> {
   }
 }
 
-/** Returns a sorted list of all unique stakeholder names across all projects — used for autocomplete. */
+/** Returns a sorted, deduplicated list of all stakeholder names — from projects and the contacts table. */
 export async function getAllStakeholderNames(): Promise<string[]> {
-  const rows = await query(`SELECT stakeholders FROM projects WHERE stakeholders != '' AND stakeholders IS NOT NULL`)
+  const [projectRows, contactRows] = await Promise.all([
+    query(`SELECT stakeholders FROM projects WHERE stakeholders != '' AND stakeholders IS NOT NULL`),
+    query(`SELECT name FROM contacts ORDER BY name COLLATE NOCASE ASC`),
+  ])
   const nameSet = new Set<string>()
-  for (const row of rows) {
+  for (const row of projectRows) {
     const parsed = parseStakeholders(row.stakeholders as string)
     for (const s of parsed) if (s.name.trim()) nameSet.add(s.name.trim())
+  }
+  for (const row of contactRows) {
+    const name = (row.name as string).trim()
+    if (name) nameSet.add(name)
   }
   return [...nameSet].sort((a, b) => a.localeCompare(b))
 }
 
-/** Returns a sorted, deduplicated list of all tag names across projects and tasks — used for autocomplete and filter options. */
+/** Returns a sorted, deduplicated list of all tag names across projects, tasks, and contacts — used for autocomplete. */
 export async function getAllTagNames(): Promise<string[]> {
-  const [projectRows, taskRows] = await Promise.all([
+  const [projectRows, taskRows, contactRows] = await Promise.all([
     query(`SELECT tags FROM projects WHERE tags != '' AND tags IS NOT NULL`),
     query(`SELECT tags FROM tasks WHERE tags != '' AND tags IS NOT NULL`),
+    query(`SELECT tags FROM contacts WHERE tags != '' AND tags IS NOT NULL`),
   ])
   const tagSet = new Set<string>()
-  for (const row of [...projectRows, ...taskRows]) {
+  for (const row of [...projectRows, ...taskRows, ...contactRows]) {
     for (const tag of parseTags(row.tags as string)) {
       const trimmed = tag.trim()
       if (trimmed) tagSet.add(trimmed)

@@ -165,7 +165,7 @@ export function ProjectModal({ project, open, onClose, onSaved }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto" onInteractOutside={e => e.preventDefault()}>
+      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto overflow-x-hidden" onInteractOutside={e => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Edit Project' : 'New Project'}</DialogTitle>
           <DialogDescription>

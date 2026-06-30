@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { getWorkLogByDateRange, type WorkLogEntryWithProject } from '@/db/workLog'
 import { MarkdownContent } from '@/components/MarkdownContent'
 import { RagBadge } from '@/components/RagBadge'
@@ -6,6 +6,7 @@ import type { RagStatus } from '@/types'
 import { ChevronLeft, ChevronRight, Copy, Check, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
+import { useSearch } from '@/contexts/SearchContext'
 
 // ── date helpers ─────────────────────────────────────────────────────────────
 
@@ -146,9 +147,26 @@ export default function WeeklyReportView() {
   }, [startStr, endStr])
 
   const groups = groupByProject(entries)
+  const { query } = useSearch()
+
+  const filteredGroups = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return groups
+    const terms = q.split(/\s+/).filter(Boolean)
+    return groups
+      .map(group => {
+        const nameMatches = terms.every(t => group.projectName.toLowerCase().includes(t))
+        if (nameMatches) return group
+        const matchingEntries = group.entries.filter(e =>
+          terms.every(t => e.note.toLowerCase().includes(t))
+        )
+        return matchingEntries.length > 0 ? { ...group, entries: matchingEntries } : null
+      })
+      .filter(Boolean) as ProjectGroup[]
+  }, [groups, query])
 
   const copyToClipboard = useCallback(async () => {
-    const text = buildPlainText(groups, rangeLabel)
+    const text = buildPlainText(filteredGroups, rangeLabel)
     try {
       await navigator.clipboard.writeText(text)
       setCopied(true)
@@ -193,9 +211,11 @@ export default function WeeklyReportView() {
           <span className="text-sm text-muted-foreground">
             {loading ? '' : entries.length === 0
               ? 'No entries'
-              : `${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} · ${groups.length} project${groups.length === 1 ? '' : 's'}`}
+              : query.trim()
+                ? `${filteredGroups.reduce((n, g) => n + g.entries.length, 0)} of ${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} · ${filteredGroups.length} project${filteredGroups.length === 1 ? '' : 's'}`
+                : `${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} · ${groups.length} project${groups.length === 1 ? '' : 's'}`}
           </span>
-          {groups.length > 0 && (
+          {filteredGroups.length > 0 && (
             <Button size="sm" variant="outline" onClick={copyToClipboard} className="gap-1.5">
               {copied ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
               {copied ? 'Copied!' : 'Copy Report'}
@@ -215,7 +235,14 @@ export default function WeeklyReportView() {
           </div>
         )}
 
-        {!loading && groups.map(group => (
+        {!loading && entries.length > 0 && filteredGroups.length === 0 && (
+          <div className="flex flex-col items-center justify-center h-48 text-muted-foreground gap-2">
+            <FileText className="h-8 w-8 opacity-30" />
+            <p className="text-sm">No entries match <strong>{query}</strong>.</p>
+          </div>
+        )}
+
+        {!loading && filteredGroups.map(group => (
           <div key={group.projectId} className="mb-8">
             {/* Project header */}
             <div className="flex items-center gap-2 mb-1">

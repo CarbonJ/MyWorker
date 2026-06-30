@@ -437,6 +437,43 @@ const migrations: Migration[] = [
       );
     `,
   },
+  {
+    version: 17,
+    up: `
+      -- Work log entries are now editable but the FTS triggers only covered
+      -- INSERT + DELETE. Add an UPDATE trigger so edited entries stay indexed.
+      CREATE TRIGGER IF NOT EXISTS fts_worklog_update
+        AFTER UPDATE ON work_log_entries
+        BEGIN
+          DELETE FROM fts_index WHERE source_type = 'work_log' AND source_id = OLD.id;
+          INSERT INTO fts_index(content, source_type, source_id, project_id)
+          VALUES (NEW.note, 'work_log', NEW.id, NEW.project_id);
+        END;
+    `,
+  },
+  {
+    version: 18,
+    up: `
+      CREATE TABLE IF NOT EXISTS contacts (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        name       TEXT NOT NULL,
+        role       TEXT NOT NULL DEFAULT '',
+        group_name TEXT NOT NULL DEFAULT '',
+        notes      TEXT NOT NULL DEFAULT '',
+        tags       TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE TRIGGER IF NOT EXISTS contacts_updated_at
+        AFTER UPDATE ON contacts
+        BEGIN
+          UPDATE contacts SET updated_at = datetime('now') WHERE id = NEW.id;
+        END;
+
+      CREATE INDEX IF NOT EXISTS idx_contacts_name ON contacts(name);
+    `,
+  },
 ]
 
 export async function runMigrations(handle: DbHandle): Promise<void> {
@@ -446,9 +483,7 @@ export async function runMigrations(handle: DbHandle): Promise<void> {
   const versionRows = await exec(sqlite, db, 'PRAGMA user_version;')
   const currentVersion = Number(versionRows[0]?.user_version ?? 0)
 
-  // Skip if already up to date (the common case on subsequent app loads)
   const pending = migrations.filter(m => m.version > currentVersion)
-  if (pending.length === 0) return
 
   for (const migration of pending) {
     try {
@@ -472,4 +507,66 @@ export async function runMigrations(handle: DbHandle): Promise<void> {
       throw err
     }
   }
+
+  // One-time data migration: seed contacts table from unique stakeholder names
+  // stored across all projects. Runs after schema migrations so the contacts
+  // table is guaranteed to exist. Skipped on subsequent startups via app_metadata.
+  await seedContactsFromStakeholders(sqlite, db)
+}
+
+async function seedContactsFromStakeholders(
+  sqlite: DbHandle['sqlite'],
+  db: DbHandle['db'],
+): Promise<void> {
+  // Check whether we've already done this
+  const flagRows = await exec(sqlite, db,
+    `SELECT value FROM app_metadata WHERE key = 'contacts_seeded_from_stakeholders'`)
+  if (flagRows[0]?.value === '1') return
+
+  // Fetch all non-empty stakeholder blobs from projects
+  const projectRows = await exec(sqlite, db,
+    `SELECT stakeholders FROM projects WHERE stakeholders IS NOT NULL AND stakeholders != ''`)
+
+  // Parse each blob (JSON array of {name} objects, or legacy comma-separated string)
+  const nameSet = new Set<string>()
+  for (const row of projectRows) {
+    const raw = row.stakeholders as string
+    try {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) {
+        for (const s of parsed) {
+          const n = (s as { name?: string })?.name?.trim()
+          if (n) nameSet.add(n)
+        }
+      }
+    } catch {
+      // Legacy comma-separated fallback
+      for (const n of raw.split(',')) {
+        const trimmed = n.trim()
+        if (trimmed) nameSet.add(trimmed)
+      }
+    }
+  }
+
+  if (nameSet.size === 0) {
+    await exec(sqlite, db,
+      `INSERT INTO app_metadata (key, value) VALUES ('contacts_seeded_from_stakeholders', '1')
+       ON CONFLICT(key) DO UPDATE SET value = '1'`)
+    return
+  }
+
+  // Fetch names already in contacts so we don't create duplicates
+  const existingRows = await exec(sqlite, db, `SELECT name FROM contacts`)
+  const existing = new Set(existingRows.map(r => (r.name as string).toLowerCase()))
+
+  for (const name of nameSet) {
+    if (!existing.has(name.toLowerCase())) {
+      await exec(sqlite, db,
+        `INSERT INTO contacts (name) VALUES (?)`, [name])
+    }
+  }
+
+  await exec(sqlite, db,
+    `INSERT INTO app_metadata (key, value) VALUES ('contacts_seeded_from_stakeholders', '1')
+     ON CONFLICT(key) DO UPDATE SET value = '1'`)
 }

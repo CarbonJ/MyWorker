@@ -3,6 +3,22 @@ export type RagStatus = 'Red' | 'Amber' | 'Green'
 export interface Stakeholder {
   name: string
 }
+
+export interface Contact {
+  id: number
+  name: string
+  role: string
+  groupName: string
+  notes: string
+  tags: string[]
+  createdAt: string
+  updatedAt: string
+}
+
+/** True when only the name field is populated — all other fields are empty. */
+export function isStubContact(c: Contact): boolean {
+  return !c.role && !c.groupName && !c.notes && c.tags.length === 0
+}
 export type TaskStatus = 'open' | 'in_progress' | 'done'
 export type DropdownType = 'priority' | 'product_area' | 'project_status'
 

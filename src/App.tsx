@@ -6,7 +6,7 @@ import { TaskModal } from '@/components/TaskModal'
 import { ProjectModal } from '@/components/ProjectModal'
 import { SearchProvider, useSearch } from '@/contexts/SearchContext'
 import { Input } from '@/components/ui/input'
-import { X, Moon, Sun } from 'lucide-react'
+import { X, Moon, Sun, Search as SearchIcon } from 'lucide-react'
 import { getDueSoonTasks } from '@/db/tasks'
 import { loadGuiSettings, buttonStyle } from '@/lib/guiSettings'
 import Prime from '@/pages/Prime'
@@ -17,6 +17,8 @@ import Settings from '@/pages/Settings'
 import DailyDigestView from '@/pages/DailyDigestView'
 import WeeklyReportView from '@/pages/WeeklyReportView'
 import MonthlyReportView from '@/pages/MonthlyReportView'
+import SearchPage from '@/pages/SearchPage'
+import ContactsPage from '@/pages/ContactsPage'
 import { CommandPalette } from '@/components/CommandPalette'
 
 function DueDateTitleUpdater() {
@@ -68,6 +70,10 @@ function NavBar({ isDark, onToggleDark }: { isDark: boolean; onToggleDark: () =>
       <NavLink to="/reporting" className={linkClass} style={navStyle}>Reporting</NavLink>
       <NavLink to="/digest" className={linkClass} style={navStyle}>Digest</NavLink>
       <NavLink to="/archive" className={linkClass} style={navStyle}>Archive</NavLink>
+      <NavLink to="/contacts" className={linkClass} style={navStyle}>Contacts</NavLink>
+      <NavLink to="/search" className={linkClass} style={navStyle}>
+        <span className="flex items-center gap-1.5"><SearchIcon className="h-3.5 w-3.5" />Search</span>
+      </NavLink>
       <NavLink to="/settings" className={linkClass} style={navStyle}>Settings</NavLink>
       {/* Global search — top right */}
       <div className="ml-auto relative flex items-center">
@@ -147,6 +153,8 @@ function AppInner() {
           <Route path="/weekly" element={<WeeklyReportView />} />
           <Route path="/monthly" element={<MonthlyReportView />} />
           <Route path="/archive" element={<ArchiveView />} />
+          <Route path="/contacts" element={<ContactsPage />} />
+          <Route path="/search" element={<SearchPage />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </main>
