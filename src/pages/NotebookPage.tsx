@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import { MarkdownField } from '@/components/MarkdownField'
 import {
   getAllNotebookPages, getNotebookPageById, createNotebookPage,
-  updateNotebookPage, deleteNotebookPage, rebuildLinks,
+  updateNotebookPage, deleteNotebookPage, rebuildLinks, rebuildAllLinks,
 } from '@/db/notebook'
 import { getAllProjects } from '@/db/projects'
 import { getAllContacts } from '@/db/contacts'
@@ -63,6 +63,9 @@ export default function NotebookPage() {
   }, [])
 
   useEffect(() => {
+    // Re-index all links on mount so any notes written before the escaping fix
+    // are correctly indexed before BacklinksPanel queries run on project pages.
+    rebuildAllLinks().catch(() => {})
     loadPages().then(p => loadEntities(p))
   }, [loadPages, loadEntities])
 

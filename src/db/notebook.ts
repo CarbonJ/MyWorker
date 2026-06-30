@@ -53,11 +53,14 @@ async function loadAllEntities(): Promise<Array<{ type: string; id: number; name
 
 export async function rebuildLinks(pageId: number, body: string): Promise<void> {
   await run(`DELETE FROM notebook_links WHERE source_page_id = ?`, [pageId])
+  // tiptap-markdown serializes [ as \[ — normalize before parsing so wiki links
+  // stored as \[\[name\]\] are still detected.
+  const normalized = body.replace(/\\\[/g, '[').replace(/\\\]/g, ']')
   const pattern = /\[\[([^\]]+)\]\]/g
   const seen = new Set<string>()
   const names: string[] = []
   let match: RegExpExecArray | null
-  while ((match = pattern.exec(body)) !== null) {
+  while ((match = pattern.exec(normalized)) !== null) {
     const name = match[1].trim()
     if (!seen.has(name.toLowerCase())) {
       seen.add(name.toLowerCase())
@@ -106,11 +109,13 @@ export async function getBacklinks(
     }))
   }
 
-  // Fallback: index is empty but we have the entity name — scan bodies directly.
-  // Handles the case where the link index hasn't been rebuilt yet.
+  // Fallback: index is empty — scan bodies directly.
+  // Try both the raw form [[name]] and the tiptap-markdown escaped form \[\[name\]\].
   const scanRows = await query(
-    `SELECT id AS source_page_id, title, body FROM notebook_pages WHERE body LIKE ? ORDER BY updated_at DESC`,
-    [`%[[${entityName}]]%`]
+    `SELECT id AS source_page_id, title, body FROM notebook_pages
+     WHERE body LIKE ? OR body LIKE ?
+     ORDER BY updated_at DESC`,
+    [`%[[${entityName}]]%`, `%\\[\\[${entityName}\\]\\]%`]
   )
   return scanRows.map(row => ({
     pageId: row.source_page_id as number,
