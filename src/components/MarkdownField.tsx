@@ -15,6 +15,7 @@ import type { WikiEntity } from '@/types'
 import { Maximize2, Fullscreen, Minimize2, Bold, Italic, Heading1, Heading2, Heading3, Pilcrow, Code2, Table, Highlighter } from 'lucide-react'
 import { Table as TipTapTable, TableCell, TableHeader, TableRow } from '@tiptap/extension-table'
 import Highlight from '@tiptap/extension-highlight'
+import Typography from '@tiptap/extension-typography'
 import markdownItMark from 'markdown-it-mark'
 
 // Extend Highlight with tiptap-markdown serializer so ==text== roundtrips correctly.
@@ -229,6 +230,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
       TableHeader,
       TableCell,
       HighlightMarkdown,
+      Typography,
       MarkdownBlockPasteExtension,
       ...(enableWikiLinks ? [wikiLinkExtension] : []),
     ],

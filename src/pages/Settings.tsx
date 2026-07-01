@@ -810,6 +810,18 @@ export default function Settings() {
                 ],
               },
               {
+                heading: 'Auto Typography',
+                rows: [
+                  ['--', 'En dash (–)'],
+                  ['---', 'Em dash (—)'],
+                  ['...', 'Ellipsis (…)'],
+                  ['"quoted"', 'Curly double quotes (" ")'],
+                  ["'quoted'", "Curly single quotes (' ')"],
+                  ["1/2  1/4  3/4", 'Fractions (½ ¼ ¾)'],
+                  ['(c)  (r)  (tm)', 'Symbols (© ® ™)'],
+                ],
+              },
+              {
                 heading: 'Not Supported',
                 rows: [
                   ['`^superscript^`', 'Superscript'],
