@@ -279,16 +279,20 @@ export default function Prime() {
     return map
   }, [allTasks, upcomingMode, dueFilter, dueFilterShowAll, query])
 
+  /** Set of non-archived project IDs — used to exclude archived-project tasks from due counts */
+  const activeProjectIds = useMemo(() => new Set(projects.map(p => p.id)), [projects])
+
   /** Projects with at least one overdue open task */
   const overdueProjectIds = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10)
     const ids = new Set<number>()
     for (const t of allTasks) {
-      if (t.projectId !== null && t.status !== 'done' && t.dueDate && t.dueDate < today)
+      if (t.projectId !== null && t.status !== 'done' && t.dueDate && t.dueDate < today &&
+          activeProjectIds.has(t.projectId))
         ids.add(t.projectId)
     }
     return ids
-  }, [allTasks])
+  }, [allTasks, activeProjectIds])
 
   /** Projects with at least one due/overdue open task, or an open task whose start date has arrived */
   const projectsWithDueTasks = useMemo(() => {
@@ -296,19 +300,21 @@ export default function Prime() {
     const ids = new Set<number>()
     for (const t of allTasks) {
       if (t.projectId === null || t.status === 'done') continue
+      if (!activeProjectIds.has(t.projectId)) continue
       if ((t.dueDate && t.dueDate <= today) || (t.startDate && t.startDate <= today))
         ids.add(t.projectId)
     }
     return ids
-  }, [allTasks])
+  }, [allTasks, activeProjectIds])
 
   const dueTaskCount = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10)
     return allTasks.filter(t =>
       t.status !== 'done' &&
+      (t.projectId === null || activeProjectIds.has(t.projectId)) &&
       ((t.dueDate && t.dueDate <= today) || (t.startDate && t.startDate <= today))
     ).length
-  }, [allTasks])
+  }, [allTasks, activeProjectIds])
 
   // Auto-expand projects with due/overdue tasks when the due filter is active
   useEffect(() => {
@@ -662,7 +668,7 @@ export default function Prime() {
               ? 'bg-amber-200 border-amber-400 text-amber-900 hover:bg-amber-300'
               : dueTaskCount > 0
                 ? 'bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100'
-                : 'bg-background border-input text-muted-foreground hover:bg-accent'
+                : 'bg-muted border-border text-muted-foreground/50 hover:bg-accent'
           }`}
           title={dueFilter ? 'Clear due/overdue filter' : 'Show due and overdue tasks'}
         >
