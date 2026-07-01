@@ -772,6 +772,7 @@ export default function Settings() {
                   ['`**text**`', 'Bold'],
                   ['`*text*`', 'Italic'],
                   ['`~~text~~`', 'Strikethrough'],
+                  ['`==text==`', 'Highlight (amber background)'],
                   ['`` `text` ``', 'Inline code'],
                 ],
               },
@@ -811,7 +812,6 @@ export default function Settings() {
               {
                 heading: 'Not Supported',
                 rows: [
-                  ['`==text==`', 'Highlight — not available (markdown serializer does not preserve it)'],
                   ['`^superscript^`', 'Superscript'],
                   ['`~subscript~`', 'Subscript'],
                 ],
@@ -833,7 +833,7 @@ export default function Settings() {
             ))}
 
             <p className="text-xs text-muted-foreground border-t pt-4">
-              Tip: select any text in the editor to reveal the floating toolbar for bold, italic, headings, code, and tables.
+              Tip: select any text in the editor to reveal the floating toolbar for bold, italic, highlight, headings, code, and tables.
             </p>
           </div>
         </TabsContent>

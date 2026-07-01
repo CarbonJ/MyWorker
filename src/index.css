@@ -245,6 +245,20 @@
   width: 4px;
 }
 
+/* Highlight mark (==text==) in editor and read-only prose */
+.tiptap mark,
+.prose mark {
+  background-color: oklch(0.97 0.09 95); /* amber-100 */
+  color: oklch(0.35 0.07 55); /* amber-900 */
+  border-radius: 2px;
+  padding: 0 2px;
+}
+.dark .tiptap mark,
+.dark .prose mark {
+  background-color: oklch(0.42 0.11 75 / 40%); /* amber-800/40 */
+  color: oklch(0.88 0.09 90); /* amber-200 */
+}
+
 /* TipTap placeholder */
 .tiptap p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);

@@ -12,8 +12,26 @@ import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { DOMParser as PMDOMParser } from '@tiptap/pm/model'
 import { Label } from '@/components/ui/label'
 import type { WikiEntity } from '@/types'
-import { Maximize2, Fullscreen, Minimize2, Bold, Italic, Heading1, Heading2, Heading3, Pilcrow, Code2, Table } from 'lucide-react'
+import { Maximize2, Fullscreen, Minimize2, Bold, Italic, Heading1, Heading2, Heading3, Pilcrow, Code2, Table, Highlighter } from 'lucide-react'
 import { Table as TipTapTable, TableCell, TableHeader, TableRow } from '@tiptap/extension-table'
+import Highlight from '@tiptap/extension-highlight'
+import markdownItMark from 'markdown-it-mark'
+
+// Extend Highlight with tiptap-markdown serializer so ==text== roundtrips correctly.
+const HighlightMarkdown = Highlight.extend({
+  addStorage() {
+    return {
+      markdown: {
+        serialize: { open: '==', close: '==', mixable: true, expelEnclosingWhitespace: true },
+        parse: {
+          setup(md: { use: (plugin: unknown) => void }) {
+            md.use(markdownItMark)
+          },
+        },
+      },
+    }
+  },
+})
 
 // ProseMirror decoration plugin: highlights [[Name]] as blue (live) or muted (dead).
 // Takes a ref so it always reads the latest entity list without needing to be recreated.
@@ -210,6 +228,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
       TableRow,
       TableHeader,
       TableCell,
+      HighlightMarkdown,
       MarkdownBlockPasteExtension,
       ...(enableWikiLinks ? [wikiLinkExtension] : []),
     ],
@@ -464,6 +483,11 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
           onClick={() => editor.chain().focus().toggleItalic().run()}
           title="Italic (⌘I)"
         ><Italic size={13} /></ToolbarBtn>
+        <ToolbarBtn
+          active={editor.isActive('highlight')}
+          onClick={() => editor.chain().focus().toggleHighlight().run()}
+          title="Highlight (==text==)"
+        ><Highlighter size={13} /></ToolbarBtn>
         <div className="w-px h-4 bg-border mx-0.5" />
         <ToolbarBtn
           active={editor.isActive('heading', { level: 1 })}
