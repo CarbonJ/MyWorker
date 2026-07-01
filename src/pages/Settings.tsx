@@ -740,7 +740,7 @@ export default function Settings() {
                   <Button variant="outline">Export all notes…</Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-40 p-1" align="start">
-                  {(['md', 'rtf', 'pdf'] as NoteExportFormat[]).map(fmt => (
+                  {(['md', 'pdf'] as NoteExportFormat[]).map(fmt => (
                     <button
                       key={fmt}
                       type="button"
@@ -756,7 +756,7 @@ export default function Settings() {
                         }
                       }}
                     >
-                      {fmt === 'md' ? 'Markdown (.md)' : fmt === 'rtf' ? 'RTF (.rtf)' : 'PDF (print)'}
+                      {fmt === 'md' ? 'Markdown (.md)' : 'PDF (print)'}
                     </button>
                   ))}
                 </PopoverContent>

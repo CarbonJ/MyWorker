@@ -266,14 +266,14 @@ export default function NotebookPage() {
                     </button>
                   </PopoverTrigger>
                   <PopoverContent className="w-36 p-1" align="end" onClick={e => e.stopPropagation()}>
-                    {(['md', 'rtf', 'pdf'] as NoteExportFormat[]).map(fmt => (
+                    {(['md', 'pdf'] as NoteExportFormat[]).map(fmt => (
                       <button
                         key={fmt}
                         type="button"
                         className="w-full text-left px-2 py-1 text-sm rounded hover:bg-accent transition-colors"
                         onClick={() => exportNote(page, fmt)}
                       >
-                        {fmt === 'md' ? 'Markdown (.md)' : fmt === 'rtf' ? 'RTF (.rtf)' : 'PDF (print)'}
+                        {fmt === 'md' ? 'Markdown (.md)' : 'PDF (print)'}
                       </button>
                     ))}
                   </PopoverContent>

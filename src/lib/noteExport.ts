@@ -1,6 +1,6 @@
 import { marked } from 'marked'
 
-export type NoteExportFormat = 'md' | 'rtf' | 'pdf'
+export type NoteExportFormat = 'md' | 'pdf'
 
 export interface ExportablePage {
   title: string
@@ -63,59 +63,10 @@ function notesToHtml(pages: ExportablePage[]): string {
 </style></head><body>${sections}<script>window.onload=()=>window.print()</script></body></html>`
 }
 
-// RTF body content only (no \rtf1 header) — used to build single or multi-page documents
-function mdToRtfBody(title: string, body: string): string {
-  const escape = (s: string) =>
-    s.replace(/\\/g, '\\\\').replace(/\{/g, '\\{').replace(/\}/g, '\\}')
-
-  let t = escape(body)
-  // headings (order matters — most specific first)
-  t = t.replace(/^### (.+)$/gm, '{\\pard\\sb160\\sa80\\b\\fs22 $1\\b0\\fs24\\par}')
-  t = t.replace(/^## (.+)$/gm,  '{\\pard\\sb200\\sa80\\b\\fs28 $1\\b0\\fs24\\par}')
-  t = t.replace(/^# (.+)$/gm,   '{\\pard\\sb240\\sa80\\b\\fs36 $1\\b0\\fs24\\par}')
-  // horizontal rule
-  t = t.replace(/^---$/gm, '{\\pard\\brdrb\\brdrs\\brdrw10\\brsp20 \\par}')
-  // task list items (must precede bullet list)
-  t = t.replace(/^- \[x\] (.+)$/gm, '{\\pard\\li360 \\u10003? $1\\par}')
-  t = t.replace(/^- \[ \] (.+)$/gm, '{\\pard\\li360 \\u9744? $1\\par}')
-  // bullet lists
-  t = t.replace(/^[-*+] (.+)$/gm, '{\\pard\\li360 \\bullet  $1\\par}')
-  // bold + italic (most specific first)
-  t = t.replace(/\*\*\*(.+?)\*\*\*/g, '{\\b\\i $1\\i0\\b0}')
-  t = t.replace(/\*\*(.+?)\*\*/g, '{\\b $1\\b0}')
-  t = t.replace(/\*(.+?)\*/g, '{\\i $1\\i0}')
-  // strikethrough
-  t = t.replace(/~~(.+?)~~/g, '{\\strike $1\\strike0}')
-  // highlight
-  t = t.replace(/==(.+?)==/g, '{\\highlight3 $1}')
-  // inline code
-  t = t.replace(/`(.+?)`/g, '{\\f1 $1}')
-  // remaining non-empty lines that don't already start with RTF control
-  t = t.replace(/^([^{\\].*)$/gm, '{\\pard $1\\par}')
-  // blank lines
-  t = t.replace(/^\s*$/gm, '{\\pard\\par}')
-
-  const titleRtf = `{\\pard\\sb0\\sa160\\b\\fs36 ${escape(title || 'Untitled')}\\b0\\fs24\\par}`
-  return titleRtf + t
-}
-
-function buildRtfDocument(sections: ExportablePage[]): string {
-  const body = sections
-    .map((s, i) => (i > 0 ? '{\\pard\\page\\par}' : '') + mdToRtfBody(s.title, s.body))
-    .join('')
-  return (
-    '{\\rtf1\\ansi\\deff0' +
-    '{\\fonttbl{\\f0\\froman\\fcharset0 Arial;}{\\f1\\fmodern\\fcharset0 Courier New;}}' +
-    '{\\f0\\fs24 ' + body + '}'
-  )
-}
-
 export function exportNote(page: ExportablePage, format: NoteExportFormat) {
   const name = safeFilename(page.title)
   if (format === 'md') {
     downloadBlob(cleanMarkdownExport(page.body), `${name}.md`, 'text/markdown')
-  } else if (format === 'rtf') {
-    downloadBlob(buildRtfDocument([page]), `${name}.rtf`, 'text/rtf')
   } else {
     const html = notesToHtml([page])
     const blob = new Blob([html], { type: 'text/html' })
@@ -129,8 +80,6 @@ export function exportAllNotes(pages: ExportablePage[], format: NoteExportFormat
   if (format === 'md') {
     const content = pages.map(p => `# ${p.title || 'Untitled'}\n\n${cleanMarkdownExport(p.body)}`).join('\n\n---\n\n')
     downloadBlob(content, 'notebook-export.md', 'text/markdown')
-  } else if (format === 'rtf') {
-    downloadBlob(buildRtfDocument(pages), 'notebook-export.rtf', 'text/rtf')
   } else {
     const html = notesToHtml(pages)
     const blob = new Blob([html], { type: 'text/html' })
