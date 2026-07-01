@@ -15,38 +15,44 @@ import type { WikiEntity } from '@/types'
 import { Maximize2, Fullscreen, Minimize2, Bold, Italic, Heading1, Heading2, Heading3, Pilcrow, Code2, Table } from 'lucide-react'
 import { Table as TipTapTable, TableCell, TableHeader, TableRow } from '@tiptap/extension-table'
 
-// ProseMirror decoration plugin: highlights [[Name]] text as styled links in the editor
-const WikiLinkDecorationExtension = Extension.create({
-  name: 'wikiLinkDecoration',
-  addProseMirrorPlugins() {
-    return [
-      new Plugin({
-        key: new PluginKey('wikiLinkDecoration'),
-        props: {
-          decorations(state) {
-            const decorations: Decoration[] = []
-            const pattern = /\[\[([^\]]+)\]\]/g
-            state.doc.descendants((node, pos) => {
-              if (!node.isText || !node.text) return
-              pattern.lastIndex = 0
-              let match: RegExpExecArray | null
-              while ((match = pattern.exec(node.text)) !== null) {
-                decorations.push(
-                  Decoration.inline(
-                    pos + match.index,
-                    pos + match.index + match[0].length,
-                    { class: 'wiki-link', title: `Go to: ${match[1]}` }
+// ProseMirror decoration plugin: highlights [[Name]] as blue (live) or muted (dead).
+// Takes a ref so it always reads the latest entity list without needing to be recreated.
+function createWikiLinkDecorationExtension(entitiesRef: React.MutableRefObject<WikiEntity[]>) {
+  return Extension.create({
+    name: 'wikiLinkDecoration',
+    addProseMirrorPlugins() {
+      return [
+        new Plugin({
+          key: new PluginKey('wikiLinkDecoration'),
+          props: {
+            decorations(state) {
+              const decorations: Decoration[] = []
+              const entities = entitiesRef.current
+              const pattern = /\[\[([^\]]+)\]\]/g
+              state.doc.descendants((node, pos) => {
+                if (!node.isText || !node.text) return
+                pattern.lastIndex = 0
+                let match: RegExpExecArray | null
+                while ((match = pattern.exec(node.text)) !== null) {
+                  const name = match[1]
+                  const isLive = entities.some(e => e.name.toLowerCase() === name.trim().toLowerCase())
+                  decorations.push(
+                    Decoration.inline(
+                      pos + match.index,
+                      pos + match.index + match[0].length,
+                      { class: `wiki-link ${isLive ? 'wiki-link-live' : 'wiki-link-dead'}`, title: `Go to: ${name}` }
+                    )
                   )
-                )
-              }
-            })
-            return DecorationSet.create(state.doc, decorations)
+                }
+              })
+              return DecorationSet.create(state.doc, decorations)
+            },
           },
-        },
-      }),
-    ]
-  },
-})
+        }),
+      ]
+    },
+  })
+}
 
 // Paste plain text as block-level markdown so bullets, headings, etc. parse correctly
 // instead of landing as a plain paragraph and getting characters escaped on serialization.
@@ -142,6 +148,10 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
   const onWikiLinkClickRef = useRef(onWikiLinkClick)
   onWikiLinkClickRef.current = onWikiLinkClick
 
+  // Stable extension instance — created once; reads latest entities via ref on each decoration pass
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const wikiLinkExtension = useMemo(() => createWikiLinkDecorationExtension(wikiEntitiesRef), [])
+
   // Wiki-link suggestion state + refs (refs keep handleKeyDown inside useEditor free of stale closures)
   type WikiSuggestState = { active: boolean; partial: string; coords: { left: number; top: number } }
   const [wikiSuggest, setWikiSuggest] = useState<WikiSuggestState>({ active: false, partial: '', coords: { left: 0, top: 0 } })
@@ -201,7 +211,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
       TableHeader,
       TableCell,
       MarkdownBlockPasteExtension,
-      ...(enableWikiLinks ? [WikiLinkDecorationExtension] : []),
+      ...(enableWikiLinks ? [wikiLinkExtension] : []),
     ],
     content: value,
     autofocus: initialFocused,
@@ -290,6 +300,13 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
       requestAnimationFrame(() => editor?.commands.focus())
     }
   }, [sizeMode, editor, rawMode])
+
+  // Re-run decorations when entities load/change so live/dead colouring updates immediately
+  useEffect(() => {
+    if (editor && enableWikiLinks) {
+      editor.view.dispatch(editor.state.tr)
+    }
+  }, [wikiEntities, editor, enableWikiLinks])
 
   // Wiki-link detection: watch cursor position for [[ pattern
   useEffect(() => {
@@ -558,7 +575,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
               onClick={() => editor?.chain().focus().run()}
               onMouseDown={handleWikiLinkMouseDown}
             >
-              <EditorContent editor={editor} className="text-base min-h-full break-words [&_.wiki-link]:text-primary [&_.wiki-link]:underline [&_.wiki-link]:cursor-pointer [&_.wiki-link]:decoration-dotted" />
+              <EditorContent editor={editor} className="text-base min-h-full break-words wiki-link-styles" />
             </div>
           )}
           <div className="border-t px-4 py-1.5 text-xs text-muted-foreground/50">
@@ -581,7 +598,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
           onClick={() => editor?.chain().focus().run()}
           onMouseDown={handleWikiLinkMouseDown}
         >
-          <EditorContent editor={editor} className="[&_.wiki-link]:text-primary [&_.wiki-link]:underline [&_.wiki-link]:cursor-pointer [&_.wiki-link]:decoration-dotted" />
+          <EditorContent editor={editor} className="wiki-link-styles" />
         </div>
       )}
       {wikiDropdown}

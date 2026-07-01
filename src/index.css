@@ -169,6 +169,32 @@
   margin-bottom: 0;
 }
 
+/* Wiki-link colours in the TipTap editor */
+.wiki-link-styles .wiki-link {
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  cursor: pointer;
+}
+.wiki-link-styles .wiki-link-live {
+  color: oklch(0.546 0.245 262.881); /* blue-600 */
+}
+.wiki-link-styles .wiki-link-live:hover {
+  opacity: 0.75;
+}
+.wiki-link-styles .wiki-link-dead {
+  color: var(--muted-foreground);
+  opacity: 0.6;
+}
+@media (prefers-color-scheme: dark) {
+  .wiki-link-styles .wiki-link-live {
+    color: oklch(0.707 0.165 254.624); /* blue-400 */
+  }
+}
+/* Dark-mode class variant (for next-themes class strategy) */
+.dark .wiki-link-styles .wiki-link-live {
+  color: oklch(0.707 0.165 254.624); /* blue-400 */
+}
+
 /* Tighter list spacing in prose (editor + read-only renderer) */
 .prose ul, .prose ol {
   margin-top: 0.25em;
