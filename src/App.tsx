@@ -133,10 +133,11 @@ function AppInner() {
         setQuickTaskOpen(true)
         return
       }
-      // Esc → navigate home, but only when no modal/dialog is open
+      // Esc → navigate home, but not when a dialog is open or a rich-text editor is focused
       if (e.key === 'Escape') {
         const hasOpenDialog = !!document.querySelector('[role="dialog"]')
-        if (!hasOpenDialog) navigate('/')
+        const isEditingInEditor = !!document.activeElement?.closest('.ProseMirror')
+        if (!hasOpenDialog && !isEditingInEditor) navigate('/')
       }
     }
     window.addEventListener('keydown', handleKey)

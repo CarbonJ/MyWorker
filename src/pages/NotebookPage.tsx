@@ -128,10 +128,31 @@ export default function NotebookPage() {
   const doSaveRef = useRef(doSave)
   doSaveRef.current = doSave
 
+  // Track the latest unsaved args so we can flush them synchronously on unmount
+  const pendingTitleRef = useRef<string | null>(null)
+  const pendingBodyRef  = useRef<string | null>(null)
+
   const scheduleSave = useCallback((newTitle: string, newBody: string) => {
     setSaveStatus('unsaved')
+    pendingTitleRef.current = newTitle
+    pendingBodyRef.current  = newBody
     if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(() => doSaveRef.current(newTitle, newBody), 800)
+    saveTimer.current = setTimeout(() => {
+      doSaveRef.current(newTitle, newBody)
+      pendingTitleRef.current = null
+      pendingBodyRef.current  = null
+    }, 800)
+  }, [])
+
+  // Flush any pending debounced save immediately when the component unmounts
+  // (e.g. user presses Escape or navigates away before the 800ms timer fires).
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current && pendingBodyRef.current !== null) {
+        clearTimeout(saveTimer.current)
+        doSaveRef.current(pendingTitleRef.current ?? '', pendingBodyRef.current)
+      }
+    }
   }, [])
 
   const handleNewPage = useCallback(() => {

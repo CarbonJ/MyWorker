@@ -270,13 +270,20 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
             return true
           }
           if (event.key === 'Escape') {
+            event.stopPropagation()
             setWikiSuggest(s => ({ ...s, active: false }))
             return true
           }
         }
-        if (event.key === 'Escape' && sizeModeRef.current === 'fullscreen') {
-          setSizeMode('default')
-          return true
+        if (event.key === 'Escape') {
+          // Always stop propagation so the global App.tsx Escape → navigate('/') handler
+          // doesn't fire while the user is typing inside any MarkdownField.
+          event.stopPropagation()
+          if (sizeModeRef.current === 'fullscreen') {
+            setSizeMode('default')
+            return true
+          }
+          return false
         }
         // Always intercept Cmd/Ctrl+Enter to prevent TipTap inserting a line
         // break. preventDefault doesn't stop propagation, so window-level save
