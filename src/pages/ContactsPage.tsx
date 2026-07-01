@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { toast } from 'sonner'
 import { useSearchParams } from 'react-router-dom'
-import { UserRound, Plus, Pencil, Trash2, Search, X, ChevronDown, ChevronRight, Check, ChevronsUpDown } from 'lucide-react'
+import { UserRound, Plus, Pencil, Trash2, Search, X, ChevronDown, ChevronRight, Check, ChevronsUpDown, ExternalLink } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -22,9 +22,10 @@ interface FormState {
   groupName: string
   notes: string
   tags: string[]
+  whosWho: string
 }
 
-const EMPTY_FORM: FormState = { name: '', role: '', groupName: '', notes: '', tags: [] }
+const EMPTY_FORM: FormState = { name: '', role: '', groupName: '', notes: '', tags: [], whosWho: '' }
 
 function SearchableSelect({
   value,
@@ -168,6 +169,17 @@ function ContactForm({
         wikiEntities={wikiEntities}
       />
 
+      <div className="space-y-1.5">
+        <Label htmlFor="contact-whos-who">Who's Who URL</Label>
+        <Input
+          id="contact-whos-who"
+          type="url"
+          value={form.whosWho}
+          onChange={e => set('whosWho')(e.target.value)}
+          placeholder="https://…"
+        />
+      </div>
+
       <div className="flex items-center gap-2 pt-1">
         <Button type="submit" size="sm" disabled={saving}>
           {saving ? 'Saving…' : 'Save Contact'}
@@ -267,6 +279,7 @@ export default function ContactsPage() {
     groupName: c.groupName,
     notes: c.notes,
     tags: c.tags,
+    whosWho: c.whosWho,
   })
 
   const toggleExpand = (id: number) =>
@@ -420,6 +433,18 @@ export default function ContactsPage() {
                                 : <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
                               }
                               <span className="text-sm font-medium truncate">{contact.name}</span>
+                              {contact.whosWho && (
+                                <a
+                                  href={contact.whosWho}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title="Who's Who profile"
+                                  onClick={e => e.stopPropagation()}
+                                  className="text-muted-foreground hover:text-primary transition-colors shrink-0"
+                                >
+                                  <ExternalLink className="h-3 w-3" />
+                                </a>
+                              )}
                             </div>
                             {contact.role && (
                               <div className="text-xs text-muted-foreground truncate ml-4.5 pl-0.5">{contact.role}</div>

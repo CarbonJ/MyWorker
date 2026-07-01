@@ -64,6 +64,30 @@ export async function deleteDropdownOption(id: number): Promise<void> {
   await run(`DELETE FROM dropdown_options WHERE id = ?`, [id])
 }
 
+/** Count how many active projects (and tasks) reference a given dropdown option. */
+export async function getOptionUsageCount(id: number, type: DropdownType): Promise<number> {
+  let n = 0
+  if (type === 'priority') {
+    const [pr, ta] = await Promise.all([
+      query(`SELECT COUNT(*) as n FROM projects WHERE priority_id = ? AND is_archived = 0`, [id]),
+      query(`SELECT COUNT(*) as n FROM tasks WHERE priority_id = ?`, [id]),
+    ])
+    n = Number((pr[0] as Record<string, unknown>).n) + Number((ta[0] as Record<string, unknown>).n)
+  } else if (type === 'product_area') {
+    const [pr, ta] = await Promise.all([
+      query(`SELECT COUNT(*) as n FROM projects WHERE product_area_id = ? AND is_archived = 0`, [id]),
+      query(`SELECT COUNT(*) as n FROM tasks WHERE product_area_id = ?`, [id]),
+    ])
+    n = Number((pr[0] as Record<string, unknown>).n) + Number((ta[0] as Record<string, unknown>).n)
+  } else if (type === 'project_status') {
+    const [pr] = await Promise.all([
+      query(`SELECT COUNT(*) as n FROM projects WHERE status_id = ? AND is_archived = 0`, [id]),
+    ])
+    n = Number((pr[0] as Record<string, unknown>).n)
+  }
+  return n
+}
+
 /** Reorder a list of options by saving new sort_order values.
  *  All updates run inside a transaction — if any step fails, the
  *  database rolls back to its original state automatically. */

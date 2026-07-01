@@ -70,6 +70,10 @@ export default function NotebookPage() {
     // ?new=1 from CommandPalette "New Note" action
     if (searchParams.get('new') === '1') {
       handleNewPage()
+    } else if (searchParams.get('page') === null) {
+      // Default to last viewed page if no page is selected
+      const lastId = localStorage.getItem('myworker:notebook-last-page')
+      if (lastId) setSearchParams({ page: lastId }, { replace: true })
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -83,6 +87,7 @@ export default function NotebookPage() {
       currentPageId.current = null
       return
     }
+    localStorage.setItem('myworker:notebook-last-page', String(selectedId))
     getNotebookPageById(selectedId).then(p => {
       if (p) {
         setTitle(p.title)
@@ -173,7 +178,7 @@ export default function NotebookPage() {
   return (
     <div className="flex h-[calc(100vh-57px)] overflow-hidden">
       {/* Left sidebar */}
-      <div className="w-64 shrink-0 border-r flex flex-col">
+      <div className="w-80 shrink-0 border-r flex flex-col">
         <div className="px-3 py-3 border-b flex items-center gap-2 shrink-0">
           <BookOpen className="h-4 w-4 text-muted-foreground shrink-0" />
           <span className="text-sm font-semibold flex-1">Notebook</span>

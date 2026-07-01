@@ -11,6 +11,7 @@ export interface Contact {
   groupName: string
   notes: string
   tags: string[]
+  whosWho: string
   createdAt: string
   updatedAt: string
 }

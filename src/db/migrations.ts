@@ -519,6 +519,10 @@ const migrations: Migration[] = [
       END;
     `,
   },
+  {
+    version: 20,
+    up: `ALTER TABLE contacts ADD COLUMN whos_who TEXT NOT NULL DEFAULT '';`,
+  },
 ]
 
 export async function runMigrations(handle: DbHandle): Promise<void> {

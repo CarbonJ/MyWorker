@@ -49,8 +49,12 @@ const WikiLinkDecorationExtension = Extension.create({
 
 type SizeMode = 'default' | 'large' | 'fullscreen'
 
-// Unescape markdown link patterns that prosemirror-markdown bracket-escapes in plain text.
-const unescapeLinks = (s: string) => s.replace(/\\\[([^\]\\]+)\\\]\(([^)]+)\)/g, '[$1]($2)')
+// Unescape patterns that prosemirror-markdown escapes unnecessarily.
+// 1. Bracket-escaped link patterns: \[text\](url) → [text](url)
+// 2. Escaped horizontal rules: \--- → ---  (Espanso templates paste --- and it gets escaped)
+const unescapeLinks = (s: string) =>
+  s.replace(/\\\[([^\]\\]+)\\\]\(([^)]+)\)/g, '[$1]($2)')
+   .replace(/^\\---$/gm, '---')
 
 function ToolbarBtn({ active, onClick, title, children }: { active: boolean; onClick: () => void; title: string; children: React.ReactNode }) {
   return (

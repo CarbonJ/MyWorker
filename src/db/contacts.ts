@@ -23,6 +23,7 @@ function rowToContact(row: Record<string, unknown>): Contact {
     groupName: (row.group_name as string) ?? '',
     notes: (row.notes as string) ?? '',
     tags: parseTags(row.tags as string),
+    whosWho: (row.whos_who as string) ?? '',
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   }
@@ -44,18 +45,20 @@ export interface CreateContactInput {
   groupName?: string
   notes?: string
   tags?: string[]
+  whosWho?: string
 }
 
 export async function createContact(input: CreateContactInput): Promise<number> {
   await run(
-    `INSERT INTO contacts (name, role, group_name, notes, tags)
-     VALUES (?, ?, ?, ?, ?)`,
+    `INSERT INTO contacts (name, role, group_name, notes, tags, whos_who)
+     VALUES (?, ?, ?, ?, ?, ?)`,
     [
       input.name.trim(),
       input.role?.trim() ?? '',
       input.groupName?.trim() ?? '',
       input.notes?.trim() ?? '',
       stringifyTags(input.tags ?? []),
+      input.whosWho?.trim() ?? '',
     ],
   )
   return await lastInsertId()
@@ -72,7 +75,7 @@ export async function updateContact(input: UpdateContactInput): Promise<void> {
 
   await run(
     `UPDATE contacts
-     SET name = ?, role = ?, group_name = ?, notes = ?, tags = ?
+     SET name = ?, role = ?, group_name = ?, notes = ?, tags = ?, whos_who = ?
      WHERE id = ?`,
     [
       (input.name ?? current.name).trim(),
@@ -80,6 +83,7 @@ export async function updateContact(input: UpdateContactInput): Promise<void> {
       (input.groupName !== undefined ? input.groupName : current.groupName).trim(),
       (input.notes !== undefined ? input.notes : current.notes).trim(),
       stringifyTags(input.tags !== undefined ? input.tags : current.tags),
+      (input.whosWho !== undefined ? input.whosWho : current.whosWho).trim(),
       input.id,
     ],
   )

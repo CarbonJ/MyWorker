@@ -7,6 +7,7 @@ import {
   updateDropdownOption,
   deleteDropdownOption,
   reorderDropdownOptions,
+  getOptionUsageCount,
 } from '@/db/dropdownOptions'
 import { exportToJson, importFromJson } from '@/db/importExport'
 import { setUserFolderHandle, query } from '@/db'
@@ -107,10 +108,15 @@ function OptionList({ type, title }: { type: DropdownType; title: string }) {
     }
   }
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Delete this option?')) return
+  const handleDelete = async (opt: DropdownOption) => {
+    const usageCount = await getOptionUsageCount(opt.id, type)
+    const noun = type === 'priority' ? 'priority' : type === 'product_area' ? 'area' : 'status'
+    const msg = usageCount > 0
+      ? `"${opt.label}" is used by ${usageCount} project${usageCount !== 1 ? 's' : ''} or task${usageCount !== 1 ? 's' : ''}. Deleting it will clear that ${noun} from those items. Continue?`
+      : `Delete "${opt.label}"?`
+    if (!confirm(msg)) return
     try {
-      await deleteDropdownOption(id)
+      await deleteDropdownOption(opt.id)
       load()
     } catch (err) {
       handleError(err, 'Failed to delete option')
@@ -163,7 +169,7 @@ function OptionList({ type, title }: { type: DropdownType; title: string }) {
                 <button onClick={() => moveUp(i)} disabled={i === 0} className="text-muted-foreground hover:text-foreground disabled:opacity-30 text-xs px-1">↑</button>
                 <button onClick={() => moveDown(i)} disabled={i === options.length - 1} className="text-muted-foreground hover:text-foreground disabled:opacity-30 text-xs px-1">↓</button>
                 <button onClick={() => { setEditingId(opt.id); setEditLabel(opt.label); setEditColor(opt.color) }} className="text-xs text-muted-foreground hover:text-foreground px-1">Edit</button>
-                <button onClick={() => handleDelete(opt.id)} className="text-xs text-destructive hover:text-destructive/80 px-1">Delete</button>
+                <button onClick={() => handleDelete(opt)} className="text-xs text-destructive hover:text-destructive/80 px-1">Delete</button>
               </>
             )}
           </div>

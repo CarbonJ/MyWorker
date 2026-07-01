@@ -494,13 +494,13 @@ export default function ReportingView() {
 
   /** Minimum resize width per column — prevents content wrapping */
   const COL_MIN_WIDTHS: Record<ColKey, number> = {
-    staleness: 50, ragStatus: 60, workItem: 100, productArea: 110,
-    priority: 95, projectStatus: 80, openTasks: 75, latestStatus: 100, latestUpdate: 100,
+    staleness: 50, ragStatus: 70, workItem: 100, productArea: 110,
+    priority: 95, projectStatus: 80, openTasks: 100, latestStatus: 100, latestUpdate: 100,
   }
 
   /** Compute default widths that fill the available viewport width */
   const computeDefaultWidths = (): Record<ColKey, number> => {
-    const fixedWidths = { staleness: 60, ragStatus: 70, productArea: 130, priority: 110, projectStatus: 110, openTasks: 90 }
+    const fixedWidths = { staleness: 60, ragStatus: 86, productArea: 130, priority: 110, projectStatus: 110, openTasks: 110 }
     const fixedTotal = Object.values(fixedWidths).reduce((s, v) => s + v, 0)
     const available = Math.max(800, (window.innerWidth || 1200) - 48)
     const contentSpace = Math.max(500, available - fixedTotal)
@@ -669,11 +669,11 @@ export default function ReportingView() {
 
       {/* ── Area + Priority pill filters ────────────────────────────────── */}
       {(productAreas.length > 0 || priorities.length > 0) && (
-        <div className="flex items-center gap-4 px-6 py-2 border-b bg-background shrink-0 flex-wrap">
+        <div className="flex items-center gap-4 px-6 py-2 border-b bg-background shrink-0 overflow-x-auto">
 
           {/* Area pills */}
           {productAreas.length > 0 && (
-            <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="flex items-center gap-1.5 flex-nowrap shrink-0">
               <span className="text-xs text-muted-foreground font-medium shrink-0">Area:</span>
               {[{ id: 'all', label: 'All Areas', color: '' }, ...productAreas.map(a => ({ id: String(a.id), label: a.label, color: a.color }))].map(opt => {
                 const isAll = opt.id === 'all'
@@ -688,7 +688,7 @@ export default function ReportingView() {
                   <button
                     key={opt.id}
                     onClick={() => isAll ? setAreaFilters([]) : setAreaFilters(prev => prev.length === 1 && prev[0] === opt.id ? [] : [opt.id])}
-                    className={`h-6 px-2.5 text-xs rounded-full border transition-colors ${cls}`}
+                    className={`h-6 px-2.5 text-xs rounded-full border transition-colors whitespace-nowrap shrink-0 ${cls}`}
                   >
                     {opt.label}
                   </button>
@@ -699,7 +699,7 @@ export default function ReportingView() {
 
           {/* Priority pills */}
           {priorities.length > 0 && (
-            <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="flex items-center gap-1.5 flex-nowrap shrink-0">
               <span className="text-xs text-muted-foreground font-medium shrink-0">Priority:</span>
               {[{ id: 'all', label: 'All', color: '' }, ...priorities.map(p => ({ id: String(p.id), label: p.label, color: p.color }))].map(opt => {
                 const isAll = opt.id === 'all'
@@ -714,7 +714,7 @@ export default function ReportingView() {
                   <button
                     key={opt.id}
                     onClick={() => isAll ? setPriorityFilters([]) : setPriorityFilters(prev => prev.length === 1 && prev[0] === opt.id ? [] : [opt.id])}
-                    className={`h-6 px-2.5 text-xs rounded-full border transition-colors ${cls}`}
+                    className={`h-6 px-2.5 text-xs rounded-full border transition-colors whitespace-nowrap shrink-0 ${cls}`}
                   >
                     {!isAll && opt.color && <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${dotClass(opt.color)}`} />}
                     {opt.label}
@@ -1020,7 +1020,7 @@ export default function ReportingView() {
                   <td className="px-3 py-1"><RagBadge status={p.ragStatus} /></td>
 
                   {/* Work Item */}
-                  <td className="px-3 py-1 font-medium">
+                  <td className="pl-5 pr-3 py-1 font-medium">
                     <span className="text-primary underline-offset-2 hover:underline">{p.workItem}</span>
                   </td>
 
@@ -1050,7 +1050,7 @@ export default function ReportingView() {
                   </td>
 
                   {/* Open Tasks */}
-                  <td className="px-3 py-1 whitespace-nowrap">
+                  <td className="px-3 py-1 whitespace-nowrap overflow-hidden">
                     {counts && (counts.open > 0 || counts.inProgress > 0) ? (
                       <span className="text-xs text-muted-foreground">
                         {counts.open > 0 && <span className="text-slate-700 font-medium">{counts.open} open</span>}
