@@ -360,6 +360,7 @@ export default function Settings() {
         <TabsList>
           <TabsTrigger value="customization">Customization</TabsTrigger>
           <TabsTrigger value="data">Data</TabsTrigger>
+          <TabsTrigger value="markdown">Markdown</TabsTrigger>
           <TabsTrigger value="license">License</TabsTrigger>
         </TabsList>
 
@@ -757,6 +758,86 @@ export default function Settings() {
         </TabsContent>
 
         {/* ── License tab ─────────────────────────────────────────────── */}
+        <TabsContent value="markdown" className="pt-4 max-w-2xl space-y-6">
+          <div>
+            <h3 className="text-sm font-semibold mb-3">Markdown Reference</h3>
+            <p className="text-xs text-muted-foreground mb-4">
+              All text fields in MyWorker use a rich markdown editor. You can type markdown syntax directly or use the floating toolbar that appears when text is selected.
+            </p>
+
+            {([
+              {
+                heading: 'Text Formatting',
+                rows: [
+                  ['`**text**`', 'Bold'],
+                  ['`*text*`', 'Italic'],
+                  ['`~~text~~`', 'Strikethrough'],
+                  ['`` `text` ``', 'Inline code'],
+                ],
+              },
+              {
+                heading: 'Headings',
+                rows: [
+                  ['`# Heading`', 'Heading 1'],
+                  ['`## Heading`', 'Heading 2'],
+                  ['`### Heading`', 'Heading 3'],
+                ],
+              },
+              {
+                heading: 'Lists',
+                rows: [
+                  ['`- item`', 'Bullet list (also `*` or `+`)'],
+                  ['`1. item`', 'Numbered list'],
+                  ['`- [ ] task`', 'Task list item (unchecked)'],
+                  ['`- [x] task`', 'Task list item (checked)'],
+                ],
+              },
+              {
+                heading: 'Blocks',
+                rows: [
+                  ['`> text`', 'Blockquote'],
+                  ['` ``` `', 'Code block (wrap lines)'],
+                  ['`---`', 'Horizontal rule'],
+                ],
+              },
+              {
+                heading: 'Links & Tables',
+                rows: [
+                  ['`[label](url)`', 'Hyperlink'],
+                  ['`[[Name]]`', 'Wiki link — links to a note, project, contact, or area; shows blue if the target exists'],
+                  ['`| A | B |`', 'Table — use the toolbar button to insert a 3×3 table'],
+                ],
+              },
+              {
+                heading: 'Not Supported',
+                rows: [
+                  ['`==text==`', 'Highlight — not available (markdown serializer does not preserve it)'],
+                  ['`^superscript^`', 'Superscript'],
+                  ['`~subscript~`', 'Subscript'],
+                ],
+              },
+            ] as { heading: string; rows: [string, string][] }[]).map(section => (
+              <div key={section.heading} className="mb-5">
+                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">{section.heading}</h4>
+                <table className="w-full text-sm border-collapse">
+                  <tbody>
+                    {section.rows.map(([syntax, desc]) => (
+                      <tr key={syntax} className="border-b border-border/50 last:border-0">
+                        <td className="py-1.5 pr-6 font-mono text-xs whitespace-nowrap text-foreground/80 w-44">{syntax.replace(/`/g, '')}</td>
+                        <td className="py-1.5 text-muted-foreground">{desc}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+
+            <p className="text-xs text-muted-foreground border-t pt-4">
+              Tip: select any text in the editor to reveal the floating toolbar for bold, italic, headings, code, and tables.
+            </p>
+          </div>
+        </TabsContent>
+
         <TabsContent value="license" className="space-y-4 pt-4 max-w-2xl">
           <h2 className={sectionTitle}>License</h2>
           <p className="text-sm text-muted-foreground">
