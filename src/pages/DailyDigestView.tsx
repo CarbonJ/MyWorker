@@ -124,7 +124,7 @@ export default function DailyDigestView() {
             value={meetings}
             onChange={handleMeetingsChange}
             placeholder="Today's meetings… use [[ to link to a note"
-            rows={3}
+            autoHeight
             expandable
             enableWikiLinks
             onWikiLinkClick={handleWikiLinkClick}

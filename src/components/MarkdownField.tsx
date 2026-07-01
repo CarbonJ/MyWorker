@@ -118,9 +118,11 @@ interface Props {
   wikiEntities?: WikiEntity[]
   /** Override wiki-link click behaviour. Called with the link name; skips default entity lookup + navigate. */
   onWikiLinkClick?: (name: string) => void
+  /** Remove the minimum height floor so the editor shrinks to fit its content. */
+  autoHeight?: boolean
 }
 
-export function MarkdownField({ id, label, headerLabel, value, onChange, placeholder, rows = 2, onKeyDown, initialFocused = false, expandable = false, enableWikiLinks = false, wikiEntities = [], onWikiLinkClick }: Props) {
+export function MarkdownField({ id, label, headerLabel, value, onChange, placeholder, rows = 2, onKeyDown, initialFocused = false, expandable = false, enableWikiLinks = false, wikiEntities = [], onWikiLinkClick, autoHeight = false }: Props) {
   const [focused, setFocused] = useState(initialFocused)
   const [sizeMode, setSizeMode] = useState<SizeMode>('default')
   const [rawMode, setRawMode] = useState(false)
@@ -401,7 +403,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
     </div>
   )
 
-  const minHeight = `${rows * 1.5 + 1}rem`
+  const minHeight = autoHeight ? undefined : `${rows * 1.5 + 1}rem`
 
   const containerClass = [
     'rounded-md border px-3 py-2 text-sm cursor-text transition-colors overflow-y-auto overflow-x-hidden',
