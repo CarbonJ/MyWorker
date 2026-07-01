@@ -26,6 +26,39 @@ export async function getNotebookPageByTitle(title: string): Promise<NotebookPag
   return rows.length > 0 ? rowToPage(rows[0]) : null
 }
 
+export interface LinkedNotebookEntry {
+  pageId: number
+  title: string
+  updatedAt: string
+  projectId: number
+  projectName: string
+}
+
+/** Returns notebook pages updated within [startDate, endDate] that contain a wiki link to a project. */
+export async function getLinkedNotebookEntriesByDateRange(
+  startDate: string,
+  endDate: string,
+): Promise<LinkedNotebookEntry[]> {
+  const rows = await query(
+    `SELECT DISTINCT np.id AS page_id, np.title, np.updated_at,
+            nl.target_id AS project_id, p.work_item AS project_name
+     FROM notebook_pages np
+     JOIN notebook_links nl ON nl.source_page_id = np.id
+     JOIN projects p ON p.id = nl.target_id
+     WHERE nl.target_type = 'project'
+       AND date(np.updated_at) BETWEEN ? AND ?
+     ORDER BY np.updated_at DESC`,
+    [startDate, endDate],
+  )
+  return rows.map(row => ({
+    pageId: row.page_id as number,
+    title: row.title as string,
+    updatedAt: row.updated_at as string,
+    projectId: row.project_id as number,
+    projectName: row.project_name as string,
+  }))
+}
+
 export async function createNotebookPage(title: string, body: string): Promise<number> {
   await run(`INSERT INTO notebook_pages (title, body) VALUES (?, ?)`, [title, body])
   return await lastInsertId()

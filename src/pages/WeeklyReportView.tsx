@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { getWorkLogByDateRange, type WorkLogEntryWithProject } from '@/db/workLog'
+import { getLinkedNotebookEntriesByDateRange, type LinkedNotebookEntry } from '@/db/notebook'
 import { WikiLinkContent } from '@/components/WikiLinkContent'
 import { RagBadge } from '@/components/RagBadge'
 import type { RagStatus } from '@/types'
-import { ChevronLeft, ChevronRight, Copy, Check, FileText } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Copy, Check, FileText, BookOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { useSearch } from '@/contexts/SearchContext'
+import { useNavigate } from 'react-router-dom'
 
 // ── date helpers ─────────────────────────────────────────────────────────────
 
@@ -80,11 +82,12 @@ interface ProjectGroup {
   ragStatus: string
   latestStatus: string
   entries: WorkLogEntryWithProject[]
+  notebooks: LinkedNotebookEntry[]
 }
 
-function groupByProject(entries: WorkLogEntryWithProject[]): ProjectGroup[] {
+function mergeGroups(workLog: WorkLogEntryWithProject[], notebooks: LinkedNotebookEntry[]): ProjectGroup[] {
   const map = new Map<number, ProjectGroup>()
-  for (const e of entries) {
+  for (const e of workLog) {
     if (!map.has(e.projectId)) {
       map.set(e.projectId, {
         projectId: e.projectId,
@@ -92,9 +95,23 @@ function groupByProject(entries: WorkLogEntryWithProject[]): ProjectGroup[] {
         ragStatus: e.ragStatus ?? 'Green',
         latestStatus: e.latestStatus ?? '',
         entries: [],
+        notebooks: [],
       })
     }
     map.get(e.projectId)!.entries.push(e)
+  }
+  for (const n of notebooks) {
+    if (!map.has(n.projectId)) {
+      map.set(n.projectId, {
+        projectId: n.projectId,
+        projectName: n.projectName,
+        ragStatus: 'Green',
+        latestStatus: '',
+        entries: [],
+        notebooks: [],
+      })
+    }
+    map.get(n.projectId)!.notebooks.push(n)
   }
   return Array.from(map.values())
 }
@@ -142,9 +159,11 @@ function formatDayLabel(dateStr: string): string {
 // ── component ─────────────────────────────────────────────────────────────────
 
 export default function WeeklyReportView() {
+  const navigate = useNavigate()
   const todayDate = new Date()
   const [weekStart, setWeekStart] = useState(() => getWeekStart(todayDate))
   const [entries, setEntries] = useState<WorkLogEntryWithProject[]>([])
+  const [notebooks, setNotebooks] = useState<LinkedNotebookEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
 
@@ -156,12 +175,14 @@ export default function WeeklyReportView() {
 
   useEffect(() => {
     setLoading(true)
-    getWorkLogByDateRange(startStr, endStr)
-      .then(setEntries)
+    Promise.all([
+      getWorkLogByDateRange(startStr, endStr),
+      getLinkedNotebookEntriesByDateRange(startStr, endStr),
+    ]).then(([wl, nb]) => { setEntries(wl); setNotebooks(nb) })
       .finally(() => setLoading(false))
   }, [startStr, endStr])
 
-  const groups = groupByProject(entries)
+  const groups = mergeGroups(entries, notebooks)
   const { query } = useSearch()
 
   const filteredGroups = useMemo(() => {
@@ -175,7 +196,12 @@ export default function WeeklyReportView() {
         const matchingEntries = group.entries.filter(e =>
           terms.every(t => e.note.toLowerCase().includes(t))
         )
-        return matchingEntries.length > 0 ? { ...group, entries: matchingEntries } : null
+        const matchingNotebooks = group.notebooks.filter(n =>
+          terms.every(t => n.title.toLowerCase().includes(t))
+        )
+        return (matchingEntries.length > 0 || matchingNotebooks.length > 0)
+          ? { ...group, entries: matchingEntries, notebooks: matchingNotebooks }
+          : null
       })
       .filter(Boolean) as ProjectGroup[]
   }, [groups, query])
@@ -224,11 +250,9 @@ export default function WeeklyReportView() {
 
         <div className="ml-auto flex items-center gap-3">
           <span className="text-sm text-muted-foreground">
-            {loading ? '' : entries.length === 0
+            {loading ? '' : groups.length === 0
               ? 'No entries'
-              : query.trim()
-                ? `${filteredGroups.reduce((n, g) => n + g.entries.length, 0)} of ${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} · ${filteredGroups.length} project${filteredGroups.length === 1 ? '' : 's'}`
-                : `${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} · ${groups.length} project${groups.length === 1 ? '' : 's'}`}
+              : `${filteredGroups.length} project${filteredGroups.length === 1 ? '' : 's'}`}
           </span>
           {filteredGroups.length > 0 && (
             <Button size="sm" variant="outline" onClick={copyToClipboard} className="gap-1.5">
@@ -282,7 +306,7 @@ export default function WeeklyReportView() {
             {/* Project header */}
             <div className="flex items-center gap-2 mb-1">
               <h2 className="text-base font-semibold">{group.projectName}</h2>
-              <RagBadge status={group.ragStatus as RagStatus} />
+              {group.ragStatus !== 'Green' || group.entries.length > 0 ? <RagBadge status={group.ragStatus as RagStatus} /> : null}
             </div>
             {group.latestStatus && (
               <p className="text-sm text-muted-foreground mb-3 pl-0.5">
@@ -290,14 +314,28 @@ export default function WeeklyReportView() {
               </p>
             )}
 
-            {/* Entries */}
+            {/* Work log + linked notebook entries */}
             <div className="border rounded-lg divide-y divide-border">
               {group.entries.map(entry => (
-                <div key={entry.id} className="px-4 py-3">
+                <div key={`wl-${entry.id}`} className="px-4 py-3">
                   <p className="text-xs text-muted-foreground mb-1">
                     {formatEntryDate(entry.createdAt)} · {formatEntryTime(entry.createdAt)}
                   </p>
                   <WikiLinkContent>{entry.note}</WikiLinkContent>
+                </div>
+              ))}
+              {group.notebooks.map(nb => (
+                <div key={`nb-${nb.pageId}`} className="px-4 py-3 bg-muted/30">
+                  <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                    <BookOpen className="h-3 w-3" />
+                    {formatEntryDate(nb.updatedAt)} · {formatEntryTime(nb.updatedAt)}
+                  </p>
+                  <button
+                    onClick={() => navigate(`/notebook?page=${nb.pageId}`)}
+                    className="text-sm text-primary hover:underline text-left"
+                  >
+                    {nb.title || 'Untitled'}
+                  </button>
                 </div>
               ))}
             </div>

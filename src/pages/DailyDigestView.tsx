@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getWorkLogByDate, type WorkLogEntryWithProject } from '@/db/workLog'
-import { getNotebookPageByTitle, createNotebookPage } from '@/db/notebook'
+import { getNotebookPageByTitle, createNotebookPage, getLinkedNotebookEntriesByDateRange, type LinkedNotebookEntry } from '@/db/notebook'
 import { WikiLinkContent } from '@/components/WikiLinkContent'
 import { MarkdownField } from '@/components/MarkdownField'
-import { ChevronLeft, ChevronRight, CalendarDays, FileText } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CalendarDays, FileText, BookOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 function toLocalDateString(date: Date): string {
@@ -15,17 +15,35 @@ function toLocalDateString(date: Date): string {
 }
 
 function formatDisplayDate(dateStr: string): string {
-  // Parse as local date to avoid timezone shift
   const [y, m, d] = dateStr.split('-').map(Number)
   const date = new Date(y, m - 1, d)
   return date.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 }
 
-function groupByProject(entries: WorkLogEntryWithProject[]): { projectId: number; projectName: string; entries: WorkLogEntryWithProject[] }[] {
-  const map = new Map<number, { projectId: number; projectName: string; entries: WorkLogEntryWithProject[] }>()
-  for (const e of entries) {
-    if (!map.has(e.projectId)) map.set(e.projectId, { projectId: e.projectId, projectName: e.projectName, entries: [] })
+function formatTime(ts: string): string {
+  return new Date(ts.replace(' ', 'T').replace(/([^Z])$/, '$1Z'))
+    .toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+}
+
+interface ProjectGroup {
+  projectId: number
+  projectName: string
+  entries: WorkLogEntryWithProject[]
+  notebooks: LinkedNotebookEntry[]
+}
+
+function mergeGroups(
+  workLog: WorkLogEntryWithProject[],
+  notebooks: LinkedNotebookEntry[],
+): ProjectGroup[] {
+  const map = new Map<number, ProjectGroup>()
+  for (const e of workLog) {
+    if (!map.has(e.projectId)) map.set(e.projectId, { projectId: e.projectId, projectName: e.projectName, entries: [], notebooks: [] })
     map.get(e.projectId)!.entries.push(e)
+  }
+  for (const n of notebooks) {
+    if (!map.has(n.projectId)) map.set(n.projectId, { projectId: n.projectId, projectName: n.projectName, entries: [], notebooks: [] })
+    map.get(n.projectId)!.notebooks.push(n)
   }
   return Array.from(map.values())
 }
@@ -37,14 +55,19 @@ export default function DailyDigestView() {
   const today = toLocalDateString(new Date())
   const [date, setDate] = useState(today)
   const [entries, setEntries] = useState<WorkLogEntryWithProject[]>([])
+  const [notebooks, setNotebooks] = useState<LinkedNotebookEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [meetings, setMeetings] = useState(() => localStorage.getItem(MEETINGS_KEY(toLocalDateString(new Date()))) ?? '')
 
   useEffect(() => {
     setLoading(true)
-    getWorkLogByDate(date)
-      .then(setEntries)
-      .finally(() => setLoading(false))
+    Promise.all([
+      getWorkLogByDate(date),
+      getLinkedNotebookEntriesByDateRange(date, date),
+    ]).then(([wl, nb]) => {
+      setEntries(wl)
+      setNotebooks(nb)
+    }).finally(() => setLoading(false))
     setMeetings(localStorage.getItem(MEETINGS_KEY(date)) ?? '')
   }, [date])
 
@@ -62,11 +85,13 @@ export default function DailyDigestView() {
     navigate(`/notebook?page=${page.id}`)
   }, [navigate])
 
-  // Refresh when a task is completed via global modal — completing a task adds a work log entry
   useEffect(() => {
     const handler = () => {
       if (date === today) {
-        getWorkLogByDate(date).then(setEntries).catch(() => {})
+        Promise.all([
+          getWorkLogByDate(date),
+          getLinkedNotebookEntriesByDateRange(date, date),
+        ]).then(([wl, nb]) => { setEntries(wl); setNotebooks(nb) }).catch(() => {})
       }
     }
     window.addEventListener('myworker:task-saved', handler)
@@ -80,7 +105,8 @@ export default function DailyDigestView() {
   }
 
   const isToday = date === today
-  const groups = groupByProject(entries)
+  const groups = mergeGroups(entries, notebooks)
+  const hasActivity = entries.length > 0 || notebooks.length > 0
 
   return (
     <div className="flex flex-col h-[calc(100vh-57px)] overflow-hidden">
@@ -109,14 +135,14 @@ export default function DailyDigestView() {
           <FileText className="h-3.5 w-3.5" /> Weekly Report
         </Button>
         <span className="text-sm text-muted-foreground">
-          {loading ? '' : entries.length === 0 ? 'No entries' : `${entries.length} entr${entries.length === 1 ? 'y' : 'ies'} across ${groups.length} project${groups.length === 1 ? '' : 's'}`}
+          {loading ? '' : !hasActivity ? 'No entries' : `${groups.length} project${groups.length === 1 ? '' : 's'}`}
         </span>
       </div>
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto px-6 py-4">
 
-        {/* Meetings / schedule for the day */}
+        {/* Journal */}
         <div className="mb-6">
           <MarkdownField
             id={`digest-meetings-${date}`}
@@ -131,14 +157,12 @@ export default function DailyDigestView() {
           />
         </div>
 
-        {loading && (
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        )}
+        {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
 
-        {!loading && entries.length === 0 && (
+        {!loading && !hasActivity && (
           <div className="flex flex-col items-center justify-center h-48 text-muted-foreground gap-2">
             <CalendarDays className="h-8 w-8 opacity-30" />
-            <p className="text-sm">No work log entries for this day.</p>
+            <p className="text-sm">No entries for this day.</p>
           </div>
         )}
 
@@ -150,16 +174,30 @@ export default function DailyDigestView() {
             >
               {group.projectName}
               <span className="text-xs font-normal text-muted-foreground ml-1">
-                ({group.entries.length})
+                ({group.entries.length + group.notebooks.length})
               </span>
             </button>
             <div className="border rounded-lg divide-y divide-border">
               {group.entries.map(entry => (
-                <div key={entry.id} className="px-4 py-3">
+                <div key={`wl-${entry.id}`} className="px-4 py-3">
                   <p className="text-xs text-muted-foreground mb-1">
-                    {new Date(entry.createdAt.replace(' ', 'T').replace(/([^Z])$/, '$1Z')).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+                    {formatTime(entry.createdAt)}
                   </p>
                   <WikiLinkContent>{entry.note}</WikiLinkContent>
+                </div>
+              ))}
+              {group.notebooks.map(nb => (
+                <div key={`nb-${nb.pageId}`} className="px-4 py-3 bg-muted/30">
+                  <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                    <BookOpen className="h-3 w-3" />
+                    {formatTime(nb.updatedAt)}
+                  </p>
+                  <button
+                    onClick={() => navigate(`/notebook?page=${nb.pageId}`)}
+                    className="text-sm text-primary hover:underline text-left"
+                  >
+                    {nb.title || 'Untitled'}
+                  </button>
                 </div>
               ))}
             </div>
