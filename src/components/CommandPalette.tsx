@@ -35,8 +35,8 @@ export function CommandPalette({ open, onClose, onNewTask, onNewProject }: Props
             <CommandEmpty>No results found.</CommandEmpty>
 
             <CommandGroup heading="Navigate">
-              <CommandItem value="prime dashboard" onSelect={() => go('/')}>
-                <LayoutDashboard className="text-muted-foreground" /> Prime
+              <CommandItem value="projects dashboard" onSelect={() => go('/')}>
+                <LayoutDashboard className="text-muted-foreground" /> Projects
               </CommandItem>
               <CommandItem value="daily digest journal" onSelect={() => go('/digest')}>
                 <BookOpen className="text-muted-foreground" /> Daily Digest

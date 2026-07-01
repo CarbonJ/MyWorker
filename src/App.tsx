@@ -6,7 +6,7 @@ import { TaskModal } from '@/components/TaskModal'
 import { ProjectModal } from '@/components/ProjectModal'
 import { SearchProvider, useSearch } from '@/contexts/SearchContext'
 import { Input } from '@/components/ui/input'
-import { X, Moon, Sun, Search as SearchIcon, BookOpen } from 'lucide-react'
+import { X, Moon, Sun, Search as SearchIcon } from 'lucide-react'
 import { getDueSoonTasks } from '@/db/tasks'
 import { loadGuiSettings, buttonStyle } from '@/lib/guiSettings'
 import Prime from '@/pages/Prime'
@@ -67,17 +67,14 @@ function NavBar({ isDark, onToggleDark }: { isDark: boolean; onToggleDark: () =>
     <nav className="border-b bg-background px-6 py-3 flex items-center gap-2">
       <img src="/myworker.png" alt="MyWorker" className="w-7 h-7 rounded-md" />
       <span className="font-bold text-lg mr-4">MyWorker</span>
-      <NavLink to="/" end className={linkClass} style={navStyle}>Prime</NavLink>
-      <NavLink to="/reporting" className={linkClass} style={navStyle}>Reporting</NavLink>
+      <NavLink to="/" end className={linkClass} style={navStyle}>Projects</NavLink>
       <NavLink to="/digest" className={linkClass} style={navStyle}>Digest</NavLink>
-      <NavLink to="/archive" className={linkClass} style={navStyle}>Archive</NavLink>
       <NavLink to="/contacts" className={linkClass} style={navStyle}>Contacts</NavLink>
-      <NavLink to="/notebook" className={linkClass} style={navStyle}>
-        <span className="flex items-center gap-1.5"><BookOpen className="h-3.5 w-3.5" />Notebook</span>
-      </NavLink>
+      <NavLink to="/reporting" className={linkClass} style={navStyle}>Reporting</NavLink>
       <NavLink to="/search" className={linkClass} style={navStyle}>
         <span className="flex items-center gap-1.5"><SearchIcon className="h-3.5 w-3.5" />Search</span>
       </NavLink>
+      <NavLink to="/archive" className={linkClass} style={navStyle}>Archive</NavLink>
       <NavLink to="/settings" className={linkClass} style={navStyle}>Settings</NavLink>
       {/* Global search — top right */}
       <div className="ml-auto relative flex items-center">
