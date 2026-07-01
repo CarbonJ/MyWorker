@@ -371,22 +371,9 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
                     initialFocus
                   />
                   <div className="border-t px-3 py-2 flex gap-2">
-                    <button
-                      type="button"
-                      className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center"
-                      onClick={() => setStartDate(new Date().toISOString().slice(0, 10))}
-                    >
-                      Today
-                    </button>
-                    {startDate && (
-                      <button
-                        type="button"
-                        className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center"
-                        onClick={() => setStartDate('')}
-                      >
-                        Clear
-                      </button>
-                    )}
+                    <button type="button" className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setStartDate('')}>Clear</button>
+                    <button type="button" className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setStartDate(new Date().toISOString().slice(0, 10))}>Today</button>
+                    <button type="button" className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setStartDate(new Date(Date.now() + 86400000).toISOString().slice(0, 10))}>Tomorrow</button>
                   </div>
                 </PopoverContent>
               </Popover>
@@ -418,22 +405,9 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
                     initialFocus
                   />
                   <div className="border-t px-3 py-2 flex gap-2">
-                    <button
-                      type="button"
-                      className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center"
-                      onClick={() => setDueDate(new Date().toISOString().slice(0, 10))}
-                    >
-                      Today
-                    </button>
-                    {dueDate && (
-                      <button
-                        type="button"
-                        className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center"
-                        onClick={() => setDueDate('')}
-                      >
-                        Clear
-                      </button>
-                    )}
+                    <button type="button" className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setDueDate('')}>Clear</button>
+                    <button type="button" className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setDueDate(new Date().toISOString().slice(0, 10))}>Today</button>
+                    <button type="button" className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setDueDate(new Date(Date.now() + 86400000).toISOString().slice(0, 10))}>Tomorrow</button>
                   </div>
                 </PopoverContent>
               </Popover>

@@ -296,17 +296,11 @@ export function ProjectModal({ project, open, onClose, onSaved }: Props) {
                   onSelect={d => setDueDate(d ? d.toISOString().slice(0, 10) : '')}
                   initialFocus
                 />
-                {dueDate && (
-                  <div className="border-t p-2">
-                    <button
-                      type="button"
-                      onClick={() => setDueDate('')}
-                      className="w-full text-xs text-muted-foreground hover:text-foreground py-1"
-                    >
-                      Clear date
-                    </button>
-                  </div>
-                )}
+                <div className="border-t px-3 py-2 flex gap-2">
+                  <button type="button" className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setDueDate('')}>Clear</button>
+                  <button type="button" className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setDueDate(new Date().toISOString().slice(0, 10))}>Today</button>
+                  <button type="button" className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setDueDate(new Date(Date.now() + 86400000).toISOString().slice(0, 10))}>Tomorrow</button>
+                </div>
               </PopoverContent>
             </Popover>
           </div>

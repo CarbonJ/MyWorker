@@ -7,7 +7,7 @@ import { ProjectModal } from '@/components/ProjectModal'
 import { SearchProvider, useSearch } from '@/contexts/SearchContext'
 import { Input } from '@/components/ui/input'
 import { X, Moon, Sun, Search as SearchIcon, BookOpen } from 'lucide-react'
-import { getDueSoonTasks } from '@/db/tasks'
+
 import { loadGuiSettings, buttonStyle } from '@/lib/guiSettings'
 import Prime from '@/pages/Prime'
 import ProjectDetail from '@/pages/ProjectDetail'
@@ -22,20 +22,6 @@ import ContactsPage from '@/pages/ContactsPage'
 import NotebookPage from '@/pages/NotebookPage'
 import { CommandPalette } from '@/components/CommandPalette'
 
-function DueDateTitleUpdater() {
-  useEffect(() => {
-    const refresh = () => {
-      getDueSoonTasks().then(tasks => {
-        const n = tasks.length
-        document.title = n > 0 ? `(${n}) MyWorker` : 'MyWorker'
-      }).catch(() => {})
-    }
-    refresh()
-    window.addEventListener('myworker:task-saved', refresh)
-    return () => window.removeEventListener('myworker:task-saved', refresh)
-  }, [])
-  return null
-}
 
 function NavBar({ isDark, onToggleDark }: { isDark: boolean; onToggleDark: () => void }) {
   const { query, setQuery } = useSearch()
@@ -148,7 +134,7 @@ function AppInner() {
     <SearchProvider>
     <div className="min-h-screen bg-background flex flex-col">
       <NavBar isDark={isDark} onToggleDark={toggleDark} />
-      <DueDateTitleUpdater />
+
       <main className="flex-1 overflow-hidden">
         <Routes>
           <Route path="/" element={<Prime />} />

@@ -11,6 +11,9 @@ import {
 } from '@/db/dropdownOptions'
 import { exportToJson, importFromJson } from '@/db/importExport'
 import { setUserFolderHandle, query } from '@/db'
+import { getAllNotebookPages } from '@/db/notebook'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { exportAllNotes, type NoteExportFormat } from '@/lib/noteExport'
 import type { DropdownOption, DropdownType } from '@/types'
 import { useErrorHandler } from '@/hooks/useErrorHandler'
 import { Button } from '@/components/ui/button'
@@ -727,6 +730,40 @@ export default function Settings() {
           </section>
 
           <Separator />
+
+          {/* Notebook Export */}
+          <section className={section}>
+            <h2 className={sectionTitle}>Notebook Export</h2>
+            <div className="flex gap-3 items-center">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline">Export all notes…</Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-40 p-1" align="start">
+                  {(['md', 'rtf', 'pdf'] as NoteExportFormat[]).map(fmt => (
+                    <button
+                      key={fmt}
+                      type="button"
+                      className="w-full text-left px-2 py-1 text-sm rounded hover:bg-accent transition-colors"
+                      onClick={async () => {
+                        try {
+                          const pages = await getAllNotebookPages()
+                          if (pages.length === 0) { toast.info('No notebook pages to export'); return }
+                          exportAllNotes(pages.map(p => ({ title: p.title, body: p.body })), fmt)
+                          if (fmt !== 'pdf') toast.success(`Exported ${pages.length} note${pages.length !== 1 ? 's' : ''}`)
+                        } catch (err) {
+                          toast.error(`Export failed: ${err instanceof Error ? err.message : String(err)}`)
+                        }
+                      }}
+                    >
+                      {fmt === 'md' ? 'Markdown (.md)' : fmt === 'rtf' ? 'RTF (.rtf)' : 'PDF (print)'}
+                    </button>
+                  ))}
+                </PopoverContent>
+              </Popover>
+            </div>
+            <p className="text-xs text-muted-foreground">Exports all notebook pages into a single file. PDF opens a print dialog.</p>
+          </section>
 
           {/* Import / Export */}
           <section className={section}>

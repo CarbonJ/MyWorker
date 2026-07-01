@@ -323,36 +323,9 @@ export function TaskPane({
                     initialFocus
                   />
                   <div className="border-t px-3 py-2 flex gap-2">
-                    <button
-                      className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center"
-                      onClick={async (e) => {
-                        e.stopPropagation()
-                        try {
-                          await updateTask({ id: task.id, dueDate: new Date().toISOString().slice(0, 10) })
-                          onReload()
-                        } catch (err) {
-                          handleError(err, 'Failed to set due date')
-                        }
-                      }}
-                    >
-                      Today
-                    </button>
-                    {task.dueDate && (
-                      <button
-                        className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center"
-                        onClick={async (e) => {
-                          e.stopPropagation()
-                          try {
-                            await updateTask({ id: task.id, dueDate: null })
-                            onReload()
-                          } catch (err) {
-                            handleError(err, 'Failed to clear due date')
-                          }
-                        }}
-                      >
-                        Clear
-                      </button>
-                    )}
+                    <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={async e => { e.stopPropagation(); try { await updateTask({ id: task.id, dueDate: null }); onReload() } catch (err) { handleError(err, 'Failed to clear due date') } }}>Clear</button>
+                    <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={async e => { e.stopPropagation(); try { await updateTask({ id: task.id, dueDate: new Date().toISOString().slice(0, 10) }); onReload() } catch (err) { handleError(err, 'Failed to set due date') } }}>Today</button>
+                    <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={async e => { e.stopPropagation(); try { await updateTask({ id: task.id, dueDate: new Date(Date.now() + 86400000).toISOString().slice(0, 10) }); onReload() } catch (err) { handleError(err, 'Failed to set due date') } }}>Tomorrow</button>
                   </div>
                 </PopoverContent>
               </Popover>

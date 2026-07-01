@@ -87,20 +87,9 @@ export function RecurringCompleteDialog({ task, open, onReschedule, onMarkDone, 
                 initialFocus
               />
               <div className="border-t px-3 py-2 flex gap-2">
-                <button
-                  className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center"
-                  onClick={() => setSelectedDate(new Date())}
-                >
-                  Today
-                </button>
-                {selectedDate && (
-                  <button
-                    className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center"
-                    onClick={() => setSelectedDate(undefined)}
-                  >
-                    Clear
-                  </button>
-                )}
+                <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setSelectedDate(undefined)}>Clear</button>
+                <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setSelectedDate(new Date())}>Today</button>
+                <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setSelectedDate(new Date(Date.now() + 86400000))}>Tomorrow</button>
               </div>
             </div>
           </div>

@@ -1250,16 +1250,11 @@ export default function Prime() {
                       selected={taskDueDateObj}
                       onSelect={d => { saveDueDate(t, d); setOpenDueDatePopover(null) }}
                     />
-                    {t.dueDate && (
-                      <div className="border-t p-2">
-                        <button
-                          className="w-full text-xs text-muted-foreground hover:text-foreground py-1 transition-colors"
-                          onClick={() => { saveDueDate(t, undefined); setOpenDueDatePopover(null) }}
-                        >
-                          Clear date
-                        </button>
-                      </div>
-                    )}
+                    <div className="border-t px-3 py-2 flex gap-2">
+                      <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => { saveDueDate(t, undefined); setOpenDueDatePopover(null) }}>Clear</button>
+                      <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => { saveDueDate(t, new Date()); setOpenDueDatePopover(null) }}>Today</button>
+                      <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => { saveDueDate(t, new Date(Date.now() + 86400000)); setOpenDueDatePopover(null) }}>Tomorrow</button>
+                    </div>
                   </PopoverContent>
                 </Popover>
               </td>
@@ -1443,16 +1438,11 @@ export default function Prime() {
                   selected={dueDateObj}
                   onSelect={d => { saveDueDate(t, d); setDueDateOpen(false) }}
                 />
-                {t.dueDate && (
-                  <div className="border-t p-2">
-                    <button
-                      className="w-full text-xs text-muted-foreground hover:text-foreground py-1 transition-colors"
-                      onClick={() => { saveDueDate(t, undefined); setDueDateOpen(false) }}
-                    >
-                      Clear date
-                    </button>
-                  </div>
-                )}
+                <div className="border-t px-3 py-2 flex gap-2">
+                  <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => { saveDueDate(t, undefined); setDueDateOpen(false) }}>Clear</button>
+                  <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => { saveDueDate(t, new Date()); setDueDateOpen(false) }}>Today</button>
+                  <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => { saveDueDate(t, new Date(Date.now() + 86400000)); setDueDateOpen(false) }}>Tomorrow</button>
+                </div>
               </PopoverContent>
             </Popover>
           </div>

@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { BookOpen, Plus, Trash2, Search, X } from 'lucide-react'
+import { BookOpen, Plus, Trash2, Search, X, FileDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { exportNote, type NoteExportFormat } from '@/lib/noteExport'
 import { toast } from 'sonner'
 import { MarkdownField } from '@/components/MarkdownField'
 import {
@@ -251,14 +253,40 @@ export default function NotebookPage() {
                 <div className="text-sm font-medium truncate">{page.title || 'Untitled'}</div>
                 <div className="text-xs text-muted-foreground">{relativeTime(page.updatedAt)}</div>
               </div>
-              <button
-                type="button"
-                onClick={(e) => handleDelete(page, e)}
-                className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-muted-foreground hover:text-destructive transition-colors shrink-0 mt-0.5"
-                title="Delete page"
-              >
-                <Trash2 className="h-3 w-3" />
-              </button>
+              <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 shrink-0 mt-0.5">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={e => e.stopPropagation()}
+                      className="p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
+                      title="Export note"
+                    >
+                      <FileDown className="h-3 w-3" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-36 p-1" align="end" onClick={e => e.stopPropagation()}>
+                    {(['md', 'rtf', 'pdf'] as NoteExportFormat[]).map(fmt => (
+                      <button
+                        key={fmt}
+                        type="button"
+                        className="w-full text-left px-2 py-1 text-sm rounded hover:bg-accent transition-colors"
+                        onClick={() => exportNote(page, fmt)}
+                      >
+                        {fmt === 'md' ? 'Markdown (.md)' : fmt === 'rtf' ? 'RTF (.rtf)' : 'PDF (print)'}
+                      </button>
+                    ))}
+                  </PopoverContent>
+                </Popover>
+                <button
+                  type="button"
+                  onClick={(e) => handleDelete(page, e)}
+                  className="p-0.5 rounded text-muted-foreground hover:text-destructive transition-colors"
+                  title="Delete page"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </div>
             </div>
           ))}
           {filteredPages.length === 0 && !isNew && (
