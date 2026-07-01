@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { getWorkLogByDateRange, type WorkLogEntryWithProject } from '@/db/workLog'
 import { WikiLinkContent } from '@/components/WikiLinkContent'
+import { MarkdownContent } from '@/components/MarkdownContent'
 import { RagBadge } from '@/components/RagBadge'
 import type { RagStatus } from '@/types'
 import { ChevronLeft, ChevronRight, Copy, Check, FileText } from 'lucide-react'
@@ -112,6 +113,27 @@ function buildPlainText(groups: ProjectGroup[], monthLabel: string): string {
   return lines.join('\n').trimEnd()
 }
 
+// ── journal helpers ───────────────────────────────────────────────────────────
+
+function getJournalEntry(dateStr: string): string {
+  return localStorage.getItem(`myworker:digest-meetings:${dateStr}`) ?? ''
+}
+
+function getMonthDates(start: Date, end: Date): string[] {
+  const dates: string[] = []
+  const cur = new Date(start)
+  while (cur <= end) {
+    dates.push(toLocalDateString(cur))
+    cur.setDate(cur.getDate() + 1)
+  }
+  return dates
+}
+
+function formatDayLabel(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })
+}
+
 // ── component ─────────────────────────────────────────────────────────────────
 
 export default function MonthlyReportView() {
@@ -216,6 +238,28 @@ export default function MonthlyReportView() {
 
       {/* Report body */}
       <div className="flex-1 overflow-y-auto px-6 py-4">
+
+        {/* Journal entries for the month */}
+        {(() => {
+          const days = getMonthDates(monthStart, monthEnd)
+            .map(d => ({ date: d, text: getJournalEntry(d) }))
+            .filter(d => d.text.trim())
+          if (days.length === 0) return null
+          return (
+            <div className="mb-8">
+              <h2 className="text-base font-semibold mb-3">Journal</h2>
+              <div className="border rounded-lg divide-y divide-border">
+                {days.map(({ date, text }) => (
+                  <div key={date} className="px-4 py-3">
+                    <p className="text-xs text-muted-foreground mb-1">{formatDayLabel(date)}</p>
+                    <MarkdownContent>{text}</MarkdownContent>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })()}
+
         {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
 
         {!loading && entries.length === 0 && (
