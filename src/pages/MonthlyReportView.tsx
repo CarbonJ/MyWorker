@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { getWorkLogByDateRange, type WorkLogEntryWithProject } from '@/db/workLog'
 import { WikiLinkContent } from '@/components/WikiLinkContent'
-import { MarkdownContent } from '@/components/MarkdownContent'
 import { RagBadge } from '@/components/RagBadge'
 import type { RagStatus } from '@/types'
 import { ChevronLeft, ChevronRight, Copy, Check, FileText } from 'lucide-react'
@@ -252,7 +251,7 @@ export default function MonthlyReportView() {
                 {days.map(({ date, text }) => (
                   <div key={date} className="px-4 py-3">
                     <p className="text-xs text-muted-foreground mb-1">{formatDayLabel(date)}</p>
-                    <MarkdownContent>{text}</MarkdownContent>
+                    <WikiLinkContent>{text}</WikiLinkContent>
                   </div>
                 ))}
               </div>

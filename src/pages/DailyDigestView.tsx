@@ -120,7 +120,7 @@ export default function DailyDigestView() {
         <div className="mb-6">
           <MarkdownField
             id={`digest-meetings-${date}`}
-            headerLabel="Journal"
+            label="Journal"
             value={meetings}
             onChange={handleMeetingsChange}
             placeholder="Today's meetings… use [[ to link to a note"
