@@ -82,9 +82,11 @@ interface Props {
   expandable?: boolean
   enableWikiLinks?: boolean
   wikiEntities?: WikiEntity[]
+  /** Override wiki-link click behaviour. Called with the link name; skips default entity lookup + navigate. */
+  onWikiLinkClick?: (name: string) => void
 }
 
-export function MarkdownField({ id, label, headerLabel, value, onChange, placeholder, rows = 2, onKeyDown, initialFocused = false, expandable = false, enableWikiLinks = false, wikiEntities = [] }: Props) {
+export function MarkdownField({ id, label, headerLabel, value, onChange, placeholder, rows = 2, onKeyDown, initialFocused = false, expandable = false, enableWikiLinks = false, wikiEntities = [], onWikiLinkClick }: Props) {
   const [focused, setFocused] = useState(initialFocused)
   const [sizeMode, setSizeMode] = useState<SizeMode>('default')
   const [rawMode, setRawMode] = useState(false)
@@ -101,6 +103,8 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
   wikiEntitiesRef.current = wikiEntities
   const enableWikiLinksRef = useRef(enableWikiLinks)
   enableWikiLinksRef.current = enableWikiLinks
+  const onWikiLinkClickRef = useRef(onWikiLinkClick)
+  onWikiLinkClickRef.current = onWikiLinkClick
 
   // Wiki-link suggestion state + refs (refs keep handleKeyDown inside useEditor free of stale closures)
   type WikiSuggestState = { active: boolean; partial: string; coords: { left: number; top: number } }
@@ -136,9 +140,14 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
     e.preventDefault()
     const name = wikiEl.getAttribute('title')?.replace('Go to: ', '') ?? ''
     if (!name) return
-    const entity = wikiEntities.find(en => en.name.toLowerCase() === name.toLowerCase())
+    // Delegate to caller if provided (e.g. auto-create note on Digest page)
+    if (onWikiLinkClickRef.current) {
+      onWikiLinkClickRef.current(name)
+      return
+    }
+    const entity = wikiEntitiesRef.current.find(en => en.name.toLowerCase() === name.toLowerCase())
     if (!entity) return
-    navigate(
+    navigateRef.current(
       entity.type === 'page' ? `/notebook?page=${entity.id}` :
       entity.type === 'project' ? `/projects/${entity.id}` :
       entity.type === 'contact' ? `/contacts` : `/`

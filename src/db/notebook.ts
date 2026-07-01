@@ -21,6 +21,11 @@ export async function getNotebookPageById(id: number): Promise<NotebookPage | nu
   return rows.length > 0 ? rowToPage(rows[0]) : null
 }
 
+export async function getNotebookPageByTitle(title: string): Promise<NotebookPage | null> {
+  const rows = await query(`SELECT * FROM notebook_pages WHERE title = ? LIMIT 1`, [title])
+  return rows.length > 0 ? rowToPage(rows[0]) : null
+}
+
 export async function createNotebookPage(title: string, body: string): Promise<number> {
   await run(`INSERT INTO notebook_pages (title, body) VALUES (?, ?)`, [title, body])
   return await lastInsertId()

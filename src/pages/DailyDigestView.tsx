@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getWorkLogByDate, type WorkLogEntryWithProject } from '@/db/workLog'
+import { getNotebookPageByTitle, createNotebookPage } from '@/db/notebook'
 import { WikiLinkContent } from '@/components/WikiLinkContent'
+import { MarkdownField } from '@/components/MarkdownField'
 import { ChevronLeft, ChevronRight, CalendarDays, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -28,19 +30,37 @@ function groupByProject(entries: WorkLogEntryWithProject[]): { projectId: number
   return Array.from(map.values())
 }
 
+const MEETINGS_KEY = (date: string) => `myworker:digest-meetings:${date}`
+
 export default function DailyDigestView() {
   const navigate = useNavigate()
   const today = toLocalDateString(new Date())
   const [date, setDate] = useState(today)
   const [entries, setEntries] = useState<WorkLogEntryWithProject[]>([])
   const [loading, setLoading] = useState(true)
+  const [meetings, setMeetings] = useState(() => localStorage.getItem(MEETINGS_KEY(toLocalDateString(new Date()))) ?? '')
 
   useEffect(() => {
     setLoading(true)
     getWorkLogByDate(date)
       .then(setEntries)
       .finally(() => setLoading(false))
+    setMeetings(localStorage.getItem(MEETINGS_KEY(date)) ?? '')
   }, [date])
+
+  const handleMeetingsChange = (v: string) => {
+    setMeetings(v)
+    localStorage.setItem(MEETINGS_KEY(date), v)
+  }
+
+  const handleWikiLinkClick = useCallback(async (name: string) => {
+    let page = await getNotebookPageByTitle(name)
+    if (!page) {
+      const id = await createNotebookPage(name, '')
+      page = { id, title: name, body: '', createdAt: '', updatedAt: '' }
+    }
+    navigate(`/notebook?page=${page.id}`)
+  }, [navigate])
 
   // Refresh when a task is completed via global modal — completing a task adds a work log entry
   useEffect(() => {
@@ -95,6 +115,22 @@ export default function DailyDigestView() {
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto px-6 py-4">
+
+        {/* Meetings / schedule for the day */}
+        <div className="mb-6">
+          <MarkdownField
+            id={`digest-meetings-${date}`}
+            headerLabel="Meetings"
+            value={meetings}
+            onChange={handleMeetingsChange}
+            placeholder="Today's meetings… use [[ to link to a note"
+            rows={3}
+            expandable
+            enableWikiLinks
+            onWikiLinkClick={handleWikiLinkClick}
+          />
+        </div>
+
         {loading && (
           <p className="text-sm text-muted-foreground">Loading…</p>
         )}
