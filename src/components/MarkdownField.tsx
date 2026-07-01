@@ -9,6 +9,7 @@ import Link from '@tiptap/extension-link'
 import { Extension } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
+import { DOMParser as PMDOMParser } from '@tiptap/pm/model'
 import { Label } from '@/components/ui/label'
 import type { WikiEntity } from '@/types'
 import { Maximize2, Fullscreen, Minimize2, Bold, Italic, Heading1, Heading2, Heading3, Pilcrow, Code2, Table } from 'lucide-react'
@@ -47,14 +48,47 @@ const WikiLinkDecorationExtension = Extension.create({
   },
 })
 
+// Paste plain text as block-level markdown so bullets, headings, etc. parse correctly
+// instead of landing as a plain paragraph and getting characters escaped on serialization.
+// Shift+paste bypasses this for literal plain-text paste (standard browser behaviour).
+const MarkdownBlockPasteExtension = Extension.create({
+  name: 'markdownBlockPaste',
+  addProseMirrorPlugins() {
+    const editor = this.editor
+    return [
+      new Plugin({
+        key: new PluginKey('markdownBlockPaste'),
+        props: {
+          handlePaste: (view, event) => {
+            const text = event.clipboardData?.getData('text/plain')
+            if (!text) return false
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const html = (editor.storage as any).markdown.parser.parse(text)
+            const el = document.createElement('div')
+            el.innerHTML = html
+            const slice = PMDOMParser.fromSchema(view.state.schema).parseSlice(el, { preserveWhitespace: true })
+            view.dispatch(view.state.tr.replaceSelection(slice))
+            return true
+          },
+        },
+      }),
+    ]
+  },
+})
+
 type SizeMode = 'default' | 'large' | 'fullscreen'
 
 // Unescape patterns that prosemirror-markdown escapes unnecessarily.
 // 1. Bracket-escaped link patterns: \[text\](url) → [text](url)
 // 2. Escaped horizontal rules: \--- → ---  (Espanso templates paste --- and it gets escaped)
+// 3. Escaped list markers at line start: \- → -
+// 4. Escaped bracket characters: \[ → [  and  \] → ]  (wiki links, etc.)
 const unescapeLinks = (s: string) =>
   s.replace(/\\\[([^\]\\]+)\\\]\(([^)]+)\)/g, '[$1]($2)')
    .replace(/^\\---$/gm, '---')
+   .replace(/^\\- /gm, '- ')
+   .replace(/\\\[/g, '[')
+   .replace(/\\\]/g, ']')
 
 function ToolbarBtn({ active, onClick, title, children }: { active: boolean; onClick: () => void; title: string; children: React.ReactNode }) {
   return (
@@ -164,6 +198,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
       TableRow,
       TableHeader,
       TableCell,
+      MarkdownBlockPasteExtension,
       ...(enableWikiLinks ? [WikiLinkDecorationExtension] : []),
     ],
     content: value,
