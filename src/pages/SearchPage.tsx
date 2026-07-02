@@ -56,6 +56,12 @@ export default function SearchPage() {
   const [input, setInput] = useState('')
   const [query, setQuery] = useState('')
   const [scope, setScope] = useState<ScopeFilter>('all')
+  const [taskStatuses, setTaskStatuses] = useState<string[]>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('myworker:search-task-status') ?? 'null')
+      return Array.isArray(saved) ? saved : ['open', 'in_progress']
+    } catch { return ['open', 'in_progress'] }
+  })
   const [results, setResults] = useState<EnrichedSearchResult[]>([])
   const [loading, setLoading] = useState(false)
   const [collapsed, setCollapsed] = useState<GroupState>({ projects: false, task: false, work_log: false, notebook: false })
@@ -64,6 +70,11 @@ export default function SearchPage() {
 
   // Autofocus on mount
   useEffect(() => { inputRef.current?.focus() }, [])
+
+  // Persist task-status filter
+  useEffect(() => {
+    localStorage.setItem('myworker:search-task-status', JSON.stringify(taskStatuses))
+  }, [taskStatuses])
 
   // Debounce input → query
   useEffect(() => {
@@ -96,12 +107,17 @@ export default function SearchPage() {
   useEffect(() => { runSearch() }, [runSearch])
 
   const projects  = results.filter(r => r.sourceType === 'project')
-  const tasks     = results.filter(r => r.sourceType === 'task')
+  const tasks     = results.filter(r =>
+    r.sourceType === 'task' && (!r.taskStatus || taskStatuses.includes(r.taskStatus)))
   const workLog   = results.filter(r => r.sourceType === 'work_log')
   const notebooks = results.filter(r => r.sourceType === 'notebook')
 
   const toggleGroup = (key: keyof GroupState) =>
     setCollapsed(s => ({ ...s, [key]: !s[key] }))
+
+  const toggleTaskStatus = (status: string) =>
+    setTaskStatuses(prev =>
+      prev.includes(status) ? prev.filter(s => s !== status) : [...prev, status])
 
   const scopeBtn = (label: string, value: ScopeFilter, count?: number) => (
     <button
@@ -150,6 +166,27 @@ export default function SearchPage() {
           {scopeBtn('Work Log', 'work_log', workLog.length)}
           {scopeBtn('Notebook', 'notebook', notebooks.length)}
         </div>
+        {/* Task status filter — narrows the Tasks group only */}
+        {(scope === 'all' || scope === 'task') && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-muted-foreground">Task status:</span>
+            {(['open', 'in_progress', 'done'] as const).map(status => (
+              <button
+                key={status}
+                type="button"
+                onClick={() => toggleTaskStatus(status)}
+                aria-pressed={taskStatuses.includes(status)}
+                className={`h-6 px-2.5 rounded-full border text-xs font-medium transition-colors ${
+                  taskStatuses.includes(status)
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'border-input text-muted-foreground hover:text-foreground hover:border-foreground/40'
+                }`}
+              >
+                {TASK_STATUS_LABEL[status]}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Results */}
@@ -233,7 +270,7 @@ export default function SearchPage() {
                     {tasks.map(r => (
                       <Link
                         key={`task-${r.sourceId}`}
-                        to={`/projects/${r.projectId}`}
+                        to={r.projectId ? `/projects/${r.projectId}?task=${r.sourceId}` : `/?task=${r.sourceId}`}
                         className="flex items-start gap-3 px-6 py-3 hover:bg-accent/50 transition-colors group"
                       >
                         <CheckSquare className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />

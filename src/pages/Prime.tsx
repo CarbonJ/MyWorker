@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { getAllProjects, updateProject } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
-import { getAllTasks, updateTask } from '@/db/tasks'
+import { getAllTasks, getTaskById, updateTask } from '@/db/tasks'
 import { getLatestWorkLogPerProject, addWorkLogEntry } from '@/db/workLog'
 import { getSavedViewsForPage, upsertSavedView, deleteSavedView } from '@/db/savedViews'
 import type { Project, DropdownOption, RagStatus, Task, WorkLogEntry, TaskStatus } from '@/types'
@@ -146,6 +146,20 @@ export default function Prime() {
 
   // Recurring task completion dialog
   const [recurringTask, setRecurringTask] = useState<Task | null>(null)
+
+  // Open the Task modal when arriving via a search deep-link (?task=<id>)
+  useEffect(() => {
+    const taskParam = searchParams.get('task')
+    if (!taskParam) return
+    const taskId = Number(taskParam)
+    if (Number.isNaN(taskId)) return
+    getTaskById(taskId).then(t => {
+      if (t) { setEditingTask(t); setTaskModalOpen(true) }
+      const next = new URLSearchParams(searchParams)
+      next.delete('task')
+      setSearchParams(next, { replace: true })
+    }).catch(() => {})
+  }, [searchParams, setSearchParams])
 
   // Controlled open state for task due-date popovers in the project rows
   const [openDueDatePopover, setOpenDueDatePopover] = useState<number | null>(null)

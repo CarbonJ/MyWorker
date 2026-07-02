@@ -36,6 +36,11 @@ function rowToTask(row: Record<string, unknown>): Task {
   }
 }
 
+export async function getTaskById(id: number): Promise<Task | null> {
+  const rows = await query(`SELECT * FROM tasks WHERE id = ?`, [id])
+  return rows.length > 0 ? rowToTask(rows[0]) : null
+}
+
 export async function getTasksByProject(projectId: number): Promise<Task[]> {
   const rows = await query(
     `SELECT * FROM tasks WHERE project_id = ? ORDER BY due_date ASC, created_at ASC`,

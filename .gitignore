@@ -30,7 +30,7 @@ myworker-app-v*
 !.vscode/extensions.json
 .idea
 .DS_Store
-myworker-app.zip
+myworker-app*.zip
 storageTesting/
 prior_builds/
 *.suo

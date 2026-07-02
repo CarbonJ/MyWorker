@@ -13,7 +13,8 @@ import { exportToJson, importFromJson } from '@/db/importExport'
 import { setUserFolderHandle, query } from '@/db'
 import { getAllNotebookPages } from '@/db/notebook'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { exportAllNotes, type NoteExportFormat } from '@/lib/noteExport'
+import { exportAllNotes, exportAllNotesZip, type NoteExportFormat } from '@/lib/noteExport'
+import { MarkdownContent } from '@/components/MarkdownContent'
 import type { DropdownOption, DropdownType } from '@/types'
 import { useErrorHandler } from '@/hooks/useErrorHandler'
 import { Button } from '@/components/ui/button'
@@ -254,6 +255,39 @@ export default function Settings() {
     applyProseSpacing(proseSpacing)
   }, [proseSpacing])
 
+  const [listSpacing, setListSpacing] = useState(
+    () => localStorage.getItem('myworker:prose-list-spacing') ?? 'normal'
+  )
+  const applyListSpacing = (val: string) => {
+    const map: Record<string, string> = { compact: '0em', normal: '0.1em', relaxed: '0.4em' }
+    document.documentElement.style.setProperty('--prose-li-spacing', map[val] ?? '0.1em')
+  }
+  useEffect(() => { applyListSpacing(listSpacing) }, [listSpacing])
+
+  const [baseFontSize, setBaseFontSize] = useState(
+    () => localStorage.getItem('myworker:prose-base-size') ?? 'm'
+  )
+  const applyBaseFontSize = (val: string) => {
+    const map: Record<string, string> = { s: '0.8125rem', m: '0.875rem', l: '1rem' }
+    document.documentElement.style.setProperty('--prose-base-size', map[val] ?? '0.875rem')
+  }
+  useEffect(() => { applyBaseFontSize(baseFontSize) }, [baseFontSize])
+
+  const [codeWrap, setCodeWrap] = useState(
+    () => localStorage.getItem('myworker:prose-code-wrap') === 'true'
+  )
+  useEffect(() => {
+    document.documentElement.classList.toggle('code-wrap', codeWrap)
+  }, [codeWrap])
+
+  // Blockquote quotation marks — off by default (class present = marks removed)
+  const [blockquoteQuotes, setBlockquoteQuotes] = useState(
+    () => localStorage.getItem('myworker:blockquote-quotes') === 'true'
+  )
+  useEffect(() => {
+    document.documentElement.classList.toggle('no-bq-quotes', !blockquoteQuotes)
+  }, [blockquoteQuotes])
+
   useEffect(() => {
     localStorage.setItem('myworker:gui-button-color', guiButtonColor)
     window.dispatchEvent(new Event('myworker:gui-settings-changed'))
@@ -417,29 +451,6 @@ export default function Settings() {
                     Show all tasks (not just due/overdue) in Due/Overdue filter mode
                   </label>
                 </div>
-              </div>
-
-              <Separator className="my-2" />
-              <h2 className={sectionTitle}>Markdown</h2>
-              <div className="space-y-1.5">
-                <label className="text-sm text-muted-foreground">Paragraph spacing</label>
-                <div className="flex gap-1">
-                  {(['compact', 'normal', 'relaxed'] as const).map(v => (
-                    <button
-                      key={v}
-                      type="button"
-                      onClick={() => {
-                        setProseSpacing(v)
-                        localStorage.setItem('myworker:prose-spacing', v)
-                        applyProseSpacing(v)
-                      }}
-                      className={`px-2 py-0.5 rounded text-xs border transition-colors capitalize ${proseSpacing === v ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-accent'}`}
-                    >
-                      {v}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-xs text-muted-foreground">Controls vertical gap between paragraphs in markdown fields.</p>
               </div>
             </section>
 
@@ -756,13 +767,29 @@ export default function Settings() {
                         }
                       }}
                     >
-                      {fmt === 'md' ? 'Markdown (.md)' : 'PDF (print)'}
+                      {fmt === 'md' ? 'Markdown (single .md)' : 'PDF (print)'}
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    className="w-full text-left px-2 py-1 text-sm rounded hover:bg-accent transition-colors"
+                    onClick={async () => {
+                      try {
+                        const pages = await getAllNotebookPages()
+                        if (pages.length === 0) { toast.info('No notebook pages to export'); return }
+                        exportAllNotesZip(pages.map(p => ({ title: p.title, body: p.body })))
+                        toast.success(`Exported ${pages.length} note${pages.length !== 1 ? 's' : ''} to ZIP`)
+                      } catch (err) {
+                        toast.error(`Export failed: ${err instanceof Error ? err.message : String(err)}`)
+                      }
+                    }}
+                  >
+                    ZIP (one .md per note)
+                  </button>
                 </PopoverContent>
               </Popover>
             </div>
-            <p className="text-xs text-muted-foreground">Exports all notebook pages into a single file. PDF opens a print dialog.</p>
+            <p className="text-xs text-muted-foreground">Markdown/PDF combine all pages into one file; ZIP contains a separate .md file per note. PDF opens a print dialog.</p>
           </section>
 
           {/* Import / Export */}
@@ -796,6 +823,112 @@ export default function Settings() {
 
         {/* ── License tab ─────────────────────────────────────────────── */}
         <TabsContent value="markdown" className="pt-4 max-w-2xl space-y-6">
+          <div>
+            <h3 className="text-sm font-semibold mb-3">Display</h3>
+            <p className="text-xs text-muted-foreground mb-4">
+              Control how markdown is rendered across all fields. Changes apply live — the previews below update as you adjust each setting.
+            </p>
+
+            <div className="space-y-5">
+              {/* Paragraph spacing */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Paragraph spacing</label>
+                <div className="flex gap-1">
+                  {(['compact', 'normal', 'relaxed'] as const).map(v => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => { setProseSpacing(v); localStorage.setItem('myworker:prose-spacing', v) }}
+                      className={`px-2 py-0.5 rounded text-xs border transition-colors capitalize ${proseSpacing === v ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-accent'}`}
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">Vertical gap between paragraphs.</p>
+                <div className="border rounded-md p-3 bg-muted/20">
+                  <MarkdownContent>{'First paragraph of the preview.\n\nSecond paragraph — spacing above reflects your choice.'}</MarkdownContent>
+                </div>
+              </div>
+
+              {/* List spacing */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">List spacing</label>
+                <div className="flex gap-1">
+                  {(['compact', 'normal', 'relaxed'] as const).map(v => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => { setListSpacing(v); localStorage.setItem('myworker:prose-list-spacing', v) }}
+                      className={`px-2 py-0.5 rounded text-xs border transition-colors capitalize ${listSpacing === v ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-accent'}`}
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">Vertical gap between list items.</p>
+                <div className="border rounded-md p-3 bg-muted/20">
+                  <MarkdownContent>{'- First item\n- Second item\n- Third item'}</MarkdownContent>
+                </div>
+              </div>
+
+              {/* Base font size */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Base font size</label>
+                <div className="flex gap-1">
+                  {([['s', 'Small'], ['m', 'Medium'], ['l', 'Large']] as const).map(([v, lbl]) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => { setBaseFontSize(v); localStorage.setItem('myworker:prose-base-size', v) }}
+                      className={`px-2 py-0.5 rounded text-xs border transition-colors ${baseFontSize === v ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-accent'}`}
+                    >
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">Base text size of markdown fields.</p>
+                <div className="border rounded-md p-3 bg-muted/20">
+                  <MarkdownContent>{'The quick brown fox jumps over the lazy dog.'}</MarkdownContent>
+                </div>
+              </div>
+
+              {/* Code block line wrapping */}
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="prose-code-wrap"
+                    checked={codeWrap}
+                    onCheckedChange={v => { const next = v === true; setCodeWrap(next); localStorage.setItem('myworker:prose-code-wrap', String(next)) }}
+                  />
+                  <label htmlFor="prose-code-wrap" className="text-sm font-medium cursor-pointer select-none">Wrap long lines in code blocks</label>
+                </div>
+                <p className="text-xs text-muted-foreground">When off, long lines scroll horizontally instead of wrapping.</p>
+                <div className="border rounded-md p-3 bg-muted/20">
+                  <MarkdownContent>{'```\nconst reallyLongVariableName = someFunction(withAnArgument, andAnother, andYetAnotherOne)\n```'}</MarkdownContent>
+                </div>
+              </div>
+
+              {/* Blockquote quote marks */}
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="blockquote-quotes"
+                    checked={blockquoteQuotes}
+                    onCheckedChange={v => { const next = v === true; setBlockquoteQuotes(next); localStorage.setItem('myworker:blockquote-quotes', String(next)) }}
+                  />
+                  <label htmlFor="blockquote-quotes" className="text-sm font-medium cursor-pointer select-none">Show blockquote quotation marks</label>
+                </div>
+                <p className="text-xs text-muted-foreground">When off, blockquotes show only the left border bar (no “ ” marks).</p>
+                <div className="border rounded-md p-3 bg-muted/20">
+                  <MarkdownContent>{'> A quoted line of text.'}</MarkdownContent>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+
           <div>
             <h3 className="text-sm font-semibold mb-3">Markdown Reference</h3>
             <p className="text-xs text-muted-foreground mb-4">
@@ -834,7 +967,7 @@ export default function Settings() {
                 heading: 'Blocks',
                 rows: [
                   ['`> text`', 'Blockquote'],
-                  ['` ``` `', 'Code block (wrap lines)'],
+                  ['` ``` `', 'Code block'],
                   ['`---`', 'Horizontal rule'],
                 ],
               },
@@ -872,7 +1005,7 @@ export default function Settings() {
                   <tbody>
                     {section.rows.map(([syntax, desc]) => (
                       <tr key={syntax} className="border-b border-border/50 last:border-0">
-                        <td className="py-1.5 pr-6 font-mono text-xs whitespace-nowrap text-foreground/80 w-44">{syntax.replace(/`/g, '')}</td>
+                        <td className="py-1.5 pr-6 font-mono text-xs whitespace-nowrap text-foreground/80 w-44">{syntax.replace(/^`|`$/g, '').trim()}</td>
                         <td className="py-1.5 text-muted-foreground">{desc}</td>
                       </tr>
                     ))}

@@ -10,10 +10,10 @@
  */
 
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { getProjectById, updateProject, archiveProject, restoreProject } from '@/db/projects'
-import { getTasksByProject, archiveTasksByProject, restoreTasksByProject } from '@/db/tasks'
+import { getTasksByProject, getTaskById, archiveTasksByProject, restoreTasksByProject } from '@/db/tasks'
 import { getWorkLogByProject, addWorkLogEntry } from '@/db/workLog'
 import { getDropdownOptions } from '@/db/dropdownOptions'
 import { getBacklinks } from '@/db/notebook'
@@ -45,6 +45,7 @@ function loadSorts(key: string, fallback: SortEntry[]): SortEntry[] {
 export default function ProjectDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { handleError } = useErrorHandler()
   const projectId = Number(id)
 
@@ -111,6 +112,20 @@ export default function ProjectDetail() {
   }, [projectId, navigate])
 
   useEffect(() => { load() }, [load])
+
+  // Open the Task modal when arriving via a search deep-link (?task=<id>)
+  useEffect(() => {
+    const taskParam = searchParams.get('task')
+    if (!taskParam) return
+    const taskId = Number(taskParam)
+    if (Number.isNaN(taskId)) return
+    getTaskById(taskId).then(t => {
+      if (t) { setEditingTask(t); setTaskModalOpen(true) }
+      const next = new URLSearchParams(searchParams)
+      next.delete('task')
+      setSearchParams(next, { replace: true })
+    }).catch(() => {})
+  }, [searchParams, setSearchParams])
 
   // Reload when a task is saved via the global modal (Cmd+Shift+T / Command Palette)
   useEffect(() => {

@@ -76,6 +76,100 @@ export function exportNote(page: ExportablePage, format: NoteExportFormat) {
   }
 }
 
+// ── Minimal store-only (uncompressed) ZIP writer ───────────────────────────
+// No dependency: builds a valid .zip with one entry per file using the STORE
+// method (compression method 0). Sufficient for text notes; keeps the app lean.
+
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256)
+  for (let n = 0; n < 256; n++) {
+    let c = n
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1
+    table[n] = c >>> 0
+  }
+  return table
+})()
+
+function crc32(bytes: Uint8Array): number {
+  let c = 0xffffffff
+  for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8)
+  return (c ^ 0xffffffff) >>> 0
+}
+
+interface ZipEntry { name: string; data: Uint8Array }
+
+/** Build a store-only ZIP archive from a list of named byte blobs. */
+function buildZip(entries: ZipEntry[]): Uint8Array {
+  const enc = new TextEncoder()
+  const chunks: Uint8Array[] = []
+  const central: Uint8Array[] = []
+  let offset = 0
+
+  const u16 = (n: number) => new Uint8Array([n & 0xff, (n >>> 8) & 0xff])
+  const u32 = (n: number) => new Uint8Array([n & 0xff, (n >>> 8) & 0xff, (n >>> 16) & 0xff, (n >>> 24) & 0xff])
+
+  for (const entry of entries) {
+    const nameBytes = enc.encode(entry.name)
+    const crc = crc32(entry.data)
+    const size = entry.data.length
+
+    // Local file header
+    const local = concat([
+      u32(0x04034b50), u16(20), u16(0), u16(0), u16(0), u16(0),
+      u32(crc), u32(size), u32(size), u16(nameBytes.length), u16(0),
+      nameBytes, entry.data,
+    ])
+    chunks.push(local)
+
+    // Central directory record (points back at the local header offset)
+    central.push(concat([
+      u32(0x02014b50), u16(20), u16(20), u16(0), u16(0), u16(0), u16(0),
+      u32(crc), u32(size), u32(size), u16(nameBytes.length),
+      u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset), nameBytes,
+    ]))
+    offset += local.length
+  }
+
+  const centralBlob = concat(central)
+  const end = concat([
+    u32(0x06054b50), u16(0), u16(0),
+    u16(entries.length), u16(entries.length),
+    u32(centralBlob.length), u32(offset), u16(0),
+  ])
+  return concat([...chunks, centralBlob, end])
+}
+
+function concat(parts: Uint8Array[]): Uint8Array {
+  const total = parts.reduce((n, p) => n + p.length, 0)
+  const out = new Uint8Array(total)
+  let pos = 0
+  for (const p of parts) { out.set(p, pos); pos += p.length }
+  return out
+}
+
+/** Export every note as an individual .md file inside a single .zip download. */
+export function exportAllNotesZip(pages: ExportablePage[]) {
+  const enc = new TextEncoder()
+  const usedNames = new Set<string>()
+  const entries: ZipEntry[] = pages.map(p => {
+    const base = safeFilename(p.title)
+    let name = `${base}.md`
+    let i = 2
+    while (usedNames.has(name.toLowerCase())) { name = `${base} (${i++}).md` }
+    usedNames.add(name.toLowerCase())
+    return { name, data: enc.encode(cleanMarkdownExport(p.body)) }
+  })
+
+  const zip = buildZip(entries)
+  const blob = new Blob([zip as unknown as BlobPart], { type: 'application/zip' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'notebook-export.zip'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 export function exportAllNotes(pages: ExportablePage[], format: NoteExportFormat) {
   if (format === 'md') {
     const content = pages.map(p => `# ${p.title || 'Untitled'}\n\n${cleanMarkdownExport(p.body)}`).join('\n\n---\n\n')

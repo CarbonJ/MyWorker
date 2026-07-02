@@ -158,12 +158,24 @@
     }
 }
 
-/* Configurable paragraph spacing (controlled by Settings → Markdown → Paragraph spacing) */
-:root { --prose-p-spacing: 1em; }
+/* Configurable markdown display (controlled by Settings → Markdown) */
+:root {
+  --prose-p-spacing: 1em;
+  --prose-li-spacing: 0.1em;
+  --prose-base-size: 0.875rem;
+}
 .prose p {
   margin-top: var(--prose-p-spacing);
   margin-bottom: var(--prose-p-spacing);
 }
+/* Configurable base font size for markdown fields (editor + read-only renderer).
+   .prose.prose-sm specificity (0,2,0) beats the prose-sm utility's own font-size. */
+.prose.prose-sm { font-size: var(--prose-base-size); }
+/* Optional code-block line wrapping (Settings → Markdown → Code block wrapping) */
+.code-wrap .prose pre { white-space: pre-wrap; word-break: break-word; }
+/* Optional removal of blockquote quotation marks (typography plugin default) */
+.no-bq-quotes .prose blockquote p:first-of-type::before,
+.no-bq-quotes .prose blockquote p:last-of-type::after { content: none; }
 /* Remove bottom margin from the last block in the editor so no dead space appears below content */
 .ProseMirror > *:last-child {
   margin-bottom: 0;
@@ -201,8 +213,8 @@
   margin-bottom: 0.25em;
 }
 .prose li {
-  margin-top: 0.1em;
-  margin-bottom: 0.1em;
+  margin-top: var(--prose-li-spacing);
+  margin-bottom: var(--prose-li-spacing);
 }
 .prose li > p {
   margin-top: 0;
