@@ -59,7 +59,7 @@ function NavBar({ isDark, onToggleDark }: { isDark: boolean; onToggleDark: () =>
         <span className="flex items-center gap-1.5"><BookOpen className="h-3.5 w-3.5" />Notebook</span>
       </NavLink>
       <NavLink to="/contacts" className={linkClass} style={navStyle}>Contacts</NavLink>
-      <NavLink to="/reporting" className={linkClass} style={navStyle}>Reporting</NavLink>
+      <NavLink to="/reporting" className={linkClass} style={navStyle}>Dashboard</NavLink>
       <NavLink to="/search" className={linkClass} style={navStyle}>
         <span className="flex items-center gap-1.5"><SearchIcon className="h-3.5 w-3.5" />Search</span>
       </NavLink>

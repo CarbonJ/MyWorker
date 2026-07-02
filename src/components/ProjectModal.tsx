@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, startTransition } from 'react'
 import { useWikiEntities } from '@/hooks/useWikiEntities'
 import { toast } from 'sonner'
 import { createProject, updateProject, deleteProject, getAllStakeholderNames, getAllTagNames } from '@/db/projects'
+import { createContact, getAllContactNames } from '@/db/contacts'
 import { getDropdownOptions } from '@/db/dropdownOptions'
 import type { Project, DropdownOption, RagStatus, Stakeholder } from '@/types'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
@@ -136,6 +137,18 @@ export function ProjectModal({ project, open, onClose, onSaved }: Props) {
         projectId = await createProject(input)
         toast.success('Project created')
       }
+
+      // Auto-create a minimal contact for any new stakeholder name
+      const newNames = stakeholders.map(s => s.name.trim()).filter(Boolean)
+      if (newNames.length > 0) {
+        const existingNames = new Set((await getAllContactNames()).map(n => n.toLowerCase()))
+        await Promise.all(
+          newNames
+            .filter(name => !existingNames.has(name.toLowerCase()))
+            .map(name => createContact({ name }))
+        )
+      }
+
       onSaved(projectId)
       onClose()
     } catch (err) {

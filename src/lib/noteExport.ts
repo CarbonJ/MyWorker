@@ -43,13 +43,23 @@ function cleanMarkdownExport(body: string): string {
 }
 
 function notesToHtml(pages: ExportablePage[]): string {
-  const sections = pages.map(p =>
-    `<h1>${escHtml(p.title || 'Untitled')}</h1><div class="body">${markdownToHtml(p.body)}</div>`
-  ).join('<hr>')
+  const sections = pages.map(p => {
+    // Strip the leading heading if it duplicates the note title (case-insensitive)
+    // to avoid printing "Title\n# Title" at the top of the page.
+    const titleNorm = (p.title || '').trim().toLowerCase()
+    const bodyWithoutDupe = p.body.replace(
+      /^#{1,3}\s+(.+?)(\r?\n|$)/,
+      (match, text) => text.trim().toLowerCase() === titleNorm ? '' : match
+    ).trimStart()
+
+    return `<div class="note-title">${escHtml(p.title || 'Untitled')}</div>`
+      + `<div class="body">${markdownToHtml(bodyWithoutDupe)}</div>`
+  }).join('<hr>')
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Notebook Export</title>
 <style>
   body{font-family:system-ui,sans-serif;max-width:800px;margin:2em auto;padding:0 2em;line-height:1.6}
+  .note-title{font-size:0.75em;color:#999;margin-bottom:0.75em;letter-spacing:0.02em}
   h1{font-size:1.5em;margin-top:0}
   mark{background:#fff3b0;padding:0 2px;border-radius:2px}
   code{background:#f4f4f4;padding:0 3px;border-radius:3px;font-size:.9em}
@@ -63,16 +73,20 @@ function notesToHtml(pages: ExportablePage[]): string {
 </style></head><body>${sections}<script>window.onload=()=>window.print()</script></body></html>`
 }
 
+// Open an HTML string in a new window via document.write so the window URL
+// stays as about:blank — prevents the blob URL from appearing in the browser's
+// print footer.
+function openHtmlForPrint(html: string) {
+  const w = window.open('', '_blank')
+  if (w) { w.document.write(html); w.document.close() }
+}
+
 export function exportNote(page: ExportablePage, format: NoteExportFormat) {
   const name = safeFilename(page.title)
   if (format === 'md') {
     downloadBlob(cleanMarkdownExport(page.body), `${name}.md`, 'text/markdown')
   } else {
-    const html = notesToHtml([page])
-    const blob = new Blob([html], { type: 'text/html' })
-    const url = URL.createObjectURL(blob)
-    const w = window.open(url, '_blank')
-    if (w) setTimeout(() => URL.revokeObjectURL(url), 10000)
+    openHtmlForPrint(notesToHtml([page]))
   }
 }
 
@@ -175,10 +189,6 @@ export function exportAllNotes(pages: ExportablePage[], format: NoteExportFormat
     const content = pages.map(p => `# ${p.title || 'Untitled'}\n\n${cleanMarkdownExport(p.body)}`).join('\n\n---\n\n')
     downloadBlob(content, 'notebook-export.md', 'text/markdown')
   } else {
-    const html = notesToHtml(pages)
-    const blob = new Blob([html], { type: 'text/html' })
-    const url = URL.createObjectURL(blob)
-    const w = window.open(url, '_blank')
-    if (w) setTimeout(() => URL.revokeObjectURL(url), 10000)
+    openHtmlForPrint(notesToHtml(pages))
   }
 }

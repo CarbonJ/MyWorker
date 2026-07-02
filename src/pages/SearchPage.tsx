@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Search, FolderKanban, CheckSquare, ScrollText, BookOpen, ChevronDown, ChevronRight } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { MultiSelectFilter } from '@/components/ui/MultiSelectFilter'
 import { searchEnriched, parseSearchQuery } from '@/db/search'
 import type { EnrichedSearchResult, SearchSourceType } from '@/db/search'
 import type { RagStatus } from '@/types'
@@ -115,10 +116,6 @@ export default function SearchPage() {
   const toggleGroup = (key: keyof GroupState) =>
     setCollapsed(s => ({ ...s, [key]: !s[key] }))
 
-  const toggleTaskStatus = (status: string) =>
-    setTaskStatuses(prev =>
-      prev.includes(status) ? prev.filter(s => s !== status) : [...prev, status])
-
   const scopeBtn = (label: string, value: ScopeFilter, count?: number) => (
     <button
       key={value}
@@ -158,35 +155,28 @@ export default function SearchPage() {
           {' '}or{' '}
           <code className="bg-muted px-1 rounded">dog bowl -cat</code>
         </p>
-        {/* Source scope filter */}
+        {/* Source scope + task-status filter */}
         <div className="flex items-center gap-2 flex-wrap">
           {scopeBtn('All', 'all', hasResults ? results.length : undefined)}
           {scopeBtn('Projects', 'project', projects.length)}
           {scopeBtn('Tasks', 'task', tasks.length)}
           {scopeBtn('Work Log', 'work_log', workLog.length)}
           {scopeBtn('Notebook', 'notebook', notebooks.length)}
+          {(scope === 'all' || scope === 'task') && (
+            <MultiSelectFilter
+              options={[
+                { value: 'open',        label: 'Open' },
+                { value: 'in_progress', label: 'In Progress' },
+                { value: 'done',        label: 'Done' },
+              ]}
+              value={taskStatuses}
+              onChange={setTaskStatuses}
+              placeholder="Task Status"
+              triggerLabel="Tasks"
+              width="w-24"
+            />
+          )}
         </div>
-        {/* Task status filter — narrows the Tasks group only */}
-        {(scope === 'all' || scope === 'task') && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-muted-foreground">Task status:</span>
-            {(['open', 'in_progress', 'done'] as const).map(status => (
-              <button
-                key={status}
-                type="button"
-                onClick={() => toggleTaskStatus(status)}
-                aria-pressed={taskStatuses.includes(status)}
-                className={`h-6 px-2.5 rounded-full border text-xs font-medium transition-colors ${
-                  taskStatuses.includes(status)
-                    ? 'bg-primary text-primary-foreground border-primary'
-                    : 'border-input text-muted-foreground hover:text-foreground hover:border-foreground/40'
-                }`}
-              >
-                {TASK_STATUS_LABEL[status]}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* Results */}

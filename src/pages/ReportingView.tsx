@@ -553,7 +553,7 @@ export default function ReportingView() {
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3 px-6 py-3 border-b shrink-0 flex-wrap">
         <div className="mr-2">
-          <h1 className="text-lg font-semibold leading-tight">Reporting</h1>
+          <h1 className="text-lg font-semibold leading-tight">Dashboard</h1>
           <p className="text-xs text-muted-foreground">{sorted.length} of {projects.length} projects · read-only</p>
         </div>
 

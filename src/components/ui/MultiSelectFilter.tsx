@@ -20,25 +20,28 @@ interface Props {
   value: string[]
   onChange: (next: string[]) => void
   placeholder: string
+  /** When provided, always shows this text on the trigger button instead of the computed selection summary */
+  triggerLabel?: string
   /** Width class for trigger button, e.g. "w-32" */
   width?: string
   /** When true, renders a search input at the top of the dropdown to filter options */
   searchable?: boolean
 }
 
-export function MultiSelectFilter({ options, value, onChange, placeholder, width = 'w-32', searchable = false }: Props) {
+export function MultiSelectFilter({ options, value, onChange, placeholder, triggerLabel, width = 'w-32', searchable = false }: Props) {
   const [search, setSearch] = useState('')
 
   const toggle = (v: string) => {
     onChange(value.includes(v) ? value.filter(x => x !== v) : [...value, v])
   }
 
-  const label =
+  const label = triggerLabel ?? (
     value.length === 0
       ? placeholder
       : value.length === 1
         ? (options.find(o => o.value === value[0])?.label ?? value[0])
         : `${value.length} selected`
+  )
 
   const visibleOptions = searchable && search.trim()
     ? options.filter(o => o.label.toLowerCase().includes(search.toLowerCase()))

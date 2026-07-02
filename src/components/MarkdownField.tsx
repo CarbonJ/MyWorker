@@ -179,6 +179,10 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
   const wikiHighlightRef = useRef(wikiHighlight)
   const wikiSuggestionsRef = useRef<WikiEntity[]>([])
   const selectWikiSuggestionRef = useRef<((entity: WikiEntity) => void) | null>(null)
+
+  // Tracks whether the last value change came from the editor itself.
+  // Prevents setContent (which clears undo history) from firing for internal edits.
+  const isInternalUpdateRef = useRef(false)
   wikiSuggestRef.current = wikiSuggest
   wikiHighlightRef.current = wikiHighlight
 
@@ -215,7 +219,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
     navigateRef.current(
       entity.type === 'page' ? `/notebook?page=${entity.id}` :
       entity.type === 'project' ? `/projects/${entity.id}` :
-      entity.type === 'contact' ? `/contacts` : `/`
+      entity.type === 'contact' ? `/contacts?q=${encodeURIComponent(entity.name)}` : `/`
     )
   }
 
@@ -303,6 +307,10 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
     onFocus: () => setFocused(true),
     onBlur: () => setFocused(false),
     onUpdate: ({ editor }) => {
+      // Mark this as an internal update so the sync effect below skips setContent.
+      // setContent resets ProseMirror's undo history — calling it for our own
+      // edits would wipe Cmd+Z history after every keystroke.
+      isInternalUpdateRef.current = true
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let md: string = (editor.storage as any).markdown.getMarkdown()
       md = unescapeLinks(md)
@@ -310,16 +318,16 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
     },
   })
 
-  // Sync external value changes without clobbering the cursor.
-  // Use normalised comparison so bracket-escaped link patterns don't trigger
-  // a setContent that would convert typed [text](url) into a hidden link node.
+  // Sync external value changes (e.g. initial load, parent reset) into the editor.
+  // Skip when the change came from the editor itself — detected via isInternalUpdateRef —
+  // to avoid calling setContent unnecessarily (setContent resets undo history).
   useEffect(() => {
     if (!editor || rawMode) return
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const current = (editor.storage as any).markdown.getMarkdown()
-    if (unescapeLinks(current) !== unescapeLinks(value)) {
-      editor.commands.setContent(value, { emitUpdate: false })
+    if (isInternalUpdateRef.current) {
+      isInternalUpdateRef.current = false
+      return
     }
+    editor.commands.setContent(value, { emitUpdate: false })
   }, [value, editor, rawMode])
 
   // Focus editor when entering fullscreen
@@ -543,7 +551,13 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
   // Wiki-link suggestion dropdown (position: fixed so it renders above everything)
   const wikiDropdown = enableWikiLinks && wikiSuggest.active && wikiSuggestions.length > 0 && (
     <div
-      style={{ position: 'fixed', left: wikiSuggest.coords.left, top: wikiSuggest.coords.top, zIndex: 200 }}
+      style={{
+        position: 'fixed',
+        // Clamp left so the 288px (w-72) dropdown doesn't overflow the viewport
+        left: Math.min(wikiSuggest.coords.left, Math.max(0, window.innerWidth - 288 - 16)),
+        top: wikiSuggest.coords.top,
+        zIndex: 200,
+      }}
       className="bg-popover border border-border rounded-md shadow-lg w-72 max-h-72 overflow-y-auto"
     >
       {wikiSuggestions.map((entity, idx) => (
