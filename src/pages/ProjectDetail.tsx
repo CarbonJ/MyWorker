@@ -284,8 +284,7 @@ export default function ProjectDetail() {
             <Button
               onClick={confirmClose}
               disabled={!closingNote.trim() || closing}
-              className="text-green-700 border-green-300 bg-green-50 hover:bg-green-100 hover:text-green-800"
-              variant="outline"
+              variant="success-outline"
             >
               {closing ? 'Closing…' : '✓ Close Project'}
             </Button>

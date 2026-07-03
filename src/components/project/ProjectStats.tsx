@@ -62,9 +62,9 @@ export function ProjectStats({ tasks, project }: Props) {
         <div className="h-2 rounded-full overflow-hidden flex bg-muted">
           {total > 0 && (
             <>
-              <div className="bg-slate-300 h-full" style={{ width: `${openPct}%` }} />
-              <div className="bg-blue-400 h-full"  style={{ width: `${inProgressPct}%` }} />
-              <div className="bg-green-500 h-full" style={{ width: `${donePct}%` }} />
+              <div className="bg-slate-300 dark:bg-slate-600 h-full" style={{ width: `${openPct}%` }} />
+              <div className="bg-blue-400 dark:bg-blue-600 h-full"  style={{ width: `${inProgressPct}%` }} />
+              <div className="bg-green-500 dark:bg-green-700 h-full" style={{ width: `${donePct}%` }} />
             </>
           )}
         </div>
@@ -81,7 +81,7 @@ export function ProjectStats({ tasks, project }: Props) {
               <span className="text-muted-foreground leading-none">Active</span>
             </div>
             <div className="flex flex-col items-center gap-0.5">
-              <span className="font-semibold text-green-600">{done}</span>
+              <span className="font-semibold text-green-600 dark:text-green-400">{done}</span>
               <span className="text-muted-foreground leading-none">Done</span>
             </div>
           </div>
@@ -91,7 +91,7 @@ export function ProjectStats({ tasks, project }: Props) {
 
         {/* Overdue */}
         {overdue > 0 && (
-          <p className="text-xs text-red-600 font-medium">⚠ {overdue} overdue</p>
+          <p className="text-xs text-red-600 dark:text-red-400 font-medium">⚠ {overdue} overdue</p>
         )}
       </div>
 

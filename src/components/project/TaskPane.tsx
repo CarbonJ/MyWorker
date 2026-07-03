@@ -15,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar'
 import { Check, RefreshCw } from 'lucide-react'
 import { pillClass, dotClass } from '@/lib/colors'
-import { fmtDate, isOverdue, isDueToday, localToday, localTomorrow, toLocalDateString } from '@/lib/utils'
+import { fmtDate, dueDateTextClass, localToday, localTomorrow, toLocalDateString } from '@/lib/utils'
 import { useErrorHandler } from '@/hooks/useErrorHandler'
 import { RecurringCompleteDialog } from '@/components/RecurringCompleteDialog'
 
@@ -32,14 +32,14 @@ function cycleStatus(current: TaskStatus): TaskStatus {
 
 function StatusCircle({ status }: { status: TaskStatus }) {
   if (status === 'done') return (
-    <span className="w-5 h-5 rounded bg-green-500 border-2 border-green-500 flex items-center justify-center text-white text-[10px] font-bold leading-none">✓</span>
+    <span className="w-5 h-5 rounded bg-green-500 border-2 border-green-500 dark:bg-green-700 dark:border-green-700 flex items-center justify-center text-white text-[10px] font-bold leading-none">✓</span>
   )
   if (status === 'in_progress') return (
-    <span className="w-5 h-5 rounded border-2 border-blue-500 flex items-center justify-center">
-      <span className="w-2 h-2 rounded-sm bg-blue-500" />
+    <span className="w-5 h-5 rounded border-2 border-blue-500 dark:border-blue-600 flex items-center justify-center">
+      <span className="w-2 h-2 rounded-sm bg-blue-500 dark:bg-blue-600" />
     </span>
   )
-  return <span className="w-5 h-5 rounded border-2 border-slate-300" />
+  return <span className="w-5 h-5 rounded border-2 border-slate-300 dark:border-slate-600" />
 }
 
 interface Props {
@@ -299,9 +299,7 @@ export function TaskPane({
                   <button
                     onClick={e => e.stopPropagation()}
                     className={`text-xs text-right w-full hover:underline decoration-dashed underline-offset-2 flex items-center justify-end gap-1 ${
-                      isOverdue(task.dueDate) && !isDone ? 'text-red-600 font-medium' :
-                      isDueToday(task.dueDate) && !isDone ? 'text-amber-600 font-medium' :
-                      'text-muted-foreground'
+                      isDone ? 'text-muted-foreground' : dueDateTextClass(task.dueDate)
                     }`}
                   >
                     {task.isRecurring && <RefreshCw className="w-2.5 h-2.5 shrink-0 opacity-60" />}

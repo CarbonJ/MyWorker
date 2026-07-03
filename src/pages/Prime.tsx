@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, type CSSProperties } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { getAllProjects, updateProject } from '@/db/projects'
@@ -14,9 +14,9 @@ import { MultiSelectFilter } from '@/components/ui/MultiSelectFilter'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
 import { Check, Bookmark, X as XIcon, ChevronDown } from 'lucide-react'
-import { pillClass, dotClass, pillClassActive, RAG_ORDER } from '@/lib/colors'
+import { pillClass, dotClass, dotOnPillClass, pillClassActive, RAG_ORDER, RAG_OPTIONS, PILL_DIMMED_CLASS } from '@/lib/colors'
 import { loadGuiSettings, buttonStyle, workItemStyle } from '@/lib/guiSettings'
-import { fmtDate, isOverdue, isDueToday, localToday, toLocalDateString } from '@/lib/utils'
+import { fmtDate, dueDateTextClass, localToday, toLocalDateString } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { useDataLoader } from '@/hooks/useDataLoader'
 import { SplitPane } from '@/components/project/SplitPane'
@@ -65,21 +65,15 @@ function TaskStatusDot({ status, size = 'sm' }: { status: TaskStatus; size?: 'sm
   const font = size === 'md' ? 'text-[10px]' : 'text-[8px]'
   const dot  = size === 'md' ? 'w-2 h-2 rounded-sm' : 'w-1 h-1 rounded-sm'
   if (status === 'done') return (
-    <span className={`${dim} bg-green-500 border-2 border-green-500 flex items-center justify-center text-white ${font} font-bold leading-none shrink-0`}>✓</span>
+    <span className={`${dim} bg-green-500 border-2 border-green-500 dark:bg-green-700 dark:border-green-700 flex items-center justify-center text-white ${font} font-bold leading-none shrink-0`}>✓</span>
   )
   if (status === 'in_progress') return (
-    <span className={`${dim} border-2 border-blue-500 flex items-center justify-center shrink-0`}>
-      <span className={`${dot} bg-blue-500`} />
+    <span className={`${dim} border-2 border-blue-500 dark:border-blue-600 flex items-center justify-center shrink-0`}>
+      <span className={`${dot} bg-blue-500 dark:bg-blue-600`} />
     </span>
   )
-  return <span className={`${dim} border-2 border-slate-300 flex shrink-0`} />
+  return <span className={`${dim} border-2 border-slate-300 dark:border-slate-600 flex shrink-0`} />
 }
-
-const RAG_OPTIONS: { value: RagStatus; label: string; dotColor: string }[] = [
-  { value: 'Green', label: 'Green', dotColor: 'bg-green-500' },
-  { value: 'Amber', label: 'Amber', dotColor: 'bg-amber-400' },
-  { value: 'Red',   label: 'Red',   dotColor: 'bg-red-500' },
-]
 
 /** Compute cutoff date string for the upcoming filter mode. */
 function getUpcomingCutoff(mode: '1' | '3' | 'week'): string {
@@ -666,6 +660,20 @@ export default function Prime() {
     prefix: s.color ? <span className={`w-2 h-2 rounded-full shrink-0 ${dotClass(s.color)}`} /> : undefined,
   }))
 
+  const openTaskModal = (t: Task) => { setEditingTask(t); setTaskModalOpen(true) }
+
+  const rowCtx: ProjectRowsCtx = {
+    expandedProjects, tasksByProject, overdueProjectIds, taskCountsByProject,
+    latestLogByProjectMap, wiStyle, priorities, projectStatuses,
+    openDueDatePopover, setOpenDueDatePopover, toggleProject, saveProjectField,
+    cycleTaskStatus, saveDueDate, assignTaskToProject, openTaskModal,
+    addTagFilter: (tag: string) => setTagFilters(prev => prev.includes(tag) ? prev : [...prev, tag]),
+  }
+
+  const genCtx: GeneralTaskRowCtx = {
+    priorities, draggedTaskId, setDraggedTaskId, cycleTaskStatus, savePriority, saveDueDate, openTaskModal,
+  }
+
   return (
     <div className="flex flex-col h-[calc(100vh-57px)]">
 
@@ -677,12 +685,12 @@ export default function Prime() {
         {/* Due/Overdue toggle button */}
         <button
           onClick={toggleDueFilter}
-          className={`h-8 px-3 text-sm rounded-md border font-medium transition-colors whitespace-nowrap ${
+          className={`h-8 px-3 text-sm rounded-md border font-medium transition-colors whitespace-nowrap hover:opacity-90 ${
             dueFilter
-              ? 'bg-amber-200 border-amber-400 text-amber-900 hover:bg-amber-300'
+              ? pillClassActive('amber')
               : dueTaskCount > 0
-                ? 'bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100'
-                : 'bg-muted border-border text-muted-foreground/50 hover:bg-accent'
+                ? pillClass('amber')
+                : 'bg-muted border-border text-muted-foreground/50 hover:bg-accent hover:opacity-100'
           }`}
           title={dueFilter ? 'Clear due/overdue filter' : 'Show due and overdue tasks'}
         >
@@ -830,7 +838,7 @@ export default function Prime() {
               const coloredClass = isActive
                 ? (opt.color ? pillClassActive(opt.color) : 'bg-primary text-primary-foreground border-primary')
                 : anyActive && !isAll
-                  ? 'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200'
+                  ? PILL_DIMMED_CLASS
                   : (opt.color ? pillClass(opt.color) : 'border-input bg-background hover:bg-accent hover:text-accent-foreground')
               return (
                 <button
@@ -886,8 +894,8 @@ export default function Prime() {
       {/* ── Split pane ── */}
       <SplitPane
         initialSplitPct={70}
-        left={<LeftPane />}
-        right={<RightPane />}
+        left={<LeftPane filteredProjects={filteredProjects} projectSorts={projectSorts} onSort={handleProjectSort} ctx={rowCtx} />}
+        right={<RightPane generalTasks={generalTasks} generalSorts={generalSorts} onSort={handleGeneralSort} generalStatusFilters={generalStatusFilters} setGeneralStatusFilters={setGeneralStatusFilters} ctx={genCtx} />}
       />
 
       {/* Task modal */}
@@ -921,559 +929,606 @@ export default function Prime() {
       />
     </div>
   )
+}
 
-  // ── Left pane — all projects ──────────────────────────────────────────────
-  function LeftPane() {
-    const SortInd = ({ col }: { col: ProjectSortKey }) => {
-      const idx = projectSorts.findIndex(s => s.key === col)
-      if (idx === -1) return <span className="ml-1 opacity-30">↕</span>
-      const { dir } = projectSorts[idx]
-      return (
-        <span className={`ml-1 ${dir === 'asc' ? 'text-blue-700 dark:text-blue-400' : 'text-green-700 dark:text-green-500'}`}>
-          {projectSorts.length > 1 ? <sup className="text-[9px] mr-px">{idx + 1}</sup> : null}{dir === 'asc' ? '↑' : '↓'}
-        </span>
-      )
-    }
+// ── Context bundles passed from Prime into the module-level pane/row
+// components. These components must live at module scope: defining them
+// inside Prime() gives them a new identity every render, so React remounts
+// the whole subtree (resetting popover state) instead of reconciling.
+interface ProjectRowsCtx {
+  expandedProjects: Set<number>
+  tasksByProject: Map<number, Task[]>
+  overdueProjectIds: Set<number>
+  taskCountsByProject: Map<number, { open: number; inProgress: number }>
+  latestLogByProjectMap: Map<number, WorkLogEntry>
+  wiStyle: CSSProperties
+  priorities: DropdownOption[]
+  projectStatuses: DropdownOption[]
+  openDueDatePopover: number | null
+  setOpenDueDatePopover: (v: number | null) => void
+  toggleProject: (id: number) => void
+  saveProjectField: (projectId: number, patch: Partial<Project>) => void
+  cycleTaskStatus: (t: Task) => Promise<void>
+  saveDueDate: (t: Task, d: Date | undefined) => Promise<void>
+  assignTaskToProject: (taskId: number, projectId: number) => void
+  addTagFilter: (tag: string) => void
+  openTaskModal: (t: Task) => void
+}
 
-    return (
-      <div className="flex flex-col h-full overflow-hidden">
-        {/* Panel header */}
-        <div className="flex items-center gap-2 px-4 py-2 border-b bg-muted/30 shrink-0">
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Projects</span>
-          <span className="text-xs text-muted-foreground">({filteredProjects.length})</span>
-        </div>
+interface GeneralTaskRowCtx {
+  priorities: DropdownOption[]
+  draggedTaskId: number | null
+  setDraggedTaskId: (id: number | null) => void
+  cycleTaskStatus: (t: Task) => Promise<void>
+  savePriority: (t: Task, priorityId: number | null) => Promise<void>
+  saveDueDate: (t: Task, d: Date | undefined) => Promise<void>
+  openTaskModal: (t: Task) => void
+}
 
-        <div className="flex-1 overflow-auto">
-          <table className="w-full text-sm border-separate border-spacing-0">
-            <thead className="sticky top-0 bg-background z-10">
+
+// ── Left pane — all projects ──────────────────────────────────────────────
+function SortInd({ col, sorts }: { col: ProjectSortKey; sorts: ProjectSortEntry[] }) {
+  const idx = sorts.findIndex(s => s.key === col)
+  if (idx === -1) return <span className="ml-1 opacity-30">↕</span>
+  const { dir } = sorts[idx]
+  return (
+    <span className={`ml-1 ${dir === 'asc' ? 'text-blue-700 dark:text-blue-400' : 'text-green-700 dark:text-green-500'}`}>
+      {sorts.length > 1 ? <sup className="text-[9px] mr-px">{idx + 1}</sup> : null}{dir === 'asc' ? '↑' : '↓'}
+    </span>
+  )
+}
+
+function LeftPane({ filteredProjects, projectSorts, onSort, ctx }: {
+  filteredProjects: Project[]
+  projectSorts: ProjectSortEntry[]
+  onSort: (col: ProjectSortKey) => void
+  ctx: ProjectRowsCtx
+}) {
+  return (
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Panel header */}
+      <div className="flex items-center gap-2 px-4 py-2 border-b bg-muted/30 shrink-0">
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Projects</span>
+        <span className="text-xs text-muted-foreground">({filteredProjects.length})</span>
+      </div>
+
+      <div className="flex-1 overflow-auto">
+        <table className="w-full text-sm border-separate border-spacing-0">
+          <thead className="sticky top-0 bg-background z-10">
+            <tr>
+              <th className="w-10 px-2 py-1.5 shrink-0 border-b bg-background" />
+              {(() => {
+                const thBase = 'border-b bg-background text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider select-none cursor-pointer hover:text-foreground transition-colors'
+                return (<>
+                  <th className={`${thBase} px-3 py-1.5`} onClick={() => onSort('workItem')}>Work Item<SortInd col="workItem" sorts={projectSorts} /></th>
+                  <th className={`${thBase} w-px px-2 py-1.5 whitespace-nowrap`} onClick={() => onSort('rag')}>RAG<SortInd col="rag" sorts={projectSorts} /></th>
+                  <th className={`${thBase} w-px px-2 py-1.5 whitespace-nowrap`} onClick={() => onSort('priority')}>Priority<SortInd col="priority" sorts={projectSorts} /></th>
+                  <th className={`${thBase} w-px px-2 py-1.5 whitespace-nowrap`} onClick={() => onSort('status')}>Status<SortInd col="status" sorts={projectSorts} /></th>
+                  <th className={`${thBase} px-3 py-1.5 whitespace-nowrap`} onClick={() => onSort('statusComment')}>Status Comment<SortInd col="statusComment" sorts={projectSorts} /></th>
+                </>)
+              })()}
+            </tr>
+          </thead>
+          {filteredProjects.length === 0 && (
+            <tbody>
               <tr>
-                <th className="w-10 px-2 py-1.5 shrink-0 border-b bg-background" />
-                {(() => {
-                  const thBase = 'border-b bg-background text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider select-none cursor-pointer hover:text-foreground transition-colors'
-                  return (<>
-                    <th className={`${thBase} px-3 py-1.5`} onClick={() => handleProjectSort('workItem')}>Work Item<SortInd col="workItem" /></th>
-                    <th className={`${thBase} w-px px-2 py-1.5 whitespace-nowrap`} onClick={() => handleProjectSort('rag')}>RAG<SortInd col="rag" /></th>
-                    <th className={`${thBase} w-px px-2 py-1.5 whitespace-nowrap`} onClick={() => handleProjectSort('priority')}>Priority<SortInd col="priority" /></th>
-                    <th className={`${thBase} w-px px-2 py-1.5 whitespace-nowrap`} onClick={() => handleProjectSort('status')}>Status<SortInd col="status" /></th>
-                    <th className={`${thBase} px-3 py-1.5 whitespace-nowrap`} onClick={() => handleProjectSort('statusComment')}>Status Comment<SortInd col="statusComment" /></th>
-                  </>)
-                })()}
+                <td colSpan={6} className="px-4 py-12 text-center text-sm text-muted-foreground">
+                  No projects match the current filters.
+                </td>
               </tr>
-            </thead>
-            {filteredProjects.length === 0 && (
-              <tbody>
-                <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-sm text-muted-foreground">
-                    No projects match the current filters.
-                  </td>
-                </tr>
-              </tbody>
+            </tbody>
+          )}
+          {filteredProjects.map(p => <ProjectRows key={p.id} p={p} ctx={ctx} />)}
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function ProjectRows({ p, ctx }: { p: Project; ctx: ProjectRowsCtx }) {
+  const {
+    expandedProjects, tasksByProject, overdueProjectIds, taskCountsByProject,
+    latestLogByProjectMap, wiStyle, priorities, projectStatuses,
+    openDueDatePopover, setOpenDueDatePopover, toggleProject, saveProjectField,
+    cycleTaskStatus, saveDueDate, assignTaskToProject, addTagFilter, openTaskModal,
+  } = ctx
+  const navigate = useNavigate()
+  const isExpanded = expandedProjects.has(p.id)
+  const projTasks  = tasksByProject.get(p.id) ?? []
+  const hasTasks   = projTasks.length > 0
+  const hasOverdue = overdueProjectIds.has(p.id)
+  const counts     = taskCountsByProject.get(p.id)
+  const latestLog  = latestLogByProjectMap.get(p.id)
+
+  return (
+    <tbody
+      className="group/proj"
+      onDragOver={e => {
+        if (!e.dataTransfer.types.includes('application/x-task-id')) return
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'move'
+        e.currentTarget.classList.add('outline', 'outline-2', 'outline-blue-400', '-outline-offset-2')
+      }}
+      onDragLeave={e => {
+        if (e.currentTarget.contains(e.relatedTarget as Node)) return
+        e.currentTarget.classList.remove('outline', 'outline-2', 'outline-blue-400', '-outline-offset-2')
+      }}
+      onDrop={e => {
+        e.currentTarget.classList.remove('outline', 'outline-2', 'outline-blue-400', '-outline-offset-2')
+        const rawId = e.dataTransfer.getData('application/x-task-id')
+        if (!rawId) return
+        const taskId = Number(rawId)
+        if (Number.isNaN(taskId)) return
+        e.preventDefault()
+        assignTaskToProject(taskId, p.id)
+      }}
+    >
+      {/* TR1 — project header */}
+      <tr
+        onClick={() => navigate(`/projects/${p.id}`)}
+        className="group-hover/proj:bg-blue-50/60 dark:group-hover/proj:bg-blue-950/20 cursor-pointer transition-colors"
+      >
+        <td className="w-10 px-1 py-1.5">
+          {hasTasks ? (
+            <button
+              onClick={e => { e.stopPropagation(); toggleProject(p.id) }}
+              className="text-muted-foreground hover:text-foreground w-8 h-7 flex items-center justify-center text-xs rounded hover:bg-accent transition-colors shrink-0"
+              title={isExpanded ? 'Collapse tasks' : 'Expand tasks'}
+            >
+              {isExpanded ? '▼' : '▶'}
+            </button>
+          ) : (
+            <span className="text-muted-foreground/30 w-8 h-7 flex items-center justify-center text-xs shrink-0">—</span>
+          )}
+        </td>
+        <td className="px-3 py-1 font-medium max-w-[18rem]">
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <span className="truncate" style={wiStyle} title={p.workItem}>{p.workItem}</span>
+            {(hasOverdue || (!isExpanded && counts && (counts.open > 0 || counts.inProgress > 0))) && (
+              <span className="flex items-center gap-1.5 font-normal">
+                {hasOverdue && (
+                  <span className={`inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0 rounded border shrink-0 ${pillClass('red')}`}>
+                    🗓 Overdue
+                  </span>
+                )}
+                {!isExpanded && counts && (counts.open > 0 || counts.inProgress > 0) && (
+                  <span className="text-xs text-muted-foreground">
+                    {counts.open > 0 && <span>{counts.open} open</span>}
+                    {counts.open > 0 && counts.inProgress > 0 && <span> · </span>}
+                    {counts.inProgress > 0 && <span className="text-blue-600 dark:text-blue-400">{counts.inProgress} active</span>}
+                  </span>
+                )}
+              </span>
             )}
-            {filteredProjects.map(p => <ProjectRows key={p.id} p={p} />)}
-          </table>
+            {p.tags.length > 0 && (
+              <span className="flex flex-wrap gap-0.5 font-normal" onClick={e => e.stopPropagation()}>
+                {p.tags.slice(0, 3).map((tag, i) => (
+                  <button
+                    key={i}
+                    onClick={() => addTagFilter(tag)}
+                    className="inline-flex items-center px-1.5 py-0 rounded-full text-[10px] font-medium bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700 transition-colors"
+                    title={`Filter by tag: ${tag}`}
+                  >
+                    {tag}
+                  </button>
+                ))}
+                {p.tags.length > 3 && (
+                  <span className="text-[10px] text-muted-foreground self-center">+{p.tags.length - 3}</span>
+                )}
+              </span>
+            )}
+          </div>
+        </td>
+
+        {/* RAG — inline editable */}
+        <td className="w-px px-2 py-1.5 whitespace-nowrap" onClick={e => e.stopPropagation()}>
+          <Popover>
+            <PopoverTrigger asChild>
+              <button className="hover:opacity-75 transition-opacity" title="Click to change RAG">
+                <RagBadge status={p.ragStatus} />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-32 p-1" onClick={e => e.stopPropagation()}>
+              {RAG_OPTIONS.map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => saveProjectField(p.id, { ragStatus: opt.value })}
+                  className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent transition-colors"
+                >
+                  <Check className={`h-3 w-3 shrink-0 ${p.ragStatus === opt.value ? 'opacity-100' : 'opacity-0'}`} />
+                  <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${opt.dotColor}`} />
+                  {opt.label}
+                </button>
+              ))}
+            </PopoverContent>
+          </Popover>
+        </td>
+
+        {/* Priority — inline editable */}
+        <td className="w-px px-2 py-1.5 whitespace-nowrap" onClick={e => e.stopPropagation()}>
+          <Popover>
+            <PopoverTrigger asChild>
+              <button className="hover:opacity-75 transition-opacity" title="Click to change priority">
+                {p.priorityId ? (() => {
+                  const opt = priorities.find(o => o.id === p.priorityId)
+                  const c = opt?.color ?? ''
+                  return (
+                    <span className={`inline-flex items-center gap-1 px-1 py-0 rounded-full text-xs border ${pillClass(c)}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${dotOnPillClass(c)}`} />
+                      {opt?.label ?? '—'}
+                    </span>
+                  )
+                })() : <span className="text-muted-foreground text-xs">—</span>}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-40 p-1" onClick={e => e.stopPropagation()}>
+              <button
+                onClick={() => saveProjectField(p.id, { priorityId: null })}
+                className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent transition-colors"
+              >
+                <Check className={`h-3 w-3 shrink-0 ${p.priorityId === null ? 'opacity-100' : 'opacity-0'}`} />
+                <span className="text-muted-foreground">— None</span>
+              </button>
+              {priorities.map(opt => (
+                <button
+                  key={opt.id}
+                  onClick={() => saveProjectField(p.id, { priorityId: opt.id })}
+                  className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent transition-colors"
+                >
+                  <Check className={`h-3 w-3 shrink-0 ${p.priorityId === opt.id ? 'opacity-100' : 'opacity-0'}`} />
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${dotClass(opt.color)}`} />
+                  {opt.label}
+                </button>
+              ))}
+            </PopoverContent>
+          </Popover>
+        </td>
+
+        {/* Status — inline editable */}
+        <td className="w-px px-2 py-1.5 whitespace-nowrap" onClick={e => e.stopPropagation()}>
+          <Popover>
+            <PopoverTrigger asChild>
+              <button className="hover:opacity-75 transition-opacity" title="Click to change status">
+                {p.statusId ? (() => {
+                  const opt = projectStatuses.find(s => s.id === p.statusId)
+                  if (!opt) return <span className="text-muted-foreground text-xs">—</span>
+                  const c = opt.color
+                  return (
+                    <span className={`inline-flex items-center gap-1 text-xs px-1 py-0 rounded-full border ${pillClass(c)}`}>
+                      {c && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotOnPillClass(c)}`} />}
+                      {opt.label}
+                    </span>
+                  )
+                })() : <span className="text-muted-foreground text-xs">—</span>}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-44 p-1" onClick={e => e.stopPropagation()}>
+              <button
+                onClick={() => saveProjectField(p.id, { statusId: null })}
+                className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent transition-colors"
+              >
+                <Check className={`h-3 w-3 shrink-0 ${p.statusId === null ? 'opacity-100' : 'opacity-0'}`} />
+                <span className="text-muted-foreground">— None</span>
+              </button>
+              {projectStatuses.map(opt => (
+                <button
+                  key={opt.id}
+                  onClick={() => saveProjectField(p.id, { statusId: opt.id })}
+                  className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent transition-colors"
+                >
+                  <Check className={`h-3 w-3 shrink-0 ${p.statusId === opt.id ? 'opacity-100' : 'opacity-0'}`} />
+                  {opt.color && <span className={`w-2 h-2 rounded-full shrink-0 ${dotClass(opt.color)}`} />}
+                  {opt.label}
+                </button>
+              ))}
+            </PopoverContent>
+          </Popover>
+        </td>
+
+        <td className="px-3 py-1.5 max-w-[14rem]">
+          <span className="text-xs text-muted-foreground line-clamp-2">{p.latestStatus || '—'}</span>
+        </td>
+      </tr>
+
+      {/* TR2 — latest work log entry (capped to work-item column to avoid horizontal scroll) */}
+      <tr
+        onClick={() => navigate(`/projects/${p.id}`)}
+        className="group-hover/proj:bg-blue-50/40 dark:group-hover/proj:bg-blue-950/10 cursor-pointer transition-colors border-b border-border"
+      >
+        <td className="w-10" />
+        <td className="px-3 pb-1.5 pt-0 overflow-hidden max-w-0">
+          <div className="truncate text-muted-foreground/70 [&_.prose]:!text-xs [&_p]:m-0 [&_p]:inline">
+            {latestLog
+              ? <MarkdownContent>{latestLog.note.split('\n')[0]}</MarkdownContent>
+              : <span className="text-xs">—</span>}
+          </div>
+        </td>
+        <td colSpan={4} />
+      </tr>
+
+      {/* Expanded task sub-rows */}
+      {isExpanded && projTasks.length === 0 && (
+        <tr className="border-b border-border">
+          <td className="w-10" />
+          <td colSpan={5} className="px-4 py-2 text-xs text-muted-foreground italic">No open tasks</td>
+        </tr>
+      )}
+      {isExpanded && projTasks.map(t => {
+        const taskDueDateObj = t.dueDate ? new Date(t.dueDate + 'T12:00:00') : undefined
+        const taskPriority = priorities.find(pr => pr.id === t.priorityId)
+        return (
+          <tr
+            key={t.id}
+            className="bg-muted/20 hover:bg-blue-50/40 dark:hover:bg-blue-950/10 transition-colors cursor-pointer border-b border-border/60"
+            onClick={() => openTaskModal(t)}
+          >
+            <td className="w-10" />
+            <td className="px-3 py-1.5 pl-7" colSpan={4}>
+              <div className="flex flex-col gap-0.5 min-w-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <button
+                    onClick={async e => { e.stopPropagation(); await cycleTaskStatus(t) }}
+                    className="shrink-0 hover:scale-110 transition-transform"
+                    title={`Status: ${t.status} — click to cycle`}
+                  >
+                    <TaskStatusDot status={t.status} />
+                  </button>
+                  {taskPriority && (
+                    <span
+                      className={`w-2 h-2 rounded-full shrink-0 ${dotClass(taskPriority.color)}`}
+                      title={taskPriority.label}
+                    />
+                  )}
+                  <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate min-w-0" title={t.title}>{t.title}</span>
+                </div>
+                {t.notes && (
+                  <p className="text-xs text-muted-foreground truncate leading-tight pl-5" title={t.notes}>{t.notes.split('\n')[0]}</p>
+                )}
+              </div>
+            </td>
+            <td className="px-3 py-1.5">
+              <Popover
+                open={openDueDatePopover === t.id}
+                onOpenChange={v => setOpenDueDatePopover(v ? t.id : null)}
+              >
+                <PopoverTrigger asChild>
+                  <button
+                    onClick={e => e.stopPropagation()}
+                    className="hover:opacity-70 transition-opacity"
+                    title={t.dueDate ? `Due ${fmtDate(t.dueDate)} — click to change` : t.startDate ? `Start ${fmtDate(t.startDate)} — click to set due date` : 'Set due date'}
+                  >
+                    {t.dueDate ? (
+                      <span className={`text-xs whitespace-nowrap ${dueDateTextClass(t.dueDate)}`}>
+                        {fmtDate(t.dueDate)}
+                      </span>
+                    ) : t.startDate ? (
+                      <span className="text-xs whitespace-nowrap text-muted-foreground/50">
+                        {fmtDate(t.startDate)}
+                      </span>
+                    ) : (
+                      <CalendarIcon className="w-3.5 h-3.5 text-muted-foreground/40" />
+                    )}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" onClick={e => e.stopPropagation()}>
+                  <Calendar
+                    mode="single"
+                    selected={taskDueDateObj}
+                    onSelect={d => { saveDueDate(t, d); setOpenDueDatePopover(null) }}
+                  />
+                  <div className="border-t px-3 py-2 flex gap-2">
+                    <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => { saveDueDate(t, undefined); setOpenDueDatePopover(null) }}>Clear</button>
+                    <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => { saveDueDate(t, new Date()); setOpenDueDatePopover(null) }}>Today</button>
+                    <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => { saveDueDate(t, new Date(Date.now() + 86400000)); setOpenDueDatePopover(null) }}>Tomorrow</button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </td>
+          </tr>
+        )
+      })}
+    </tbody>
+  )
+}
+
+// ── Right pane — general tasks ────────────────────────────────────────────
+function GenSortInd({ col, sorts }: { col: GeneralSortKey; sorts: GeneralSortEntry[] }) {
+  const idx = sorts.findIndex(s => s.key === col)
+  if (idx === -1) return <span className="opacity-30">↕</span>
+  const { dir } = sorts[idx]
+  return (
+    <span className={dir === 'asc' ? 'text-blue-700 dark:text-blue-400' : 'text-green-700 dark:text-green-500'}>
+      {sorts.length > 1 ? <sup className="text-[9px] mr-px">{idx + 1}</sup> : null}{dir === 'asc' ? '↑' : '↓'}
+    </span>
+  )
+}
+
+function RightPane({ generalTasks, generalSorts, onSort, generalStatusFilters, setGeneralStatusFilters, ctx }: {
+  generalTasks: Task[]
+  generalSorts: GeneralSortEntry[]
+  onSort: (col: GeneralSortKey) => void
+  generalStatusFilters: string[]
+  setGeneralStatusFilters: (v: string[]) => void
+  ctx: GeneralTaskRowCtx
+}) {
+  const genStatusOptions = [
+    { value: 'active',      label: 'Active' },
+    { value: 'open',        label: 'Open' },
+    { value: 'in_progress', label: 'In Progress' },
+    { value: 'done',        label: 'Done' },
+    { value: 'inbox',       label: 'Inbox' },
+  ]
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Panel header */}
+      <div className="flex items-center gap-2 px-4 py-2 border-b bg-muted/30 shrink-0">
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">General Tasks</span>
+        <MultiSelectFilter
+          options={genStatusOptions}
+          value={generalStatusFilters}
+          onChange={next => {
+            // 'inbox' is mutually exclusive with status filters
+            const added = next.filter(x => !generalStatusFilters.includes(x))
+            if (added.includes('inbox')) setGeneralStatusFilters(['inbox'])
+            else setGeneralStatusFilters(next.filter(x => x !== 'inbox'))
+          }}
+          placeholder="Active"
+          width="w-28"
+        />
+        <span className="text-xs text-muted-foreground ml-auto">
+          {generalTasks.length} task{generalTasks.length !== 1 ? 's' : ''}
+        </span>
+      </div>
+
+      {/* Column headers */}
+      <div className="flex items-center gap-2 px-4 py-1 border-b bg-muted/20 shrink-0 text-xs font-semibold text-muted-foreground uppercase tracking-wider select-none">
+        <span className="w-5 shrink-0" />
+        <button onClick={() => onSort('title')} className="flex-1 text-left hover:text-foreground transition-colors">
+          Task<span className="ml-1"><GenSortInd col="title" sorts={generalSorts} /></span>
+        </button>
+        <div className="shrink-0 flex items-center gap-1.5">
+          <button onClick={() => onSort('priority')} className="w-8 text-center hover:text-foreground transition-colors whitespace-nowrap">
+            Pri<span className="ml-0.5"><GenSortInd col="priority" sorts={generalSorts} /></span>
+          </button>
+          <button onClick={() => onSort('due')} className="w-14 text-right hover:text-foreground transition-colors whitespace-nowrap">
+            Due<span className="ml-1"><GenSortInd col="due" sorts={generalSorts} /></span>
+          </button>
         </div>
       </div>
-    )
-  }
 
-  function ProjectRows({ p }: { p: Project }) {
-    const isExpanded = expandedProjects.has(p.id)
-    const projTasks  = tasksByProject.get(p.id) ?? []
-    const hasTasks   = projTasks.length > 0
-    const hasOverdue = overdueProjectIds.has(p.id)
-    const counts     = taskCountsByProject.get(p.id)
-    const latestLog  = latestLogByProjectMap.get(p.id)
-
-    return (
-      <tbody
-        className="group/proj"
-        onDragOver={e => {
-          if (!e.dataTransfer.types.includes('application/x-task-id')) return
-          e.preventDefault()
-          e.dataTransfer.dropEffect = 'move'
-          e.currentTarget.classList.add('outline', 'outline-2', 'outline-blue-400', '-outline-offset-2')
-        }}
-        onDragLeave={e => {
-          if (e.currentTarget.contains(e.relatedTarget as Node)) return
-          e.currentTarget.classList.remove('outline', 'outline-2', 'outline-blue-400', '-outline-offset-2')
-        }}
-        onDrop={e => {
-          e.currentTarget.classList.remove('outline', 'outline-2', 'outline-blue-400', '-outline-offset-2')
-          const rawId = e.dataTransfer.getData('application/x-task-id')
-          if (!rawId) return
-          const taskId = Number(rawId)
-          if (Number.isNaN(taskId)) return
-          e.preventDefault()
-          assignTaskToProject(taskId, p.id)
-        }}
-      >
-        {/* TR1 — project header */}
-        <tr
-          onClick={() => navigate(`/projects/${p.id}`)}
-          className="group-hover/proj:bg-blue-50/60 dark:group-hover/proj:bg-blue-950/20 cursor-pointer transition-colors"
-        >
-          <td className="w-10 px-1 py-1.5">
-            {hasTasks ? (
-              <button
-                onClick={e => { e.stopPropagation(); toggleProject(p.id) }}
-                className="text-muted-foreground hover:text-foreground w-8 h-7 flex items-center justify-center text-xs rounded hover:bg-accent transition-colors shrink-0"
-                title={isExpanded ? 'Collapse tasks' : 'Expand tasks'}
-              >
-                {isExpanded ? '▼' : '▶'}
-              </button>
-            ) : (
-              <span className="text-muted-foreground/30 w-8 h-7 flex items-center justify-center text-xs shrink-0">—</span>
-            )}
-          </td>
-          <td className="px-3 py-1 font-medium max-w-[18rem]">
-            <div className="flex flex-col gap-0.5 min-w-0">
-              <span className="truncate" style={wiStyle} title={p.workItem}>{p.workItem}</span>
-              {(hasOverdue || (!isExpanded && counts && (counts.open > 0 || counts.inProgress > 0))) && (
-                <span className="flex items-center gap-1.5 font-normal">
-                  {hasOverdue && (
-                    <span className="inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0 rounded bg-red-50 border border-red-200 text-red-700 shrink-0">
-                      🗓 Overdue
-                    </span>
-                  )}
-                  {!isExpanded && counts && (counts.open > 0 || counts.inProgress > 0) && (
-                    <span className="text-xs text-muted-foreground">
-                      {counts.open > 0 && <span>{counts.open} open</span>}
-                      {counts.open > 0 && counts.inProgress > 0 && <span> · </span>}
-                      {counts.inProgress > 0 && <span className="text-blue-600">{counts.inProgress} active</span>}
-                    </span>
-                  )}
-                </span>
-              )}
-              {p.tags.length > 0 && (
-                <span className="flex flex-wrap gap-0.5 font-normal" onClick={e => e.stopPropagation()}>
-                  {p.tags.slice(0, 3).map((tag, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setTagFilters(prev => prev.includes(tag) ? prev : [...prev, tag])}
-                      className="inline-flex items-center px-1.5 py-0 rounded-full text-[10px] font-medium bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200 transition-colors"
-                      title={`Filter by tag: ${tag}`}
-                    >
-                      {tag}
-                    </button>
-                  ))}
-                  {p.tags.length > 3 && (
-                    <span className="text-[10px] text-muted-foreground self-center">+{p.tags.length - 3}</span>
-                  )}
-                </span>
-              )}
-            </div>
-          </td>
-
-          {/* RAG — inline editable */}
-          <td className="w-px px-2 py-1.5 whitespace-nowrap" onClick={e => e.stopPropagation()}>
-            <Popover>
-              <PopoverTrigger asChild>
-                <button className="hover:opacity-75 transition-opacity" title="Click to change RAG">
-                  <RagBadge status={p.ragStatus} />
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-32 p-1" onClick={e => e.stopPropagation()}>
-                {RAG_OPTIONS.map(opt => (
-                  <button
-                    key={opt.value}
-                    onClick={() => saveProjectField(p.id, { ragStatus: opt.value })}
-                    className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent transition-colors"
-                  >
-                    <Check className={`h-3 w-3 shrink-0 ${p.ragStatus === opt.value ? 'opacity-100' : 'opacity-0'}`} />
-                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${opt.dotColor}`} />
-                    {opt.label}
-                  </button>
-                ))}
-              </PopoverContent>
-            </Popover>
-          </td>
-
-          {/* Priority — inline editable */}
-          <td className="w-px px-2 py-1.5 whitespace-nowrap" onClick={e => e.stopPropagation()}>
-            <Popover>
-              <PopoverTrigger asChild>
-                <button className="hover:opacity-75 transition-opacity" title="Click to change priority">
-                  {p.priorityId ? (() => {
-                    const opt = priorities.find(o => o.id === p.priorityId)
-                    const c = opt?.color ?? ''
-                    return (
-                      <span className={`inline-flex items-center gap-1 px-1 py-0 rounded-full text-xs border ${pillClass(c)}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${dotClass(c)}`} />
-                        {opt?.label ?? '—'}
-                      </span>
-                    )
-                  })() : <span className="text-muted-foreground text-xs">—</span>}
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-40 p-1" onClick={e => e.stopPropagation()}>
-                <button
-                  onClick={() => saveProjectField(p.id, { priorityId: null })}
-                  className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent transition-colors"
-                >
-                  <Check className={`h-3 w-3 shrink-0 ${p.priorityId === null ? 'opacity-100' : 'opacity-0'}`} />
-                  <span className="text-muted-foreground">— None</span>
-                </button>
-                {priorities.map(opt => (
-                  <button
-                    key={opt.id}
-                    onClick={() => saveProjectField(p.id, { priorityId: opt.id })}
-                    className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent transition-colors"
-                  >
-                    <Check className={`h-3 w-3 shrink-0 ${p.priorityId === opt.id ? 'opacity-100' : 'opacity-0'}`} />
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${dotClass(opt.color)}`} />
-                    {opt.label}
-                  </button>
-                ))}
-              </PopoverContent>
-            </Popover>
-          </td>
-
-          {/* Status — inline editable */}
-          <td className="w-px px-2 py-1.5 whitespace-nowrap" onClick={e => e.stopPropagation()}>
-            <Popover>
-              <PopoverTrigger asChild>
-                <button className="hover:opacity-75 transition-opacity" title="Click to change status">
-                  {p.statusId ? (() => {
-                    const opt = projectStatuses.find(s => s.id === p.statusId)
-                    if (!opt) return <span className="text-muted-foreground text-xs">—</span>
-                    const c = opt.color
-                    return (
-                      <span className={`inline-flex items-center gap-1 text-xs px-1 py-0 rounded-full border ${pillClass(c)}`}>
-                        {c && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass(c)}`} />}
-                        {opt.label}
-                      </span>
-                    )
-                  })() : <span className="text-muted-foreground text-xs">—</span>}
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-44 p-1" onClick={e => e.stopPropagation()}>
-                <button
-                  onClick={() => saveProjectField(p.id, { statusId: null })}
-                  className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent transition-colors"
-                >
-                  <Check className={`h-3 w-3 shrink-0 ${p.statusId === null ? 'opacity-100' : 'opacity-0'}`} />
-                  <span className="text-muted-foreground">— None</span>
-                </button>
-                {projectStatuses.map(opt => (
-                  <button
-                    key={opt.id}
-                    onClick={() => saveProjectField(p.id, { statusId: opt.id })}
-                    className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent transition-colors"
-                  >
-                    <Check className={`h-3 w-3 shrink-0 ${p.statusId === opt.id ? 'opacity-100' : 'opacity-0'}`} />
-                    {opt.color && <span className={`w-2 h-2 rounded-full shrink-0 ${dotClass(opt.color)}`} />}
-                    {opt.label}
-                  </button>
-                ))}
-              </PopoverContent>
-            </Popover>
-          </td>
-
-          <td className="px-3 py-1.5 max-w-[14rem]">
-            <span className="text-xs text-muted-foreground line-clamp-2">{p.latestStatus || '—'}</span>
-          </td>
-        </tr>
-
-        {/* TR2 — latest work log entry (capped to work-item column to avoid horizontal scroll) */}
-        <tr
-          onClick={() => navigate(`/projects/${p.id}`)}
-          className="group-hover/proj:bg-blue-50/40 dark:group-hover/proj:bg-blue-950/10 cursor-pointer transition-colors border-b border-border"
-        >
-          <td className="w-10" />
-          <td className="px-3 pb-1.5 pt-0 overflow-hidden max-w-0">
-            <div className="truncate text-muted-foreground/70 [&_.prose]:!text-xs [&_p]:m-0 [&_p]:inline">
-              {latestLog
-                ? <MarkdownContent>{latestLog.note.split('\n')[0]}</MarkdownContent>
-                : <span className="text-xs">—</span>}
-            </div>
-          </td>
-          <td colSpan={4} />
-        </tr>
-
-        {/* Expanded task sub-rows */}
-        {isExpanded && projTasks.length === 0 && (
-          <tr className="border-b border-border">
-            <td className="w-10" />
-            <td colSpan={5} className="px-4 py-2 text-xs text-muted-foreground italic">No open tasks</td>
-          </tr>
+      {/* Task list */}
+      <div className="flex-1 overflow-auto divide-y divide-border/60">
+        {generalTasks.length === 0 ? (
+          <p className="px-4 py-12 text-center text-sm text-muted-foreground">No general tasks.</p>
+        ) : (
+          generalTasks.map(t => <GeneralTaskRow key={t.id} t={t} ctx={ctx} />)
         )}
-        {isExpanded && projTasks.map(t => {
-          const taskDueDateObj = t.dueDate ? new Date(t.dueDate + 'T12:00:00') : undefined
-          const taskPriority = priorities.find(pr => pr.id === t.priorityId)
-          return (
-            <tr
-              key={t.id}
-              className="bg-muted/20 hover:bg-blue-50/40 dark:hover:bg-blue-950/10 transition-colors cursor-pointer border-b border-border/60"
-              onClick={() => { setEditingTask(t); setTaskModalOpen(true) }}
-            >
-              <td className="w-10" />
-              <td className="px-3 py-1.5 pl-7" colSpan={4}>
-                <div className="flex flex-col gap-0.5 min-w-0">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <button
-                      onClick={async e => { e.stopPropagation(); await cycleTaskStatus(t) }}
-                      className="shrink-0 hover:scale-110 transition-transform"
-                      title={`Status: ${t.status} — click to cycle`}
-                    >
-                      <TaskStatusDot status={t.status} />
-                    </button>
-                    {taskPriority && (
-                      <span
-                        className={`w-2 h-2 rounded-full shrink-0 ${dotClass(taskPriority.color)}`}
-                        title={taskPriority.label}
-                      />
-                    )}
-                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate min-w-0" title={t.title}>{t.title}</span>
-                  </div>
-                  {t.notes && (
-                    <p className="text-xs text-muted-foreground truncate leading-tight pl-5" title={t.notes}>{t.notes.split('\n')[0]}</p>
-                  )}
-                </div>
-              </td>
-              <td className="px-3 py-1.5">
-                <Popover
-                  open={openDueDatePopover === t.id}
-                  onOpenChange={v => setOpenDueDatePopover(v ? t.id : null)}
-                >
-                  <PopoverTrigger asChild>
-                    <button
-                      onClick={e => e.stopPropagation()}
-                      className="hover:opacity-70 transition-opacity"
-                      title={t.dueDate ? `Due ${fmtDate(t.dueDate)} — click to change` : t.startDate ? `Start ${fmtDate(t.startDate)} — click to set due date` : 'Set due date'}
-                    >
-                      {t.dueDate ? (
-                        <span className={`text-xs whitespace-nowrap ${
-                          isOverdue(t.dueDate) ? 'text-red-600 font-medium' :
-                          isDueToday(t.dueDate) ? 'text-amber-600 font-medium' :
-                          'text-muted-foreground'
-                        }`}>
-                          {fmtDate(t.dueDate)}
-                        </span>
-                      ) : t.startDate ? (
-                        <span className="text-xs whitespace-nowrap text-muted-foreground/50">
-                          {fmtDate(t.startDate)}
-                        </span>
-                      ) : (
-                        <CalendarIcon className="w-3.5 h-3.5 text-muted-foreground/40" />
-                      )}
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" onClick={e => e.stopPropagation()}>
-                    <Calendar
-                      mode="single"
-                      selected={taskDueDateObj}
-                      onSelect={d => { saveDueDate(t, d); setOpenDueDatePopover(null) }}
-                    />
-                    <div className="border-t px-3 py-2 flex gap-2">
-                      <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => { saveDueDate(t, undefined); setOpenDueDatePopover(null) }}>Clear</button>
-                      <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => { saveDueDate(t, new Date()); setOpenDueDatePopover(null) }}>Today</button>
-                      <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => { saveDueDate(t, new Date(Date.now() + 86400000)); setOpenDueDatePopover(null) }}>Tomorrow</button>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              </td>
-            </tr>
-          )
-        })}
-      </tbody>
-    )
-  }
+      </div>
+    </div>
+  )
+}
 
-  // ── Right pane — general tasks ────────────────────────────────────────────
-  function RightPane() {
-    const GenSortInd = ({ col }: { col: GeneralSortKey }) => {
-      const idx = generalSorts.findIndex(s => s.key === col)
-      if (idx === -1) return <span className="opacity-30">↕</span>
-      const { dir } = generalSorts[idx]
-      return (
-        <span className={dir === 'asc' ? 'text-blue-700 dark:text-blue-400' : 'text-green-700 dark:text-green-500'}>
-          {generalSorts.length > 1 ? <sup className="text-[9px] mr-px">{idx + 1}</sup> : null}{dir === 'asc' ? '↑' : '↓'}
+function GeneralTaskRow({ t, ctx }: { t: Task; ctx: GeneralTaskRowCtx }) {
+  const { priorities, draggedTaskId, setDraggedTaskId, cycleTaskStatus, savePriority, saveDueDate, openTaskModal } = ctx
+  const priorityOpt = priorities.find(p => p.id === t.priorityId)
+  const dueDateObj  = t.dueDate ? new Date(t.dueDate + 'T12:00:00') : undefined
+  const today = localToday()
+  const completedToday = t.status === 'done' && t.updatedAt.slice(0, 10) === today
+  const [dueDateOpen, setDueDateOpen] = useState(false)
+
+  return (
+    <div
+      className={`px-4 py-2 hover:bg-accent/50 transition-colors cursor-grab active:cursor-grabbing select-none ${t.status === 'done' && !completedToday ? 'opacity-60' : ''} ${draggedTaskId === t.id ? 'opacity-40 ring-1 ring-inset ring-blue-300' : ''}`}
+      draggable
+      onDragStart={e => {
+        e.dataTransfer.setData('application/x-task-id', String(t.id))
+        e.dataTransfer.effectAllowed = 'move'
+        setTimeout(() => setDraggedTaskId(t.id), 0)
+      }}
+      onDragEnd={() => setDraggedTaskId(null)}
+      onClick={() => openTaskModal(t)}
+    >
+      {/* Line 1: status dot + title + priority dot + due date */}
+      <div className="flex items-start gap-2">
+        {/* Status dot */}
+        <button
+          onClick={async e => { e.stopPropagation(); await cycleTaskStatus(t) }}
+          className="shrink-0 mt-0.5 hover:scale-110 transition-transform"
+          title={`Status: ${t.status} — click to cycle`}
+        >
+          <TaskStatusDot status={t.status} size="md" />
+        </button>
+
+        {/* Title */}
+        <span className={`flex-1 text-sm leading-snug line-clamp-2 ${t.status === 'done' ? 'line-through text-muted-foreground' : ''}`}>
+          {t.title}
         </span>
-      )
-    }
 
-    const genStatusOptions = [
-      { value: 'active',      label: 'Active' },
-      { value: 'open',        label: 'Open' },
-      { value: 'in_progress', label: 'In Progress' },
-      { value: 'done',        label: 'Done' },
-      { value: 'inbox',       label: 'Inbox' },
-    ]
+        {/* Priority popover */}
+        <div className="shrink-0 flex items-center gap-1.5 mt-0.5">
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                onClick={e => e.stopPropagation()}
+                className="w-4 flex items-center justify-center hover:scale-125 transition-transform"
+                title={priorityOpt ? priorityOpt.label : 'Set priority'}
+              >
+                {priorityOpt ? (
+                  <span className={`w-2.5 h-2.5 rounded-full ${dotClass(priorityOpt.color)}`} />
+                ) : (
+                  <span className="w-2.5 h-2.5 rounded-full border border-slate-300 dark:border-slate-600" />
+                )}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-40 p-1" onClick={e => e.stopPropagation()}>
+              <button
+                className="w-full text-left text-xs px-2 py-1.5 rounded hover:bg-accent transition-colors text-muted-foreground"
+                onClick={() => savePriority(t, null)}
+              >
+                None
+              </button>
+              {priorities.map(p => (
+                <button
+                  key={p.id}
+                  className="w-full text-left text-xs px-2 py-1.5 rounded hover:bg-accent transition-colors flex items-center gap-2"
+                  onClick={() => savePriority(t, p.id)}
+                >
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${dotClass(p.color)}`} />
+                  {p.label}
+                </button>
+              ))}
+            </PopoverContent>
+          </Popover>
 
-    return (
-      <div className="flex flex-col h-full overflow-hidden">
-        {/* Panel header */}
-        <div className="flex items-center gap-2 px-4 py-2 border-b bg-muted/30 shrink-0">
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">General Tasks</span>
-          <MultiSelectFilter
-            options={genStatusOptions}
-            value={generalStatusFilters}
-            onChange={next => {
-              // 'inbox' is mutually exclusive with status filters
-              const added = next.filter(x => !generalStatusFilters.includes(x))
-              if (added.includes('inbox')) setGeneralStatusFilters(['inbox'])
-              else setGeneralStatusFilters(next.filter(x => x !== 'inbox'))
-            }}
-            placeholder="Active"
-            width="w-28"
-          />
-          <span className="text-xs text-muted-foreground ml-auto">
-            {generalTasks.length} task{generalTasks.length !== 1 ? 's' : ''}
-          </span>
+          {/* Due date popover */}
+          <Popover open={dueDateOpen} onOpenChange={setDueDateOpen}>
+            <PopoverTrigger asChild>
+              <button
+                onClick={e => e.stopPropagation()}
+                className="w-14 text-right hover:opacity-70 transition-opacity"
+                title={t.dueDate ? `Due ${fmtDate(t.dueDate)} — click to change` : t.startDate ? `Start ${fmtDate(t.startDate)} — click to set due date` : 'Set due date'}
+              >
+                {t.dueDate ? (
+                  <span className={`text-xs whitespace-nowrap ${dueDateTextClass(t.dueDate)}`}>
+                    {fmtDate(t.dueDate)}
+                  </span>
+                ) : t.startDate ? (
+                  <span className="text-xs whitespace-nowrap text-muted-foreground/50">
+                    {fmtDate(t.startDate)}
+                  </span>
+                ) : (
+                  <CalendarIcon className="w-3.5 h-3.5 text-muted-foreground/40 ml-auto" />
+                )}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" onClick={e => e.stopPropagation()}>
+              <Calendar
+                mode="single"
+                selected={dueDateObj}
+                onSelect={d => { saveDueDate(t, d); setDueDateOpen(false) }}
+              />
+              <div className="border-t px-3 py-2 flex gap-2">
+                <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => { saveDueDate(t, undefined); setDueDateOpen(false) }}>Clear</button>
+                <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => { saveDueDate(t, new Date()); setDueDateOpen(false) }}>Today</button>
+                <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => { saveDueDate(t, new Date(Date.now() + 86400000)); setDueDateOpen(false) }}>Tomorrow</button>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
+      </div>
 
-        {/* Column headers */}
-        <div className="flex items-center gap-2 px-4 py-1 border-b bg-muted/20 shrink-0 text-xs font-semibold text-muted-foreground uppercase tracking-wider select-none">
-          <span className="w-5 shrink-0" />
-          <button onClick={() => handleGeneralSort('title')} className="flex-1 text-left hover:text-foreground transition-colors">
-            Task<span className="ml-1"><GenSortInd col="title" /></span>
-          </button>
-          <div className="shrink-0 flex items-center gap-1.5">
-            <button onClick={() => handleGeneralSort('priority')} className="w-8 text-center hover:text-foreground transition-colors whitespace-nowrap">
-              Pri<span className="ml-0.5"><GenSortInd col="priority" /></span>
-            </button>
-            <button onClick={() => handleGeneralSort('due')} className="w-14 text-right hover:text-foreground transition-colors whitespace-nowrap">
-              Due<span className="ml-1"><GenSortInd col="due" /></span>
-            </button>
-          </div>
-        </div>
-
-        {/* Task list */}
-        <div className="flex-1 overflow-auto divide-y divide-border/60">
-          {generalTasks.length === 0 ? (
-            <p className="px-4 py-12 text-center text-sm text-muted-foreground">No general tasks.</p>
-          ) : (
-            generalTasks.map(t => <GeneralTaskRow key={t.id} t={t} />)
+      {/* Line 2: notes + recurrence indicator */}
+      {(t.notes || t.isRecurring) && (
+        <div className="flex items-center gap-1 pl-7 mt-0.5">
+          {t.notes && (
+            <span className="text-xs text-muted-foreground truncate flex-1">{t.notes}</span>
+          )}
+          {t.isRecurring && (
+            <span title="Recurring task"><RotateCcw className="w-3 h-3 text-muted-foreground shrink-0" /></span>
           )}
         </div>
-      </div>
-    )
-  }
-
-  function GeneralTaskRow({ t }: { t: Task }) {
-    const priorityOpt = priorities.find(p => p.id === t.priorityId)
-    const dueDateObj  = t.dueDate ? new Date(t.dueDate + 'T12:00:00') : undefined
-    const today = localToday()
-    const completedToday = t.status === 'done' && t.updatedAt.slice(0, 10) === today
-    const [dueDateOpen, setDueDateOpen] = useState(false)
-
-    return (
-      <div
-        className={`px-4 py-2 hover:bg-accent/50 transition-colors cursor-grab active:cursor-grabbing select-none ${t.status === 'done' && !completedToday ? 'opacity-60' : ''} ${draggedTaskId === t.id ? 'opacity-40 ring-1 ring-inset ring-blue-300' : ''}`}
-        draggable
-        onDragStart={e => {
-          e.dataTransfer.setData('application/x-task-id', String(t.id))
-          e.dataTransfer.effectAllowed = 'move'
-          setTimeout(() => setDraggedTaskId(t.id), 0)
-        }}
-        onDragEnd={() => setDraggedTaskId(null)}
-        onClick={() => { setEditingTask(t); setTaskModalOpen(true) }}
-      >
-        {/* Line 1: status dot + title + priority dot + due date */}
-        <div className="flex items-start gap-2">
-          {/* Status dot */}
-          <button
-            onClick={async e => { e.stopPropagation(); await cycleTaskStatus(t) }}
-            className="shrink-0 mt-0.5 hover:scale-110 transition-transform"
-            title={`Status: ${t.status} — click to cycle`}
-          >
-            <TaskStatusDot status={t.status} size="md" />
-          </button>
-
-          {/* Title */}
-          <span className={`flex-1 text-sm leading-snug line-clamp-2 ${t.status === 'done' ? 'line-through text-muted-foreground' : ''}`}>
-            {t.title}
-          </span>
-
-          {/* Priority popover */}
-          <div className="shrink-0 flex items-center gap-1.5 mt-0.5">
-            <Popover>
-              <PopoverTrigger asChild>
-                <button
-                  onClick={e => e.stopPropagation()}
-                  className="w-4 flex items-center justify-center hover:scale-125 transition-transform"
-                  title={priorityOpt ? priorityOpt.label : 'Set priority'}
-                >
-                  {priorityOpt ? (
-                    <span className={`w-2.5 h-2.5 rounded-full ${dotClass(priorityOpt.color)}`} />
-                  ) : (
-                    <span className="w-2.5 h-2.5 rounded-full border border-slate-300" />
-                  )}
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-40 p-1" onClick={e => e.stopPropagation()}>
-                <button
-                  className="w-full text-left text-xs px-2 py-1.5 rounded hover:bg-accent transition-colors text-muted-foreground"
-                  onClick={() => savePriority(t, null)}
-                >
-                  None
-                </button>
-                {priorities.map(p => (
-                  <button
-                    key={p.id}
-                    className="w-full text-left text-xs px-2 py-1.5 rounded hover:bg-accent transition-colors flex items-center gap-2"
-                    onClick={() => savePriority(t, p.id)}
-                  >
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${dotClass(p.color)}`} />
-                    {p.label}
-                  </button>
-                ))}
-              </PopoverContent>
-            </Popover>
-
-            {/* Due date popover */}
-            <Popover open={dueDateOpen} onOpenChange={setDueDateOpen}>
-              <PopoverTrigger asChild>
-                <button
-                  onClick={e => e.stopPropagation()}
-                  className="w-14 text-right hover:opacity-70 transition-opacity"
-                  title={t.dueDate ? `Due ${fmtDate(t.dueDate)} — click to change` : t.startDate ? `Start ${fmtDate(t.startDate)} — click to set due date` : 'Set due date'}
-                >
-                  {t.dueDate ? (
-                    <span className={`text-xs whitespace-nowrap ${
-                      isOverdue(t.dueDate) ? 'text-red-600 font-medium' :
-                      isDueToday(t.dueDate) ? 'text-amber-600 font-medium' :
-                      'text-muted-foreground'
-                    }`}>
-                      {fmtDate(t.dueDate)}
-                    </span>
-                  ) : t.startDate ? (
-                    <span className="text-xs whitespace-nowrap text-muted-foreground/50">
-                      {fmtDate(t.startDate)}
-                    </span>
-                  ) : (
-                    <CalendarIcon className="w-3.5 h-3.5 text-muted-foreground/40 ml-auto" />
-                  )}
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" onClick={e => e.stopPropagation()}>
-                <Calendar
-                  mode="single"
-                  selected={dueDateObj}
-                  onSelect={d => { saveDueDate(t, d); setDueDateOpen(false) }}
-                />
-                <div className="border-t px-3 py-2 flex gap-2">
-                  <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => { saveDueDate(t, undefined); setDueDateOpen(false) }}>Clear</button>
-                  <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => { saveDueDate(t, new Date()); setDueDateOpen(false) }}>Today</button>
-                  <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => { saveDueDate(t, new Date(Date.now() + 86400000)); setDueDateOpen(false) }}>Tomorrow</button>
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
-        </div>
-
-        {/* Line 2: notes + recurrence indicator */}
-        {(t.notes || t.isRecurring) && (
-          <div className="flex items-center gap-1 pl-7 mt-0.5">
-            {t.notes && (
-              <span className="text-xs text-muted-foreground truncate flex-1">{t.notes}</span>
-            )}
-            {t.isRecurring && (
-              <span title="Recurring task"><RotateCcw className="w-3 h-3 text-muted-foreground shrink-0" /></span>
-            )}
-          </div>
-        )}
-      </div>
-    )
-  }
+      )}
+    </div>
+  )
 }

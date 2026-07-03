@@ -5,20 +5,10 @@ import { Input } from '@/components/ui/input'
 import { MultiSelectFilter } from '@/components/ui/MultiSelectFilter'
 import { searchEnriched } from '@/db/search'
 import { parseSearchQuery, SNIPPET_MARK_START, SNIPPET_MARK_END } from '@/lib/searchQuery'
+import { dotClass, RAG_COLOR } from '@/lib/colors'
+import { RagBadge } from '@/components/RagBadge'
 import type { EnrichedSearchResult, SearchSourceType } from '@/db/search'
 import type { RagStatus } from '@/types'
-
-const RAG_BADGE: Record<string, string> = {
-  Red:   'bg-red-100 text-red-700 border border-red-200',
-  Amber: 'bg-amber-100 text-amber-700 border border-amber-200',
-  Green: 'bg-green-100 text-green-700 border border-green-200',
-}
-
-const RAG_DOT: Record<string, string> = {
-  Red:   'bg-red-500',
-  Amber: 'bg-amber-500',
-  Green: 'bg-green-500',
-}
 
 const TASK_STATUS_LABEL: Record<string, string> = {
   open:        'Open',
@@ -48,7 +38,7 @@ function Snippet({ text }: { text: string }) {
       continue
     }
     nodes.push(
-      <mark key={i} className="bg-yellow-200 text-yellow-900 rounded-sm px-0.5">
+      <mark key={i} className="bg-yellow-200 text-yellow-900 dark:bg-yellow-900 dark:text-yellow-200 rounded-sm px-0.5">
         {segments[i].slice(0, endIdx)}
       </mark>,
     )
@@ -238,14 +228,14 @@ export default function SearchPage() {
                       >
                         <div className="mt-0.5 shrink-0">
                           {r.ragStatus && (
-                            <span className={`inline-block w-2.5 h-2.5 rounded-full ${RAG_DOT[r.ragStatus] ?? 'bg-slate-400'}`} />
+                            <span className={`inline-block w-2.5 h-2.5 rounded-full ${dotClass(RAG_COLOR[r.ragStatus as RagStatus])}`} />
                           )}
                         </div>
                         <div className="min-w-0 flex-1 space-y-0.5">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-sm font-medium group-hover:text-primary transition-colors truncate">{r.title}</span>
                             {r.ragStatus && (
-                              <span className={`text-xs px-1.5 py-0.5 rounded border font-medium ${RAG_BADGE[r.ragStatus as RagStatus] ?? ''}`}>{r.ragStatus}</span>
+                              <RagBadge status={r.ragStatus as RagStatus} />
                             )}
                             {r.areaLabel && (
                               <span className="text-xs text-muted-foreground border border-border rounded px-1.5 py-0.5">{r.areaLabel}</span>

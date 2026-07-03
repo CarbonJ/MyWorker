@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { MultiSelectFilter } from '@/components/ui/MultiSelectFilter'
-import { RAG_ORDER, pillClass, pillClassActive, dotClass } from '@/lib/colors'
+import { RAG_ORDER, RAG_OPTIONS, pillClass, pillClassActive, dotClass, dotOnPillClass, PILL_DIMMED_CLASS } from '@/lib/colors'
 import { loadGuiSettings, buttonStyle } from '@/lib/guiSettings'
 import { useDataLoader } from '@/hooks/useDataLoader'
 import { fmtDate, isOverdue } from '@/lib/utils'
@@ -72,12 +72,6 @@ function ExpandableText({ children, textKey }: { children: ReactNode; textKey: s
     </div>
   )
 }
-
-const RAG_FILTER_OPTIONS: { value: RagStatus; label: string; dotColor: string }[] = [
-  { value: 'Green', label: 'Green', dotColor: 'bg-green-500' },
-  { value: 'Amber', label: 'Amber', dotColor: 'bg-amber-400' },
-  { value: 'Red',   label: 'Red',   dotColor: 'bg-red-500' },
-]
 
 function stalenessColor(days: number): string {
   if (days < 7)  return 'text-green-600 dark:text-green-400'
@@ -559,7 +553,7 @@ export default function ReportingView() {
 
         {/* RAG filter */}
         <MultiSelectFilter
-          options={RAG_FILTER_OPTIONS.map(o => ({
+          options={RAG_OPTIONS.map(o => ({
             value: o.value,
             label: o.label,
             prefix: <span className={`w-2 h-2 rounded-full shrink-0 ${o.dotColor}`} />,
@@ -682,7 +676,7 @@ export default function ReportingView() {
                 const cls = isActive
                   ? (opt.color ? pillClassActive(opt.color) : 'bg-primary text-primary-foreground border-primary')
                   : anyActive && !isAll
-                    ? 'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-500 dark:border-slate-700'
+                    ? PILL_DIMMED_CLASS
                     : (opt.color ? pillClass(opt.color) : 'border-input bg-background hover:bg-accent hover:text-accent-foreground')
                 return (
                   <button
@@ -708,7 +702,7 @@ export default function ReportingView() {
                 const cls = isActive
                   ? (opt.color ? pillClassActive(opt.color) : 'bg-primary text-primary-foreground border-primary')
                   : anyActive && !isAll
-                    ? 'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-500 dark:border-slate-700'
+                    ? PILL_DIMMED_CLASS
                     : (opt.color ? pillClass(opt.color) : 'border-input bg-background hover:bg-accent hover:text-accent-foreground')
                 return (
                   <button
@@ -761,11 +755,11 @@ export default function ReportingView() {
             {/* Stat cards */}
             <div className="flex gap-3 flex-wrap">
               <StatCard label="Projects" value={projects.length} />
-              <StatCard label="Red"          value={metrics.ragCounts.Red}    valueClass="text-red-600"   active={activeQuickFilter === 'red'}           onClick={() => toggleQuickFilter('red')} />
-              <StatCard label="Amber"        value={metrics.ragCounts.Amber}  valueClass="text-amber-600" active={activeQuickFilter === 'amber'}         onClick={() => toggleQuickFilter('amber')} />
-              <StatCard label="Green"        value={metrics.ragCounts.Green}  valueClass="text-green-600" active={activeQuickFilter === 'green'}         onClick={() => toggleQuickFilter('green')} />
-              <StatCard label="Stale 14d+"   value={metrics.staleCount}       valueClass={metrics.staleCount > 0 ? 'text-amber-600' : 'text-muted-foreground'} active={activeQuickFilter === 'stale'}         onClick={() => toggleQuickFilter('stale')} />
-              <StatCard label="Overdue tasks" value={metrics.overdueTaskCount} valueClass={metrics.overdueTaskCount > 0 ? 'text-red-600' : 'text-muted-foreground'} active={activeQuickFilter === 'overdue_tasks'} onClick={() => toggleQuickFilter('overdue_tasks')} />
+              <StatCard label="Red"          value={metrics.ragCounts.Red}    valueClass="text-red-600 dark:text-red-400"   active={activeQuickFilter === 'red'}           onClick={() => toggleQuickFilter('red')} />
+              <StatCard label="Amber"        value={metrics.ragCounts.Amber}  valueClass="text-amber-600 dark:text-amber-400" active={activeQuickFilter === 'amber'}         onClick={() => toggleQuickFilter('amber')} />
+              <StatCard label="Green"        value={metrics.ragCounts.Green}  valueClass="text-green-600 dark:text-green-400" active={activeQuickFilter === 'green'}         onClick={() => toggleQuickFilter('green')} />
+              <StatCard label="Stale 14d+"   value={metrics.staleCount}       valueClass={metrics.staleCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'} active={activeQuickFilter === 'stale'}         onClick={() => toggleQuickFilter('stale')} />
+              <StatCard label="Overdue tasks" value={metrics.overdueTaskCount} valueClass={metrics.overdueTaskCount > 0 ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'} active={activeQuickFilter === 'overdue_tasks'} onClick={() => toggleQuickFilter('overdue_tasks')} />
               <StatCard label="No due date"  value={metrics.noDueDateCount}   valueClass="text-muted-foreground" active={activeQuickFilter === 'no_due_date'}    onClick={() => toggleQuickFilter('no_due_date')} />
             </div>
 
@@ -779,14 +773,14 @@ export default function ReportingView() {
                 <div className="space-y-1 min-w-[160px]">
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold">RAG distribution</p>
                   <div className="flex h-3 rounded overflow-hidden w-48">
-                    {ragRedPct   > 0 && <div className="bg-red-500"   style={{ width: `${ragRedPct}%` }} />}
-                    {ragAmberPct > 0 && <div className="bg-amber-400" style={{ width: `${ragAmberPct}%` }} />}
-                    {ragGreenPct > 0 && <div className="bg-green-500" style={{ width: `${ragGreenPct}%` }} />}
+                    {ragRedPct   > 0 && <div className={dotClass('red')}   style={{ width: `${ragRedPct}%` }} />}
+                    {ragAmberPct > 0 && <div className={dotClass('amber')} style={{ width: `${ragAmberPct}%` }} />}
+                    {ragGreenPct > 0 && <div className={dotClass('green')} style={{ width: `${ragGreenPct}%` }} />}
                   </div>
                   <div className="flex gap-3 text-[10px] text-muted-foreground">
-                    {metrics.ragCounts.Red   > 0 && <span className="text-red-600">{metrics.ragCounts.Red} Red</span>}
-                    {metrics.ragCounts.Amber > 0 && <span className="text-amber-600">{metrics.ragCounts.Amber} Amber</span>}
-                    {metrics.ragCounts.Green > 0 && <span className="text-green-600">{metrics.ragCounts.Green} Green</span>}
+                    {metrics.ragCounts.Red   > 0 && <span className="text-red-600 dark:text-red-400">{metrics.ragCounts.Red} Red</span>}
+                    {metrics.ragCounts.Amber > 0 && <span className="text-amber-600 dark:text-amber-400">{metrics.ragCounts.Amber} Amber</span>}
+                    {metrics.ragCounts.Green > 0 && <span className="text-green-600 dark:text-green-400">{metrics.ragCounts.Green} Green</span>}
                   </div>
                 </div>
               )}
@@ -832,9 +826,9 @@ export default function ReportingView() {
                       <div key={d.label} className="flex items-center gap-2">
                         <span className="text-[10px] text-muted-foreground w-24 truncate">{d.label}</span>
                         <div className="flex h-2 rounded overflow-hidden w-20">
-                          {d.Red   > 0 && <div className="bg-red-500"   style={{ width: `${d.Red   / d.total * 100}%` }} />}
-                          {d.Amber > 0 && <div className="bg-amber-400" style={{ width: `${d.Amber / d.total * 100}%` }} />}
-                          {d.Green > 0 && <div className="bg-green-500" style={{ width: `${d.Green / d.total * 100}%` }} />}
+                          {d.Red   > 0 && <div className={dotClass('red')}   style={{ width: `${d.Red   / d.total * 100}%` }} />}
+                          {d.Amber > 0 && <div className={dotClass('amber')} style={{ width: `${d.Amber / d.total * 100}%` }} />}
+                          {d.Green > 0 && <div className={dotClass('green')} style={{ width: `${d.Green / d.total * 100}%` }} />}
                         </div>
                         <span className="text-[10px] text-muted-foreground tabular-nums">{d.total}</span>
                       </div>
@@ -857,7 +851,7 @@ export default function ReportingView() {
               >
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold">Red + overdue tasks</p>
                 <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-1.5 group-hover:bg-red-500/20 transition-colors">
-                  <span className="text-red-600 font-bold text-base tabular-nums">{metrics.redOverdueProjects.length}</span>
+                  <span className="text-red-600 dark:text-red-400 font-bold text-base tabular-nums">{metrics.redOverdueProjects.length}</span>
                   <span className="text-[11px] text-red-700 dark:text-red-400">
                     Red project{metrics.redOverdueProjects.length !== 1 ? 's' : ''} with overdue tasks
                   </span>
@@ -908,10 +902,10 @@ export default function ReportingView() {
               <div className="flex items-center gap-1">
                 <span className="text-[10px] text-muted-foreground tabular-nums">{metrics.activityPulse.lastWeek} last week</span>
                 {metrics.activityPulse.thisWeek > metrics.activityPulse.lastWeek && (
-                  <span className="text-[10px] text-green-600">↑</span>
+                  <span className="text-[10px] text-green-600 dark:text-green-400">↑</span>
                 )}
                 {metrics.activityPulse.thisWeek < metrics.activityPulse.lastWeek && (
-                  <span className="text-[10px] text-amber-600">↓</span>
+                  <span className="text-[10px] text-amber-600 dark:text-amber-400">↓</span>
                 )}
                 {metrics.activityPulse.thisWeek === metrics.activityPulse.lastWeek && metrics.activityPulse.thisWeek > 0 && (
                   <span className="text-[10px] text-muted-foreground">→</span>
@@ -1033,7 +1027,7 @@ export default function ReportingView() {
                   <td className="px-3 py-1">
                     {priorityOpt ? (
                       <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${pillClass(priorityOpt.color)}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${dotClass(priorityOpt.color)}`} />
+                        <span className={`w-1.5 h-1.5 rounded-full ${dotOnPillClass(priorityOpt.color)}`} />
                         {priorityOpt.label}
                       </span>
                     ) : <span className="text-muted-foreground">—</span>}
@@ -1043,7 +1037,7 @@ export default function ReportingView() {
                   <td className="w-px px-3 py-1 whitespace-nowrap">
                     {statusOpt ? (
                       <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${pillClass(statusOpt.color)}`}>
-                        {statusOpt.color && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass(statusOpt.color)}`} />}
+                        {statusOpt.color && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotOnPillClass(statusOpt.color)}`} />}
                         {statusOpt.label}
                       </span>
                     ) : <span className="text-muted-foreground">—</span>}
@@ -1053,9 +1047,9 @@ export default function ReportingView() {
                   <td className="px-3 py-1 whitespace-nowrap overflow-hidden">
                     {counts && (counts.open > 0 || counts.inProgress > 0) ? (
                       <span className="text-xs text-muted-foreground">
-                        {counts.open > 0 && <span className="text-slate-700 font-medium">{counts.open} open</span>}
+                        {counts.open > 0 && <span className="text-slate-700 dark:text-slate-300 font-medium">{counts.open} open</span>}
                         {counts.open > 0 && counts.inProgress > 0 && <span> · </span>}
-                        {counts.inProgress > 0 && <span className="text-blue-600 font-medium">{counts.inProgress} active</span>}
+                        {counts.inProgress > 0 && <span className="text-blue-600 dark:text-blue-400 font-medium">{counts.inProgress} active</span>}
                       </span>
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>

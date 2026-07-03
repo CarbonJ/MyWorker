@@ -511,7 +511,7 @@ export default function Settings() {
                 </Button>
               </>
             ) : (
-              <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 space-y-1">
+              <div className="rounded-md border border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300 px-4 py-3 text-sm space-y-1">
                 <p className="font-medium">Folder sync not available in this browser</p>
                 <p>
                   Your data is safely stored in browser storage (IndexedDB).

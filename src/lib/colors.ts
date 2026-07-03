@@ -32,6 +32,40 @@ export const DOT_CLASS: Record<string, string> = {
 /** Sort weight for RAG status — Red is most urgent (0), Green is least (2). */
 export const RAG_ORDER: Record<RagStatus, number> = { Red: 0, Amber: 1, Green: 2 }
 
+/** Canonical RAG status → palette color key. */
+export const RAG_COLOR: Record<RagStatus, string> = { Red: 'red', Amber: 'amber', Green: 'green' }
+
+/** Shared RAG option list for filters and pickers. */
+export const RAG_OPTIONS: { value: RagStatus; label: string; dotColor: string }[] = [
+  { value: 'Green', label: 'Green', dotColor: DOT_CLASS.green },
+  { value: 'Amber', label: 'Amber', dotColor: DOT_CLASS.amber },
+  { value: 'Red',   label: 'Red',   dotColor: DOT_CLASS.red },
+]
+
+/**
+ * Dot classes for a dot rendered ON a tinted pill background. Unlike DOT_CLASS,
+ * the saturated shade is kept in dark mode — a *-700 dot on the pill's *-950
+ * background falls below 3:1 contrast and vanishes.
+ */
+export const DOT_ON_PILL_CLASS: Record<string, string> = {
+  red:    'bg-red-500',
+  orange: 'bg-orange-500',
+  amber:  'bg-amber-500',
+  green:  'bg-green-500',
+  blue:   'bg-blue-500',
+  purple: 'bg-purple-500',
+  grey:   'bg-slate-400 dark:bg-slate-500',
+}
+
+/** Returns the on-pill dot class for a given color string, with a safe fallback. */
+export function dotOnPillClass(color: string): string {
+  return DOT_ON_PILL_CLASS[color] ?? DOT_ON_PILL_CLASS.grey
+}
+
+/** Tailwind classes for a dimmed/inactive pill (e.g. filter chips outside the active set). */
+export const PILL_DIMMED_CLASS =
+  'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200 dark:bg-slate-900 dark:text-slate-600 dark:border-slate-800 dark:hover:bg-slate-800'
+
 /** Tailwind classes for a filled/active colored pill (solid background + white text). */
 export const COLOR_CLASS_ACTIVE: Record<string, string> = {
   red:    'bg-red-500    text-white border-red-500    dark:bg-red-700    dark:border-red-700',
@@ -45,7 +79,7 @@ export const COLOR_CLASS_ACTIVE: Record<string, string> = {
 
 /** Returns the pill class for a given color string, with a safe fallback. */
 export function pillClass(color: string): string {
-  return COLOR_CLASS[color] ?? 'bg-slate-100 text-slate-600 border-slate-200'
+  return COLOR_CLASS[color] ?? COLOR_CLASS.grey
 }
 
 /** Returns the filled/active pill class for a given color string (for selected state). */
@@ -55,7 +89,7 @@ export function pillClassActive(color: string): string {
 
 /** Returns the dot class for a given color string, with a safe fallback. */
 export function dotClass(color: string): string {
-  return DOT_CLASS[color] ?? 'bg-slate-400'
+  return DOT_CLASS[color] ?? DOT_CLASS.grey
 }
 
 /** Tailwind text-color classes for a given color string. */

@@ -49,3 +49,15 @@ export function isOverdue(dueDate: string | null): boolean {
 export function isDueToday(dueDate: string | null): boolean {
   return !!dueDate && dueDate === localToday()
 }
+
+/**
+ * Text classes for rendering a due date: red when overdue, amber when due
+ * today, muted otherwise. Single source for the due-date color treatment.
+ */
+export function dueDateTextClass(dueDate: string | null): string {
+  if (!dueDate) return 'text-muted-foreground'
+  const today = localToday()
+  if (dueDate < today) return 'text-red-600 dark:text-red-400 font-medium'
+  if (dueDate === today) return 'text-amber-600 dark:text-amber-400 font-medium'
+  return 'text-muted-foreground'
+}

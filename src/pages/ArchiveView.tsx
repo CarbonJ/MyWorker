@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input'
 import { MultiSelectFilter } from '@/components/ui/MultiSelectFilter'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Bookmark, X as XIcon } from 'lucide-react'
-import { pillClass, pillClassActive, dotClass, RAG_ORDER } from '@/lib/colors'
+import { pillClass, pillClassActive, dotClass, dotOnPillClass, RAG_ORDER, RAG_OPTIONS, PILL_DIMMED_CLASS } from '@/lib/colors'
 
 type SortKey = 'workItem' | 'area' | 'rag' | 'priority' | 'status' | 'statusComment' | 'archived'
 type SortEntry = { key: SortKey; dir: 'asc' | 'desc' }
@@ -36,12 +36,6 @@ function loadSorted<T>(key: string, fallback: T[]): T[] {
   try { return JSON.parse(localStorage.getItem(key) ?? 'null') ?? fallback }
   catch { return fallback }
 }
-
-const RAG_OPTIONS: { value: RagStatus; label: string; dotColor: string }[] = [
-  { value: 'Green', label: 'Green', dotColor: 'bg-green-500' },
-  { value: 'Amber', label: 'Amber', dotColor: 'bg-amber-400' },
-  { value: 'Red',   label: 'Red',   dotColor: 'bg-red-500'   },
-]
 
 export default function ArchiveView() {
   const navigate = useNavigate()
@@ -266,7 +260,7 @@ export default function ArchiveView() {
               const coloredClass = isActive
                 ? (opt.color ? pillClassActive(opt.color) : 'bg-primary text-primary-foreground border-primary')
                 : anyActive && !isAll
-                  ? 'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200'
+                  ? PILL_DIMMED_CLASS
                   : (opt.color ? pillClass(opt.color) : 'border-input bg-background hover:bg-accent hover:text-accent-foreground')
               return (
                 <button key={opt.value}
@@ -337,7 +331,7 @@ export default function ArchiveView() {
                   <td className="px-4 py-3">
                     {priorityOpt ? (
                       <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${pillClass(priorityOpt.color)}`}>
-                        {priorityOpt.color && <span className={`w-1.5 h-1.5 rounded-full ${dotClass(priorityOpt.color)}`} />}
+                        {priorityOpt.color && <span className={`w-1.5 h-1.5 rounded-full ${dotOnPillClass(priorityOpt.color)}`} />}
                         {priorityOpt.label}
                       </span>
                     ) : <span className="text-muted-foreground">—</span>}
@@ -346,7 +340,7 @@ export default function ArchiveView() {
                   <td className="px-4 py-3">
                     {statusOpt ? (
                       <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full border ${pillClass(statusOpt.color)}`}>
-                        {statusOpt.color && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass(statusOpt.color)}`} />}
+                        {statusOpt.color && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotOnPillClass(statusOpt.color)}`} />}
                         {statusOpt.label}
                       </span>
                     ) : <span className="text-muted-foreground">—</span>}

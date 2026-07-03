@@ -8,7 +8,7 @@
 
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import type { Project, DropdownOption, Task, RagStatus } from '@/types'
+import type { Project, DropdownOption, Task } from '@/types'
 import { RagBadge } from '@/components/RagBadge'
 import { WikiLinkContent } from '@/components/WikiLinkContent'
 import { ProjectStats } from '@/components/project/ProjectStats'
@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Check, ChevronDown, ChevronUp } from 'lucide-react'
-import { pillClass, dotClass } from '@/lib/colors'
+import { pillClass, dotClass, dotOnPillClass, RAG_OPTIONS } from '@/lib/colors'
 import { DESC_EXPAND_CHAR_THRESHOLD, DESC_EXPAND_LINE_THRESHOLD } from '@/lib/constants'
 import { localToday } from '@/lib/utils'
 
@@ -69,12 +69,6 @@ export function ProjectHeader({
   const today = localToday()
   const isProjectOverdue = !isArchived && !!project.dueDate && project.dueDate < today
 
-  const RAG_OPTIONS: { value: RagStatus; label: string; color: string }[] = [
-    { value: 'Green', label: 'Green', color: 'bg-green-500' },
-    { value: 'Amber', label: 'Amber', color: 'bg-amber-400' },
-    { value: 'Red',   label: 'Red',   color: 'bg-red-500' },
-  ]
-
   // ── Collapsed bar ────────────────────────────────────────────────────────
   if (collapsed) {
     return (
@@ -89,11 +83,11 @@ export function ProjectHeader({
         )}
         <div className="ml-auto flex items-center gap-2 shrink-0">
           {isArchived ? (
-            <Button size="sm" variant="outline" onClick={onReopen} className="text-green-700 border-green-300 hover:bg-green-50">
+            <Button size="sm" variant="success-outline" onClick={onReopen}>
               ↩ Reopen
             </Button>
           ) : (
-            <Button size="sm" variant="outline" onClick={onMarkComplete} className="text-slate-600 hover:text-green-700 hover:border-green-300">
+            <Button size="sm" variant="success-ghost-outline" onClick={onMarkComplete}>
               ✓ Mark Complete
             </Button>
           )}
@@ -118,10 +112,10 @@ export function ProjectHeader({
       </div>
 
       {isProjectOverdue && (
-        <div className="mb-3 px-3 py-2 rounded-md bg-red-50 border border-red-200 text-red-700 text-sm flex items-center gap-2">
+        <div className={`mb-3 px-3 py-2 rounded-md border text-sm flex items-center gap-2 ${pillClass('red')}`}>
           <span>🗓</span>
           <span className="font-semibold">Project overdue</span>
-          <span className="text-red-600">— due {new Date(project.dueDate! + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+          <span className="text-red-600 dark:text-red-400">— due {new Date(project.dueDate! + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
         </div>
       )}
 
@@ -135,11 +129,11 @@ export function ProjectHeader({
               Edit
             </Button>
             {isArchived ? (
-              <Button size="sm" variant="outline" onClick={onReopen} className="shrink-0 text-green-700 border-green-300 hover:bg-green-50">
+              <Button size="sm" variant="success-outline" onClick={onReopen} className="shrink-0">
                 ↩ Reopen
               </Button>
             ) : (
-              <Button size="sm" variant="outline" onClick={onMarkComplete} className="shrink-0 text-slate-600 hover:text-green-700 hover:border-green-300">
+              <Button size="sm" variant="success-ghost-outline" onClick={onMarkComplete} className="shrink-0">
                 ✓ Mark Complete
               </Button>
             )}
@@ -201,7 +195,7 @@ export function ProjectHeader({
                     className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent transition-colors"
                   >
                     <Check className={`h-3 w-3 shrink-0 ${project.ragStatus === opt.value ? 'opacity-100' : 'opacity-0'}`} />
-                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${opt.color}`} />
+                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${opt.dotColor}`} />
                     {opt.label}
                   </button>
                 ))}
@@ -217,7 +211,7 @@ export function ProjectHeader({
                     const color = opt?.color ?? ''
                     return (
                       <span className={`text-xs inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-medium border ${pillClass(color)}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${dotClass(color)}`} />
+                        <span className={`w-1.5 h-1.5 rounded-full ${dotOnPillClass(color)}`} />
                         {opt?.label ?? '—'}
                       </span>
                     )
@@ -255,7 +249,7 @@ export function ProjectHeader({
                     if (!opt) return <span className="text-xs text-muted-foreground border border-dashed rounded-full px-2 py-0.5">Status</span>
                     return (
                       <span className={`text-xs px-2 py-0.5 rounded-full border inline-flex items-center gap-1 ${pillClass(opt.color)}`}>
-                        {opt.color && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass(opt.color)}`} />}
+                        {opt.color && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotOnPillClass(opt.color)}`} />}
                         {opt.label}
                       </span>
                     )
@@ -290,7 +284,7 @@ export function ProjectHeader({
               const color = opt?.color ?? ''
               return (
                 <span className={`text-xs inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-medium border ${pillClass(color)}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${dotClass(color)}`} />
+                  <span className={`w-1.5 h-1.5 rounded-full ${dotOnPillClass(color)}`} />
                   {opt?.label ?? '—'}
                 </span>
               )
@@ -305,7 +299,7 @@ export function ProjectHeader({
                   key={i}
                   type="button"
                   onClick={() => navigate(`/contacts?q=${encodeURIComponent(s.name)}`)}
-                  className="bg-white border rounded-full px-2.5 py-0.5 text-xs text-slate-900 shadow-sm hover:bg-slate-50 hover:border-slate-400 transition-colors cursor-pointer"
+                  className="bg-white border rounded-full px-2.5 py-0.5 text-xs text-slate-900 shadow-sm hover:bg-slate-50 hover:border-slate-400 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 dark:hover:bg-slate-700 dark:hover:border-slate-500 transition-colors cursor-pointer"
                   title={`View contact: ${s.name}`}
                 >
                   {s.name}
