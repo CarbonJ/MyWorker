@@ -16,7 +16,7 @@ import { Calendar } from '@/components/ui/calendar'
 import { Check, Bookmark, X as XIcon, ChevronDown } from 'lucide-react'
 import { pillClass, dotClass, pillClassActive, RAG_ORDER } from '@/lib/colors'
 import { loadGuiSettings, buttonStyle, workItemStyle } from '@/lib/guiSettings'
-import { fmtDate, isOverdue, isDueToday } from '@/lib/utils'
+import { fmtDate, isOverdue, isDueToday, localToday, toLocalDateString } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { useDataLoader } from '@/hooks/useDataLoader'
 import { SplitPane } from '@/components/project/SplitPane'
@@ -94,7 +94,7 @@ function getUpcomingCutoff(mode: '1' | '3' | 'week'): string {
     const daysToFriday = day === 0 ? 5 : day === 6 ? 6 : 5 - day
     d.setDate(d.getDate() + daysToFriday)
   }
-  return d.toISOString().slice(0, 10)
+  return toLocalDateString(d)
 }
 
 export default function Prime() {
@@ -260,7 +260,7 @@ export default function Prime() {
   /** Open/in-progress tasks grouped by projectId */
   const tasksByProject = useMemo(() => {
     const map = new Map<number, Task[]>()
-    const today = new Date().toISOString().slice(0, 10)
+    const today = localToday()
     const upcomingCutoff = upcomingMode ? getUpcomingCutoff(upcomingMode) : null
     const q = query.trim().toLowerCase()
     for (const t of allTasks) {
@@ -298,7 +298,7 @@ export default function Prime() {
 
   /** Projects with at least one overdue open task */
   const overdueProjectIds = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = localToday()
     const ids = new Set<number>()
     for (const t of allTasks) {
       if (t.projectId !== null && t.status !== 'done' && t.dueDate && t.dueDate < today &&
@@ -310,7 +310,7 @@ export default function Prime() {
 
   /** Projects with at least one due/overdue open task, or an open task whose start date has arrived */
   const projectsWithDueTasks = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = localToday()
     const ids = new Set<number>()
     for (const t of allTasks) {
       if (t.projectId === null || t.status === 'done') continue
@@ -322,7 +322,7 @@ export default function Prime() {
   }, [allTasks, activeProjectIds])
 
   const dueTaskCount = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = localToday()
     return allTasks.filter(t =>
       t.status !== 'done' &&
       (t.projectId === null || activeProjectIds.has(t.projectId)) &&
@@ -370,7 +370,7 @@ export default function Prime() {
 
   /** General tasks (no project), filtered and sorted */
   const generalTasks = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = localToday()
     let list = allTasks.filter(t => t.projectId === null)
 
 
@@ -532,7 +532,7 @@ export default function Prime() {
     }
     await updateTask({ id: t.id, status: next })
     if (next === 'done' && t.projectId) {
-      await addWorkLogEntry(t.projectId, `✓ Completed: ${t.title}`)
+      await addWorkLogEntry(t.projectId, `✓ Completed: ${t.title}`, true)
       // Full reload needed to refresh latestLogByProject after the work log entry is added
       reload()
       return
@@ -546,7 +546,7 @@ export default function Prime() {
       await updateTask({ id: recurringTask.id, status: 'open', dueDate: newDueDate })
       if (recurringTask.projectId) {
         const logNote = `✓ Completed: ${recurringTask.title}. Next due: ${fmtDate(newDueDate)}${note ? `. ${note}` : ''}`
-        await addWorkLogEntry(recurringTask.projectId, logNote)
+        await addWorkLogEntry(recurringTask.projectId, logNote, true)
       }
       reload()
     } finally {
@@ -588,7 +588,7 @@ export default function Prime() {
   }
 
   const saveDueDate = async (t: Task, dueDate: Date | undefined) => {
-    const val = dueDate ? dueDate.toISOString().slice(0, 10) : null
+    const val = dueDate ? toLocalDateString(dueDate) : null
     await updateTask({ id: t.id, dueDate: val })
     patchData(prev => ({ ...prev, allTasks: prev.allTasks.map(task => task.id === t.id ? { ...task, dueDate: val } : task) }))
   }
@@ -1353,7 +1353,7 @@ export default function Prime() {
   function GeneralTaskRow({ t }: { t: Task }) {
     const priorityOpt = priorities.find(p => p.id === t.priorityId)
     const dueDateObj  = t.dueDate ? new Date(t.dueDate + 'T12:00:00') : undefined
-    const today = new Date().toISOString().slice(0, 10)
+    const today = localToday()
     const completedToday = t.status === 'done' && t.updatedAt.slice(0, 10) === today
     const [dueDateOpen, setDueDateOpen] = useState(false)
 

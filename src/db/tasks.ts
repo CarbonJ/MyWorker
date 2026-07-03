@@ -1,20 +1,6 @@
 import { query, run, lastInsertId } from './index'
+import { parseTags, stringifyTags } from '@/lib/tags'
 import type { Task, TaskStatus } from '@/types'
-
-function parseTags(raw: string): string[] {
-  if (!raw || raw.trim() === '') return []
-  try {
-    const parsed = JSON.parse(raw)
-    if (Array.isArray(parsed)) return parsed as string[]
-    return []
-  } catch {
-    return []
-  }
-}
-
-function stringifyTags(tags: string[]): string {
-  return tags.length === 0 ? '' : JSON.stringify(tags)
-}
 
 function rowToTask(row: Record<string, unknown>): Task {
   return {
@@ -61,19 +47,16 @@ export async function getOpenTasksByProject(projectId: number): Promise<Task[]> 
 
 /** Returns all tasks that are overdue or due today, excluding tasks on archived projects */
 export async function getDueSoonTasks(): Promise<Task[]> {
+  // Archive membership is the is_archived flag (migration v14), not the status
+  // label — a project archived under any status name keeps its tasks excluded.
+  // date('now', 'localtime') so "due today" flips at local midnight, not UTC.
   const rows = await query(
     `SELECT t.* FROM tasks t
      LEFT JOIN projects p ON t.project_id = p.id
      WHERE t.status != 'done'
        AND t.due_date IS NOT NULL
-       AND t.due_date <= date('now')
-       AND (
-         t.project_id IS NULL
-         OR p.status_id IS NULL
-         OR p.status_id NOT IN (
-           SELECT id FROM dropdown_options WHERE type='project_status' AND lower(label)='done'
-         )
-       )
+       AND t.due_date <= date('now', 'localtime')
+       AND (t.project_id IS NULL OR p.is_archived = 0)
      ORDER BY t.due_date ASC`,
   )
   return rows.map(rowToTask)

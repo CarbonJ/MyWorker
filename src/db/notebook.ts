@@ -46,7 +46,7 @@ export async function getLinkedNotebookEntriesByDateRange(
      JOIN notebook_links nl ON nl.source_page_id = np.id
      JOIN projects p ON p.id = nl.target_id
      WHERE nl.target_type = 'project'
-       AND date(np.updated_at) BETWEEN ? AND ?
+       AND date(np.updated_at, 'localtime') BETWEEN ? AND ?
      ORDER BY np.updated_at DESC`,
     [startDate, endDate],
   )

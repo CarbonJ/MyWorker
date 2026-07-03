@@ -45,6 +45,8 @@ export interface WorkLogEntry {
   projectId: number
   note: string
   createdAt: string
+  /** True for app-generated entries (e.g. task-completion log lines), false for user-written notes. */
+  isSystem: boolean
 }
 
 export interface Task {

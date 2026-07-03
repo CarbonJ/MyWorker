@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Separator } from '@/components/ui/separator'
 import { renderTemplate } from '@/lib/reportTemplate'
+import { localToday } from '@/lib/utils'
+import { escapeCsv } from '@/lib/csv'
 import briefTemplateRaw from '@/templates/report-brief.md?raw'
 import detailedTemplateRaw from '@/templates/report-detailed.md?raw'
 
@@ -57,10 +59,6 @@ function downloadCsv(content: string, filename: string) {
   a.download = filename
   a.click()
   URL.revokeObjectURL(url)
-}
-
-function escapeCsv(v: string): string {
-  return `"${String(v).replace(/"/g, '""')}"`
 }
 
 
@@ -164,7 +162,7 @@ function buildCsv(
     if (t.projectId && t.status !== 'done')
       openCount.set(t.projectId, (openCount.get(t.projectId) ?? 0) + 1)
   }
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localToday()
   const headers = ['Work Item','RAG','Area','Priority','Status','Status Comment','Days Stale','Open Tasks','Latest Update Date','Latest Update Note']
   const rows = projects.map(p => {
     const log = latestLog.get(p.id)
@@ -198,7 +196,7 @@ export function ReportingExportModal({
 
   const renderOpts = { priorities, productAreas, projectStatuses, allTasks, allWorkLog }
   const tmpl = template(exportFormat)
-  const date = new Date().toISOString().slice(0, 10)
+  const date = localToday()
 
   const projectItems = useMemo(
     () => projects.map(p => ({ id: String(p.id), label: p.workItem })),
@@ -213,7 +211,8 @@ export function ReportingExportModal({
 
   const toggle = (set: Set<string>, id: string): Set<string> => {
     const next = new Set(set)
-    next.has(id) ? next.delete(id) : next.add(id)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
     return next
   }
 

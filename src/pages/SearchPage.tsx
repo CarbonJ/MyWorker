@@ -3,7 +3,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Search, FolderKanban, CheckSquare, ScrollText, BookOpen, ChevronDown, ChevronRight } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { MultiSelectFilter } from '@/components/ui/MultiSelectFilter'
-import { searchEnriched, parseSearchQuery } from '@/db/search'
+import { searchEnriched } from '@/db/search'
+import { parseSearchQuery, SNIPPET_MARK_START, SNIPPET_MARK_END } from '@/lib/searchQuery'
 import type { EnrichedSearchResult, SearchSourceType } from '@/db/search'
 import type { RagStatus } from '@/types'
 
@@ -33,13 +34,30 @@ function formatTs(ts: string): string {
   }
 }
 
-// Render a snippet that contains <mark>…</mark> highlights from FTS5 snippet().
-function Snippet({ html }: { html: string }) {
+// Render a plain-text snippet from FTS5 snippet(). Matched terms are wrapped
+// in sentinel characters (not HTML) and rendered as React <mark> elements, so
+// HTML stored in notes/tasks/projects is displayed as text, never executed.
+function Snippet({ text }: { text: string }) {
+  const nodes: React.ReactNode[] = []
+  const segments = text.split(SNIPPET_MARK_START)
+  nodes.push(segments[0])
+  for (let i = 1; i < segments.length; i++) {
+    const endIdx = segments[i].indexOf(SNIPPET_MARK_END)
+    if (endIdx === -1) {
+      nodes.push(segments[i])
+      continue
+    }
+    nodes.push(
+      <mark key={i} className="bg-yellow-200 text-yellow-900 rounded-sm px-0.5">
+        {segments[i].slice(0, endIdx)}
+      </mark>,
+    )
+    nodes.push(segments[i].slice(endIdx + 1))
+  }
   return (
-    <span
-      className="text-xs text-muted-foreground leading-relaxed [&_mark]:bg-yellow-200 [&_mark]:text-yellow-900 [&_mark]:rounded-sm [&_mark]:px-0.5"
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
+    <span className="text-xs text-muted-foreground leading-relaxed">
+      {nodes}
+    </span>
   )
 }
 
@@ -233,7 +251,7 @@ export default function SearchPage() {
                               <span className="text-xs text-muted-foreground border border-border rounded px-1.5 py-0.5">{r.areaLabel}</span>
                             )}
                           </div>
-                          <Snippet html={r.snippet} />
+                          <Snippet text={r.snippet} />
                         </div>
                       </Link>
                     ))}
@@ -276,7 +294,7 @@ export default function SearchPage() {
                           {r.projectName && (
                             <p className="text-xs text-muted-foreground">in {r.projectName}</p>
                           )}
-                          <Snippet html={r.snippet} />
+                          <Snippet text={r.snippet} />
                         </div>
                       </Link>
                     ))}
@@ -316,7 +334,7 @@ export default function SearchPage() {
                               <span className="text-xs text-muted-foreground">{formatTs(r.entryCreatedAt)}</span>
                             )}
                           </div>
-                          <Snippet html={r.snippet} />
+                          <Snippet text={r.snippet} />
                         </div>
                       </Link>
                     ))}
@@ -350,7 +368,7 @@ export default function SearchPage() {
                         <BookOpen className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                         <div className="min-w-0 flex-1 space-y-0.5">
                           <span className="text-sm font-medium group-hover:text-primary transition-colors block">{r.title || 'Untitled'}</span>
-                          <Snippet html={r.snippet} />
+                          <Snippet text={r.snippet} />
                         </div>
                       </button>
                     ))}

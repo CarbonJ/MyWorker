@@ -5,6 +5,7 @@
  */
 
 import type { Task, Project } from '@/types'
+import { localToday } from '@/lib/utils'
 
 interface Props {
   tasks: Task[]
@@ -26,7 +27,7 @@ function fmtDate(iso: string): string {
 }
 
 export function ProjectStats({ tasks, project }: Props) {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localToday()
 
   const open       = tasks.filter(t => t.status === 'open').length
   const inProgress = tasks.filter(t => t.status === 'in_progress').length

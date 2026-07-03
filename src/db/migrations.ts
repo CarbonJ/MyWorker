@@ -523,6 +523,17 @@ const migrations: Migration[] = [
     version: 20,
     up: `ALTER TABLE contacts ADD COLUMN whos_who TEXT NOT NULL DEFAULT '';`,
   },
+  {
+    version: 21,
+    up: `
+      -- App-generated work log entries (task-completion lines) were previously
+      -- identified by matching the note text against '✓ Completed%' — fragile,
+      -- and it silently hid any user note that happened to start the same way.
+      -- Replace the convention with an explicit flag; back-fill existing rows.
+      ALTER TABLE work_log_entries ADD COLUMN is_system INTEGER NOT NULL DEFAULT 0;
+      UPDATE work_log_entries SET is_system = 1 WHERE note LIKE '✓ Completed%';
+    `,
+  },
 ]
 
 export async function runMigrations(handle: DbHandle): Promise<void> {
@@ -534,26 +545,40 @@ export async function runMigrations(handle: DbHandle): Promise<void> {
 
   const pending = migrations.filter(m => m.version > currentVersion)
 
-  for (const migration of pending) {
+  if (pending.length > 0) {
+    // Disable FK enforcement while migrating (must happen outside a transaction).
+    // With FKs enabled, DROP TABLE runs an implicit DELETE that fires ON DELETE
+    // actions against child tables — a table-recreation migration (copy → drop →
+    // rename, like v4/v5) would null out or cascade-delete referencing rows.
+    await exec(sqlite, db, 'PRAGMA foreign_keys = OFF;')
     try {
-      await exec(sqlite, db, migration.up)
-      // Bump user_version only after the migration succeeds.
-      // If the migration throws, user_version stays at the previous value
-      // and the migration will be retried on the next startup.
-      await exec(sqlite, db, `PRAGMA user_version = ${migration.version};`)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      // SQLite ALTER TABLE ADD COLUMN auto-commits even inside a transaction,
-      // so a crash between the ADD COLUMN and the PRAGMA user_version update
-      // leaves the column present but the version un-bumped. On the next
-      // startup the migration retries and hits "duplicate column name".
-      // The schema is already in the desired state — just bump the version.
-      if (msg.includes('duplicate column name')) {
-        await exec(sqlite, db, `PRAGMA user_version = ${migration.version};`)
-        continue
+      for (const migration of pending) {
+        // Migration body and user_version bump commit atomically: a crash or
+        // error can never leave the schema changed but the version un-bumped
+        // (PRAGMA user_version is transactional in SQLite).
+        await exec(sqlite, db, 'BEGIN')
+        try {
+          await exec(sqlite, db, migration.up)
+          await exec(sqlite, db, `PRAGMA user_version = ${migration.version};`)
+          await exec(sqlite, db, 'COMMIT')
+        } catch (err) {
+          await exec(sqlite, db, 'ROLLBACK')
+          const msg = err instanceof Error ? err.message : String(err)
+          // Legacy recovery: before the runner was transactional, a crash
+          // between a migration's ADD COLUMN and the version bump left the
+          // column present with the version un-bumped, so the retry hits
+          // "duplicate column name". The schema is already in the desired
+          // state — just bump the version.
+          if (msg.includes('duplicate column name')) {
+            await exec(sqlite, db, `PRAGMA user_version = ${migration.version};`)
+            continue
+          }
+          console.error(`[db] Migration v${migration.version} FAILED`, err)
+          throw err
+        }
       }
-      console.error(`[db] Migration v${migration.version} FAILED`, err)
-      throw err
+    } finally {
+      await exec(sqlite, db, 'PRAGMA foreign_keys = ON;')
     }
   }
 

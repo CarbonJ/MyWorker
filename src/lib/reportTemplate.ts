@@ -1,12 +1,7 @@
 import type { Project, DropdownOption, WorkLogEntry, Task } from '@/types'
-import { isOverdue } from '@/lib/utils'
+import { isOverdue, fmtDate } from '@/lib/utils'
 
 const RAG_EMOJI: Record<string, string> = { Red: '🔴', Amber: '🟡', Green: '🟢' }
-
-function fmtDate(iso: string): string {
-  const [y, m, d] = iso.split('-')
-  return `${m}/${d}/${y.slice(2)}`
-}
 
 export interface TemplateRenderOpts {
   priorities: DropdownOption[]

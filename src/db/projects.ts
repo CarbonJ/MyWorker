@@ -1,21 +1,6 @@
 import { query, run, lastInsertId } from './index'
+import { parseTags, stringifyTags } from '@/lib/tags'
 import type { Project, RagStatus, Stakeholder } from '@/types'
-
-
-function parseTags(raw: string): string[] {
-  if (!raw || raw.trim() === '') return []
-  try {
-    const parsed = JSON.parse(raw)
-    if (Array.isArray(parsed)) return parsed as string[]
-    return []
-  } catch {
-    return []
-  }
-}
-
-function stringifyTags(tags: string[]): string {
-  return tags.length === 0 ? '' : JSON.stringify(tags)
-}
 
 function parseStakeholders(raw: string): Stakeholder[] {
   if (!raw || raw.trim() === '') return []

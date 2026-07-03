@@ -1,5 +1,11 @@
 import { query } from './index'
 import type { SQLiteCompatibleType } from './index'
+import {
+  parseSearchQuery,
+  buildFtsMatchExpr,
+  SNIPPET_MARK_START,
+  SNIPPET_MARK_END,
+} from '@/lib/searchQuery'
 
 export type SearchSourceType = 'project' | 'task' | 'work_log' | 'notebook'
 
@@ -7,6 +13,7 @@ export interface SearchResult {
   sourceType: SearchSourceType
   sourceId: number
   projectId: number
+  /** Plain-text snippet with SNIPPET_MARK_START/END sentinels around matches. */
   snippet: string
   rank: number
 }
@@ -37,18 +44,15 @@ export async function searchAll(rawQuery: string): Promise<SearchResult[]> {
   if (!trimmed) return []
 
   // Build FTS5 query: each token becomes a prefix query (e.g. "risk rep*")
-  const ftsQuery = trimmed
-    .split(/\s+/)
-    .filter(Boolean)
-    .map(token => `${escapeFtsToken(token)}*`)
-    .join(' ')
+  const ftsQuery = buildFtsMatchExpr(parseSearchQuery(trimmed))
+  if (!ftsQuery) return []
 
   const rows = await query(
     `SELECT
        source_type,
        source_id,
        project_id,
-       snippet(fts_index, 0, '<mark>', '</mark>', '...', 12) AS snippet,
+       snippet(fts_index, 0, '${SNIPPET_MARK_START}', '${SNIPPET_MARK_END}', '...', 12) AS snippet,
        rank
      FROM fts_index
      WHERE fts_index MATCH ?
@@ -112,7 +116,7 @@ export async function searchEnriched(
       source_type,
       source_id,
       project_id,
-      snippet(fts_index, 0, '<mark>', '</mark>', '...', 16) AS snippet,
+      snippet(fts_index, 0, '${SNIPPET_MARK_START}', '${SNIPPET_MARK_END}', '...', 16) AS snippet,
       rank
     FROM fts_index
     WHERE fts_index MATCH ?
@@ -227,66 +231,4 @@ export async function searchEnriched(
   })
 }
 
-/**
- * Parse a user-facing search string into include and exclude term lists.
- *
- * Syntax:
- *   - Words → include (must all match)
- *   - NOT word  → exclude
- *   - -word     → exclude (dash shorthand)
- *   - AND       → ignored (explicit AND is implicit by default)
- */
-export function parseSearchQuery(raw: string): { include: string[]; exclude: string[] } {
-  const tokens = raw.trim().split(/\s+/).filter(Boolean)
-  const include: string[] = []
-  const exclude: string[] = []
-
-  let i = 0
-  while (i < tokens.length) {
-    const t = tokens[i]
-    if (t.toUpperCase() === 'NOT') {
-      if (i + 1 < tokens.length) {
-        const term = escapeFtsToken(tokens[i + 1])
-        if (term) exclude.push(term)
-        i += 2
-      } else {
-        i++
-      }
-    } else if (t.startsWith('-') && t.length > 1) {
-      const term = escapeFtsToken(t.slice(1))
-      if (term) exclude.push(term)
-      i++
-    } else if (t.toUpperCase() === 'AND') {
-      i++
-    } else {
-      const term = escapeFtsToken(t)
-      if (term) include.push(term)
-      i++
-    }
-  }
-
-  return { include, exclude }
-}
-
-function buildFtsMatchExpr(parsed: { include: string[]; exclude: string[] }): string | null {
-  if (parsed.include.length === 0) return null
-  const parts = parsed.include.map(t => `${t}*`)
-  if (parsed.exclude.length > 0) {
-    parts.push(...parsed.exclude.map(t => `NOT ${t}*`))
-  }
-  return parts.join(' ')
-}
-
-/**
- * Strip FTS5 special characters from a single search token.
- *
- * Why strip rather than quote/escape: FTS5 supports wrapping tokens in double
- * quotes to treat them as literals, but quoted tokens cannot carry the trailing
- * `*` wildcard needed for prefix matching ("repo"* is a syntax error). Stripping
- * the handful of special characters (`"`, `^`, `*`, `:`, `.`) is simpler and
- * covers all realistic user input — these characters have no meaningful search
- * value in this app's content anyway.
- */
-function escapeFtsToken(token: string): string {
-  return token.replace(/["^*:.]/g, '')
-}
+// Query parsing lives in @/lib/searchQuery (pure, unit-tested).

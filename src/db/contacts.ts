@@ -1,19 +1,6 @@
 import { query, run, lastInsertId } from './index'
+import { parseTags, stringifyTags } from '@/lib/tags'
 import type { Contact } from '@/types'
-
-function parseTags(raw: string): string[] {
-  if (!raw || !raw.trim()) return []
-  try {
-    const p = JSON.parse(raw)
-    return Array.isArray(p) ? (p as string[]) : []
-  } catch {
-    return raw.split(',').map(t => t.trim()).filter(Boolean)
-  }
-}
-
-function stringifyTags(tags: string[]): string {
-  return tags.length === 0 ? '' : JSON.stringify(tags)
-}
 
 function rowToContact(row: Record<string, unknown>): Contact {
   return {
@@ -22,7 +9,7 @@ function rowToContact(row: Record<string, unknown>): Contact {
     role: (row.role as string) ?? '',
     groupName: (row.group_name as string) ?? '',
     notes: (row.notes as string) ?? '',
-    tags: parseTags(row.tags as string),
+    tags: parseTags(row.tags as string, true),
     whosWho: (row.whos_who as string) ?? '',
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,

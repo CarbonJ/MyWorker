@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label'
 import { MarkdownField } from '@/components/MarkdownField'
 import { Calendar } from '@/components/ui/calendar'
 import { RefreshCw } from 'lucide-react'
+import { toLocalDateString } from '@/lib/utils'
 
 interface Props {
   task: Task
@@ -35,7 +36,7 @@ export function RecurringCompleteDialog({ task, open, onReschedule, onMarkDone, 
     if (!selectedDate) return
     setSaving(true)
     try {
-      await onReschedule(selectedDate.toISOString().slice(0, 10), note.trim())
+      await onReschedule(toLocalDateString(selectedDate), note.trim())
     } finally {
       setSaving(false)
       setSelectedDate(undefined)

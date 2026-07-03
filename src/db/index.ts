@@ -19,6 +19,7 @@ import SQLiteAsyncESMFactory from '@/vendor/wa-sqlite/wa-sqlite-async.mjs'
 import * as SQLite from '@/vendor/wa-sqlite/sqlite-api.js'
 import { IDBBatchAtomicVFS } from '@/vendor/wa-sqlite/examples/IDBBatchAtomicVFS.js'
 import { runMigrations } from './migrations'
+import { BACKUP_TABLES, DERIVED_TABLES, EXPORT_FORMAT_VERSION } from './backupSchema'
 
 const DB_NAME = 'myworker.db'
 const IDB_NAME = 'myworker-sqlite'
@@ -126,6 +127,25 @@ async function _initDb(
   // Run migrations (creates tables, FTS index, triggers, etc.)
   await runMigrations(instance)
 
+  // Safety net: every table in the database must be classified in the backup
+  // registry (backupSchema.ts) so new tables can't silently miss the backup.
+  // The backupCoverage unit test is the primary gate; this catches drift at
+  // runtime too (e.g. a build that skipped tests).
+  const knownTables = new Set([
+    ...BACKUP_TABLES.map(t => t.table),
+    ...DERIVED_TABLES.map(t => t.table),
+  ])
+  const tableRows = await exec(sqlite, db,
+    `SELECT name FROM sqlite_master
+     WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'fts_index%'`)
+  const unclassified = tableRows.map(r => r.name as string).filter(n => !knownTables.has(n))
+  if (unclassified.length > 0) {
+    console.error(
+      '[db] Tables not classified in backupSchema.ts — they are NOT being backed up:',
+      unclassified,
+    )
+  }
+
   // Record the app version that opened this database (upsert on every startup)
   await exec(sqlite, db,
     `INSERT INTO app_metadata (key, value) VALUES ('app_version', ?)
@@ -156,18 +176,130 @@ async function _initDb(
       )
     } catch (err) {
       if (_isRetry) throw err // don't loop
-      console.warn('[db] Integrity check failed — wiping IDB and reinitialising', err)
+      console.warn('[db] Integrity check failed — attempting recovery', err)
+      // Best-effort salvage of whatever is still readable, written to a
+      // separate timestamped file so the main backup (myworker-data.json)
+      // is never overwritten with data from a corrupt database.
+      if (dirHandle) await salvageToUserFolder(dirHandle)
       // Close DB and VFS before deleting the IDB — otherwise deleteDatabase is
       // blocked by the open VFS connection and the old corrupt pages survive.
       await sqlite.close(db)
       await vfs.close()
       instance = null
       await deleteIdb()
-      return _initDb(dirHandle, true)
+      const fresh = await _initDb(dirHandle, true)
+      await restoreAfterWipe(dirHandle)
+      return fresh
     }
   }
 
   return instance
+}
+
+// ── Corruption recovery ───────────────────────────────────────────────────────
+
+export interface RecoveryNotice {
+  level: 'warning' | 'error'
+  message: string
+}
+
+let recoveryNotice: RecoveryNotice | null = null
+
+/**
+ * One-shot read of the notice set when initDb() ran corruption recovery.
+ * The app shell reads this after startup and shows it as a persistent toast.
+ */
+export function consumeRecoveryNotice(): RecoveryNotice | null {
+  const notice = recoveryNotice
+  recoveryNotice = null
+  return notice
+}
+
+/**
+ * Before wiping a corrupt database: export whatever is still readable to a
+ * timestamped salvage file. Deliberately a separate file from the rolling
+ * myworker-data.json backup. May fail if the corruption is severe — that's
+ * fine, the rolling backup is the primary recovery source.
+ */
+async function salvageToUserFolder(dirHandle: FileSystemDirectoryHandle): Promise<void> {
+  try {
+    const data = {
+      ...(await snapshotUserData()),
+      savedAt: new Date().toISOString(),
+      salvagedFromCorruptDb: true,
+    }
+    const ts = new Date().toISOString().replace(/[:.]/g, '-')
+    const fileHandle = await dirHandle.getFileHandle(`myworker-salvage-${ts}.json`, { create: true })
+    const writable = await fileHandle.createWritable()
+    await writable.write(JSON.stringify(data, null, 2))
+    await writable.close()
+  } catch (err) {
+    console.warn('[db] Salvage export failed (database too corrupt to read)', err)
+  }
+}
+
+/**
+ * After a corruption wipe: try to restore automatically from the rolling
+ * OneDrive backup (myworker-data.json). Sets recoveryNotice either way so
+ * the user always finds out what happened.
+ */
+async function restoreAfterWipe(dirHandle: FileSystemDirectoryHandle | null): Promise<void> {
+  if (!dirHandle) {
+    recoveryNotice = {
+      level: 'error',
+      message: 'Database corruption was detected and the database has been reset. ' +
+        'No storage folder is connected, so no automatic restore was possible. ' +
+        'Import a backup via Settings → Import.',
+    }
+    return
+  }
+  try {
+    const fileHandle = await dirHandle.getFileHandle('myworker-data.json')
+    const text = await (await fileHandle.getFile()).text()
+    // Dynamic import avoids a static circular dependency (importExport imports from this module)
+    const { restoreFromData } = await import('./importExport')
+    await restoreFromData(JSON.parse(text))
+    recoveryNotice = {
+      level: 'warning',
+      message: 'Database corruption was detected. Your data was automatically restored ' +
+        'from the folder backup (myworker-data.json). Please verify your most recent changes.',
+    }
+  } catch (err) {
+    console.error('[db] Automatic restore from folder backup failed', err)
+    recoveryNotice = {
+      level: 'error',
+      message: 'Database corruption was detected and the automatic restore from ' +
+        'myworker-data.json failed. The database has been reset — import a backup ' +
+        'via Settings → Import.',
+    }
+  }
+}
+
+/**
+ * Snapshot every user-authored table for backup, driven by the BACKUP_TABLES
+ * registry in backupSchema.ts — a table added there is automatically included
+ * in both the automatic OneDrive persist and the manual Settings export.
+ * Also captures all myworker:* localStorage keys (UI prefs, filters, digest
+ * meeting notes) so a restore brings back settings, not just data.
+ */
+export async function snapshotUserData(): Promise<Record<string, unknown>> {
+  const data: Record<string, unknown> = { version: EXPORT_FORMAT_VERSION }
+  for (const { table, key } of BACKUP_TABLES) {
+    // Table names come from the hard-coded registry, never from user input.
+    data[key] = await query(`SELECT * FROM ${table} ORDER BY id ASC`)
+  }
+  data.localPrefs = collectLocalPrefs()
+  return data
+}
+
+/** All myworker:* localStorage entries, for inclusion in backups. */
+function collectLocalPrefs(): Record<string, string> {
+  const prefs: Record<string, string> = {}
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    if (key?.startsWith('myworker:')) prefs[key] = localStorage.getItem(key) ?? ''
+  }
+  return prefs
 }
 
 /**
@@ -179,21 +311,9 @@ export async function persistToUserFolder(): Promise<void> {
   if (!instance?.dirHandle) return
 
   try {
-    // Snapshot all tables
-    const [projects, workLogEntries, tasks, dropdownOptions] = await Promise.all([
-      query('SELECT * FROM projects ORDER BY id ASC'),
-      query('SELECT * FROM work_log_entries ORDER BY id ASC'),
-      query('SELECT * FROM tasks ORDER BY id ASC'),
-      query('SELECT * FROM dropdown_options ORDER BY id ASC'),
-    ])
-
     const data = {
-      version: 1,
+      ...(await snapshotUserData()),
       savedAt: new Date().toISOString(),
-      projects,
-      workLogEntries,
-      tasks,
-      dropdownOptions,
     }
 
     const json = JSON.stringify(data, null, 2)

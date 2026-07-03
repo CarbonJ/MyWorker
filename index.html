@@ -14,12 +14,8 @@
   </head>
   <body>
     <div id="root"></div>
-    <script>
-      if (localStorage.getItem('myworker:theme') === 'dark' ||
-          (!localStorage.getItem('myworker:theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-        document.documentElement.classList.add('dark')
-      }
-    </script>
+    <!-- Blocking theme bootstrap: external file so production CSP can drop 'unsafe-inline' for scripts -->
+    <script src="/theme-init.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

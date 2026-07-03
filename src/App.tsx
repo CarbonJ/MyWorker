@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 import { DbProvider } from '@/hooks/useDb'
+import { consumeRecoveryNotice } from '@/db'
 import { TaskModal } from '@/components/TaskModal'
 import { ProjectModal } from '@/components/ProjectModal'
 import { SearchProvider, useSearch } from '@/contexts/SearchContext'
@@ -103,6 +105,15 @@ function AppInner() {
     localStorage.setItem('myworker:theme', next ? 'dark' : 'light')
     setIsDark(next)
   }
+
+  // If initDb ran corruption recovery, tell the user what happened.
+  // Persistent toast (no auto-dismiss) so it can't be missed.
+  useEffect(() => {
+    const notice = consumeRecoveryNotice()
+    if (!notice) return
+    const show = notice.level === 'warning' ? toast.warning : toast.error
+    show(notice.message, { duration: Infinity, closeButton: true })
+  }, [])
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {

@@ -18,6 +18,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Check, ChevronDown, ChevronUp } from 'lucide-react'
 import { pillClass, dotClass } from '@/lib/colors'
 import { DESC_EXPAND_CHAR_THRESHOLD, DESC_EXPAND_LINE_THRESHOLD } from '@/lib/constants'
+import { localToday } from '@/lib/utils'
 
 const COLLAPSED_KEY = 'myworker:header-collapsed'
 
@@ -65,7 +66,7 @@ export function ProjectHeader({
     }
   }
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localToday()
   const isProjectOverdue = !isArchived && !!project.dueDate && project.dueDate < today
 
   const RAG_OPTIONS: { value: RagStatus; label: string; color: string }[] = [

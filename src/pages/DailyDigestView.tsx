@@ -6,13 +6,7 @@ import { WikiLinkContent } from '@/components/WikiLinkContent'
 import { MarkdownField } from '@/components/MarkdownField'
 import { ChevronLeft, ChevronRight, CalendarDays, FileText, BookOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-
-function toLocalDateString(date: Date): string {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
-}
+import { toLocalDateString } from '@/lib/utils'
 
 function formatDisplayDate(dateStr: string): string {
   const [y, m, d] = dateStr.split('-').map(Number)

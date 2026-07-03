@@ -1,4 +1,5 @@
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 
 export type NoteExportFormat = 'md' | 'pdf'
 
@@ -17,7 +18,7 @@ function downloadBlob(content: string, filename: string, mimeType: string) {
   URL.revokeObjectURL(url)
 }
 
-function safeFilename(title: string): string {
+export function safeFilename(title: string): string {
   return (title || 'Untitled').replace(/[/\\?%*:|"<>]/g, '-').trim() || 'Untitled'
 }
 
@@ -25,16 +26,20 @@ function escHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-// Pre-process tiptap-specific tokens before markdown parsing
+// Pre-process tiptap-specific tokens before markdown parsing.
+// marked passes raw HTML in the source through unchanged, and note bodies can
+// contain arbitrary text (raw-mode editing, pasted content) — sanitize the
+// output so script/event-handler HTML never reaches the print window.
 function markdownToHtml(body: string): string {
   const md = body
     .replace(/==(.+?)==/g, '<mark>$1</mark>')     // ==highlight== → <mark>
     .replace(/\[\[([^\]]+)\]\]/g, '<em>$1</em>')  // [[wiki link]] → italic name
-  return marked.parse(md, { gfm: true }) as string
+  const html = marked.parse(md, { gfm: true }) as string
+  return DOMPurify.sanitize(html)
 }
 
 // Clean up tiptap-markdown over-escaping for .md downloads (not applied to DB content)
-function cleanMarkdownExport(body: string): string {
+export function cleanMarkdownExport(body: string): string {
   return body
     .replace(/^\\- /gm, '- ')
     .replace(/^\\\d+\. /gm, m => m.slice(1))
@@ -70,15 +75,20 @@ function notesToHtml(pages: ExportablePage[]): string {
   td,th{border:1px solid #ccc;padding:.3em .6em}
   hr{break-after:page;margin:2em 0;border:none;border-top:1px solid #eee}
   @media print{@page{margin:2cm}}
-</style></head><body>${sections}<script>window.onload=()=>window.print()</script></body></html>`
+</style></head><body>${sections}</body></html>`
 }
 
 // Open an HTML string in a new window via document.write so the window URL
 // stays as about:blank — prevents the blob URL from appearing in the browser's
-// print footer.
+// print footer. The print call comes from this (opener) script rather than an
+// inline <script> in the written document: the about:blank window inherits the
+// app's CSP, which blocks inline scripts in production.
 function openHtmlForPrint(html: string) {
   const w = window.open('', '_blank')
-  if (w) { w.document.write(html); w.document.close() }
+  if (!w) return
+  w.document.write(html)
+  w.document.close()
+  w.print()
 }
 
 export function exportNote(page: ExportablePage, format: NoteExportFormat) {
@@ -104,16 +114,16 @@ const CRC_TABLE = (() => {
   return table
 })()
 
-function crc32(bytes: Uint8Array): number {
+export function crc32(bytes: Uint8Array): number {
   let c = 0xffffffff
   for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8)
   return (c ^ 0xffffffff) >>> 0
 }
 
-interface ZipEntry { name: string; data: Uint8Array }
+export interface ZipEntry { name: string; data: Uint8Array }
 
 /** Build a store-only ZIP archive from a list of named byte blobs. */
-function buildZip(entries: ZipEntry[]): Uint8Array {
+export function buildZip(entries: ZipEntry[]): Uint8Array {
   const enc = new TextEncoder()
   const chunks: Uint8Array[] = []
   const central: Uint8Array[] = []

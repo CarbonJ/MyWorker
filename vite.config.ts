@@ -11,6 +11,20 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
   plugins: [
+    // Tighten the CSP for production builds: drop 'unsafe-inline' from
+    // script-src. It must stay in index.html for dev because
+    // @vitejs/plugin-react injects an inline react-refresh preamble; the
+    // built app has no inline scripts (theme bootstrap is /theme-init.js).
+    {
+      name: 'csp-tighten-prod',
+      apply: 'build' as const,
+      transformIndexHtml(html: string) {
+        return html.replace(
+          "script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline'",
+          "script-src 'self' 'wasm-unsafe-eval'",
+        )
+      },
+    },
     react(),
     tailwindcss(),
     VitePWA({

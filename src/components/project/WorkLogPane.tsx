@@ -49,7 +49,7 @@ export function WorkLogPane({ projectId, projectName, workLog, notebookRefs = []
   const { rowColor, rowOpacity } = loadGuiSettings()
 
   const filteredByCompletion = filterCompleted
-    ? workLog.filter(e => !e.note.startsWith('✓ Completed'))
+    ? workLog.filter(e => !e.isSystem)
     : workLog
   const hiddenCount = workLog.length - filteredByCompletion.length
 
@@ -188,7 +188,7 @@ export function WorkLogPane({ projectId, projectName, workLog, notebookRefs = []
           }
 
           const entry = item.entry
-          const isAutoEntry = entry.note.startsWith('✓ Completed')
+          const isAutoEntry = entry.isSystem
           return (
             <div key={`log-${entry.id}`} className="px-4 py-3" style={altRowStyle(rowColor, rowOpacity, index)}>
               <div className="flex items-center gap-1.5 mb-1">

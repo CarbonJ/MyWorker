@@ -15,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Calendar } from '@/components/ui/calendar'
 import { ChevronsUpDown, Check, X, CalendarIcon } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, localToday, localTomorrow, toLocalDateString } from '@/lib/utils'
 import { Checkbox } from '@/components/ui/checkbox'
 import { TagInput } from '@/components/TagInput'
 
@@ -367,13 +367,13 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
                   <Calendar
                     mode="single"
                     selected={startDate ? new Date(startDate + 'T12:00:00') : undefined}
-                    onSelect={d => setStartDate(d ? d.toISOString().slice(0, 10) : '')}
+                    onSelect={d => setStartDate(d ? toLocalDateString(d) : '')}
                     initialFocus
                   />
                   <div className="border-t px-3 py-2 flex gap-2">
                     <button type="button" className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setStartDate('')}>Clear</button>
-                    <button type="button" className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setStartDate(new Date().toISOString().slice(0, 10))}>Today</button>
-                    <button type="button" className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setStartDate(new Date(Date.now() + 86400000).toISOString().slice(0, 10))}>Tomorrow</button>
+                    <button type="button" className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setStartDate(localToday())}>Today</button>
+                    <button type="button" className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setStartDate(localTomorrow())}>Tomorrow</button>
                   </div>
                 </PopoverContent>
               </Popover>
@@ -401,13 +401,13 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
                   <Calendar
                     mode="single"
                     selected={dueDate ? new Date(dueDate + 'T12:00:00') : undefined}
-                    onSelect={d => setDueDate(d ? d.toISOString().slice(0, 10) : '')}
+                    onSelect={d => setDueDate(d ? toLocalDateString(d) : '')}
                     initialFocus
                   />
                   <div className="border-t px-3 py-2 flex gap-2">
                     <button type="button" className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setDueDate('')}>Clear</button>
-                    <button type="button" className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setDueDate(new Date().toISOString().slice(0, 10))}>Today</button>
-                    <button type="button" className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setDueDate(new Date(Date.now() + 86400000).toISOString().slice(0, 10))}>Tomorrow</button>
+                    <button type="button" className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setDueDate(localToday())}>Today</button>
+                    <button type="button" className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setDueDate(localTomorrow())}>Tomorrow</button>
                   </div>
                 </PopoverContent>
               </Popover>

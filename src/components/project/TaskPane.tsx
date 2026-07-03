@@ -15,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar'
 import { Check, RefreshCw } from 'lucide-react'
 import { pillClass, dotClass } from '@/lib/colors'
-import { fmtDate, isOverdue, isDueToday } from '@/lib/utils'
+import { fmtDate, isOverdue, isDueToday, localToday, localTomorrow, toLocalDateString } from '@/lib/utils'
 import { useErrorHandler } from '@/hooks/useErrorHandler'
 import { RecurringCompleteDialog } from '@/components/RecurringCompleteDialog'
 
@@ -64,7 +64,7 @@ export function TaskPane({
 }: Props) {
   const { handleError } = useErrorHandler()
   const [recurringTask, setRecurringTask] = useState<Task | null>(null)
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localToday()
 
   const visibleTasks = useMemo(() => {
     let list = [...tasks]
@@ -127,7 +127,7 @@ export function TaskPane({
       const newStatus = cycleStatus(task.status)
       await updateTask({ id: task.id, status: newStatus })
       if (newStatus === 'done' && task.projectId) {
-        await addWorkLogEntry(task.projectId, `✓ Completed: ${task.title}`)
+        await addWorkLogEntry(task.projectId, `✓ Completed: ${task.title}`, true)
       }
       window.dispatchEvent(new Event('myworker:task-saved'))
       onReload()
@@ -142,7 +142,7 @@ export function TaskPane({
       await updateTask({ id: recurringTask.id, status: 'open', dueDate: newDueDate })
       if (recurringTask.projectId) {
         const logNote = `✓ Completed: ${recurringTask.title}. Next due: ${fmtDate(newDueDate)}${note ? `. ${note}` : ''}`
-        await addWorkLogEntry(recurringTask.projectId, logNote)
+        await addWorkLogEntry(recurringTask.projectId, logNote, true)
       }
       onReload()
     } catch (err) {
@@ -314,7 +314,7 @@ export function TaskPane({
                     selected={task.dueDate ? new Date(task.dueDate + 'T12:00:00') : undefined}
                     onSelect={async (date) => {
                       try {
-                        await updateTask({ id: task.id, dueDate: date ? date.toISOString().slice(0, 10) : null })
+                        await updateTask({ id: task.id, dueDate: date ? toLocalDateString(date) : null })
                         onReload()
                       } catch (err) {
                         handleError(err, 'Failed to update due date')
@@ -324,8 +324,8 @@ export function TaskPane({
                   />
                   <div className="border-t px-3 py-2 flex gap-2">
                     <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={async e => { e.stopPropagation(); try { await updateTask({ id: task.id, dueDate: null }); onReload() } catch (err) { handleError(err, 'Failed to clear due date') } }}>Clear</button>
-                    <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={async e => { e.stopPropagation(); try { await updateTask({ id: task.id, dueDate: new Date().toISOString().slice(0, 10) }); onReload() } catch (err) { handleError(err, 'Failed to set due date') } }}>Today</button>
-                    <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={async e => { e.stopPropagation(); try { await updateTask({ id: task.id, dueDate: new Date(Date.now() + 86400000).toISOString().slice(0, 10) }); onReload() } catch (err) { handleError(err, 'Failed to set due date') } }}>Tomorrow</button>
+                    <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={async e => { e.stopPropagation(); try { await updateTask({ id: task.id, dueDate: localToday() }); onReload() } catch (err) { handleError(err, 'Failed to set due date') } }}>Today</button>
+                    <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={async e => { e.stopPropagation(); try { await updateTask({ id: task.id, dueDate: localTomorrow() }); onReload() } catch (err) { handleError(err, 'Failed to set due date') } }}>Tomorrow</button>
                   </div>
                 </PopoverContent>
               </Popover>

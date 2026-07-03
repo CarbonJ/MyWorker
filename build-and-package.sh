@@ -14,6 +14,9 @@ VERSION=$(node -p "require('./package.json').version")
 OUTPUT_ZIP="myworker-app-v${VERSION}.zip"
 echo "▶ Packaging version $VERSION..."
 
+echo "▶ Running tests (includes backup-coverage guard)..."
+npm test
+
 echo "▶ Building MyWorker..."
 npm run build
 
