@@ -795,7 +795,7 @@ export default function Settings() {
                 rows: [
                   ['`[label](url)`', 'Hyperlink'],
                   ['`[[Name]]`', 'Wiki link — links to a note, project, contact, or area; shows blue if the target exists'],
-                  ['`| A | B |`', 'Table — use the toolbar button to insert a 3×3 table'],
+                  ['`| A | B |`', 'Table — the toolbar table button opens a size picker; with the cursor inside a table, the toolbar shows row/column add & delete controls. Tab / Shift+Tab move between cells.'],
                 ],
               },
               {
@@ -815,6 +815,8 @@ export default function Settings() {
                 rows: [
                   ['`^superscript^`', 'Superscript'],
                   ['`~subscript~`', 'Subscript'],
+                  ['Merged table cells', 'Markdown pipe tables cannot represent merged cells'],
+                  ['Table column widths / alignment', 'Not representable in the stored markdown'],
                 ],
               },
             ] as { heading: string; rows: [string, string][] }[]).map(section => (
@@ -835,6 +837,7 @@ export default function Settings() {
 
             <p className="text-xs text-muted-foreground border-t pt-4">
               Tip: select any text in the editor to reveal the floating toolbar for bold, italic, highlight, headings, code, and tables.
+              Place the cursor inside a table to reveal row and column controls in the same toolbar.
             </p>
           </div>
         </TabsContent>

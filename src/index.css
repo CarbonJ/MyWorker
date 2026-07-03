@@ -221,22 +221,29 @@
   margin-bottom: 0;
 }
 
-/* TipTap table styles in editor */
-.tiptap table {
+/* Markdown table styles — shared by the TipTap editor and the read-only
+   renderers (MarkdownContent / WikiLinkContent), which all carry .prose.
+   Typography-plugin defaults use zero-specificity :where(), so these win. */
+.prose table {
   border-collapse: collapse;
   width: 100%;
   margin: 0.75em 0;
   font-size: 0.875em;
 }
-.tiptap table td,
-.tiptap table th {
+.prose table td,
+.prose table th {
   border: 1px solid var(--border);
   padding: 0.3em 0.6em;
   vertical-align: top;
 }
-.tiptap table th {
+.prose table th {
   background: var(--muted);
   font-weight: 600;
+}
+/* Cell paragraphs must not inherit --prose-p-spacing */
+.prose table p {
+  margin-top: 0;
+  margin-bottom: 0;
 }
 .tiptap table .selectedCell::after {
   background: var(--accent);

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useEditor, EditorContent } from '@tiptap/react'
+import { useEditor, useEditorState, EditorContent } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from 'tiptap-markdown'
@@ -12,8 +12,9 @@ import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { DOMParser as PMDOMParser } from '@tiptap/pm/model'
 import { Label } from '@/components/ui/label'
 import type { WikiEntity } from '@/types'
-import { Maximize2, Fullscreen, Minimize2, Bold, Italic, Heading1, Heading2, Heading3, Pilcrow, Code2, Table, Highlighter } from 'lucide-react'
+import { Maximize2, Fullscreen, Minimize2, Bold, Italic, Heading1, Heading2, Heading3, Pilcrow, Code2, Highlighter } from 'lucide-react'
 import { Table as TipTapTable, TableCell, TableHeader, TableRow } from '@tiptap/extension-table'
+import { ToolbarBtn, TableInsertPopover, TableControlsRow } from '@/components/MarkdownTableControls'
 import Highlight from '@tiptap/extension-highlight'
 import Typography from '@tiptap/extension-typography'
 import markdownItMark from 'markdown-it-mark'
@@ -114,19 +115,6 @@ const unescapeLinks = (s: string) =>
    .replace(/^\\- /gm, '- ')
    .replace(/\\\[/g, '[')
    .replace(/\\\]/g, ']')
-
-function ToolbarBtn({ active, onClick, title, children }: { active: boolean; onClick: () => void; title: string; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onMouseDown={e => { e.preventDefault(); onClick() }}
-      title={title}
-      className={`p-1 rounded transition-colors ${active ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'}`}
-    >
-      {children}
-    </button>
-  )
-}
 
 interface Props {
   id: string
@@ -247,7 +235,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
         // break-words prevents long URLs from causing horizontal overflow
         class: 'prose prose-sm dark:prose-invert max-w-none focus:outline-none break-words',
       },
-      handleKeyDown: (_view, event) => {
+      handleKeyDown: (view, event) => {
         // Wiki-link suggestion keyboard navigation (refs prevent stale closure)
         if (wikiSuggestRef.current.active && wikiSuggestionsRef.current.length > 0) {
           if (event.key === 'ArrowDown') {
@@ -289,6 +277,20 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
           }
           return false
         }
+        // Block Enter / Shift+Enter inside a table cell: a second block or a
+        // hard break in a cell makes the table unserializable as GFM, and
+        // tiptap-markdown (html: false) then saves the whole table as the
+        // literal string "[table]" — silent data loss. Tab / Shift+Tab move
+        // between cells; click or arrow below the table to leave it.
+        if (event.key === 'Enter' && !event.metaKey && !event.ctrlKey) {
+          const { $from } = view.state.selection
+          for (let d = $from.depth; d > 0; d--) {
+            if ($from.node(d).type.name === 'table') {
+              event.preventDefault()
+              return true
+            }
+          }
+        }
         // Always intercept Cmd/Ctrl+Enter to prevent TipTap inserting a line
         // break. preventDefault doesn't stop propagation, so window-level save
         // listeners (e.g. ProjectModal) still fire normally.
@@ -316,6 +318,25 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
       md = unescapeLinks(md)
       onChange(md)
     },
+  })
+
+  // Toolbar active/contextual states. TipTap v3 doesn't re-render the host
+  // component on every transaction, so isActive() calls in render can go
+  // stale — useEditorState subscribes to transactions and re-renders only
+  // when the selected snapshot changes (e.g. caret enters/leaves a table).
+  const tb = useEditorState({
+    editor,
+    selector: ({ editor: e }) => e ? {
+      bold: e.isActive('bold'),
+      italic: e.isActive('italic'),
+      highlight: e.isActive('highlight'),
+      h1: e.isActive('heading', { level: 1 }),
+      h2: e.isActive('heading', { level: 2 }),
+      h3: e.isActive('heading', { level: 3 }),
+      paragraph: e.isActive('paragraph'),
+      inTable: e.isActive('table'),
+      inHeaderRow: e.isActive('tableHeader'),
+    } : null,
   })
 
   // Sync external value changes (e.g. initial load, parent reset) into the editor.
@@ -480,7 +501,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
     />
   )
 
-  const toolbar = editor && !rawMode && (
+  const toolbar = editor && tb && !rawMode && (
     <BubbleMenu
       editor={editor}
       shouldShow={({ editor: e, state }) => {
@@ -489,61 +510,54 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
       }}
       options={{ placement: 'top-start' }}
     >
-      <div className="flex items-center gap-0.5 rounded-md border border-border bg-popover shadow-md p-0.5">
-        <ToolbarBtn
-          active={editor.isActive('bold')}
-          onClick={() => editor.chain().focus().toggleBold().run()}
-          title="Bold (⌘B)"
-        ><Bold size={13} /></ToolbarBtn>
-        <ToolbarBtn
-          active={editor.isActive('italic')}
-          onClick={() => editor.chain().focus().toggleItalic().run()}
-          title="Italic (⌘I)"
-        ><Italic size={13} /></ToolbarBtn>
-        <ToolbarBtn
-          active={editor.isActive('highlight')}
-          onClick={() => editor.chain().focus().toggleHighlight().run()}
-          title="Highlight (==text==)"
-        ><Highlighter size={13} /></ToolbarBtn>
-        <div className="w-px h-4 bg-border mx-0.5" />
-        <ToolbarBtn
-          active={editor.isActive('heading', { level: 1 })}
-          onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-          title="Heading 1"
-        ><Heading1 size={13} /></ToolbarBtn>
-        <ToolbarBtn
-          active={editor.isActive('heading', { level: 2 })}
-          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-          title="Heading 2"
-        ><Heading2 size={13} /></ToolbarBtn>
-        <ToolbarBtn
-          active={editor.isActive('heading', { level: 3 })}
-          onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-          title="Heading 3"
-        ><Heading3 size={13} /></ToolbarBtn>
-        <ToolbarBtn
-          active={editor.isActive('paragraph')}
-          onClick={() => editor.chain().focus().setParagraph().run()}
-          title="Plain text"
-        ><Pilcrow size={13} /></ToolbarBtn>
-        <div className="w-px h-4 bg-border mx-0.5" />
-        <ToolbarBtn
-          active={editor.isActive('table')}
-          onClick={() => {
-            if (editor.isActive('table')) {
-              editor.chain().focus().deleteTable().run()
-            } else {
-              editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
-            }
-          }}
-          title={editor.isActive('table') ? 'Remove table' : 'Insert table (3×3)'}
-        ><Table size={13} /></ToolbarBtn>
-        <div className="w-px h-4 bg-border mx-0.5" />
-        <ToolbarBtn
-          active={false}
-          onClick={toggleRaw}
-          title="Edit raw markdown (view/edit URLs and source)"
-        ><Code2 size={13} /></ToolbarBtn>
+      <div className="flex flex-col rounded-md border border-border bg-popover shadow-md p-0.5">
+        <div className="flex items-center gap-0.5">
+          <ToolbarBtn
+            active={tb.bold}
+            onClick={() => editor.chain().focus().toggleBold().run()}
+            title="Bold (⌘B)"
+          ><Bold size={13} /></ToolbarBtn>
+          <ToolbarBtn
+            active={tb.italic}
+            onClick={() => editor.chain().focus().toggleItalic().run()}
+            title="Italic (⌘I)"
+          ><Italic size={13} /></ToolbarBtn>
+          <ToolbarBtn
+            active={tb.highlight}
+            onClick={() => editor.chain().focus().toggleHighlight().run()}
+            title="Highlight (==text==)"
+          ><Highlighter size={13} /></ToolbarBtn>
+          <div className="w-px h-4 bg-border mx-0.5" />
+          <ToolbarBtn
+            active={tb.h1}
+            onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+            title="Heading 1"
+          ><Heading1 size={13} /></ToolbarBtn>
+          <ToolbarBtn
+            active={tb.h2}
+            onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+            title="Heading 2"
+          ><Heading2 size={13} /></ToolbarBtn>
+          <ToolbarBtn
+            active={tb.h3}
+            onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+            title="Heading 3"
+          ><Heading3 size={13} /></ToolbarBtn>
+          <ToolbarBtn
+            active={tb.paragraph}
+            onClick={() => editor.chain().focus().setParagraph().run()}
+            title="Plain text"
+          ><Pilcrow size={13} /></ToolbarBtn>
+          <div className="w-px h-4 bg-border mx-0.5" />
+          <TableInsertPopover editor={editor} disabled={tb.inTable} />
+          <div className="w-px h-4 bg-border mx-0.5" />
+          <ToolbarBtn
+            active={false}
+            onClick={toggleRaw}
+            title="Edit raw markdown (view/edit URLs and source)"
+          ><Code2 size={13} /></ToolbarBtn>
+        </div>
+        {tb.inTable && <TableControlsRow editor={editor} inHeaderRow={tb.inHeaderRow} />}
       </div>
     </BubbleMenu>
   )
