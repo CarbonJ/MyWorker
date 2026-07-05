@@ -18,6 +18,9 @@ import { ToolbarBtn, TableInsertPopover, TableControlsRow } from '@/components/M
 import Highlight from '@tiptap/extension-highlight'
 import Typography from '@tiptap/extension-typography'
 import markdownItMark from 'markdown-it-mark'
+import { toast } from 'sonner'
+import { AssetImage } from '@/tiptap/assetImage'
+import { assetsSupported, saveAssetImage, buildAssetSrc, DEFAULT_ASSET_WIDTH } from '@/db/assets'
 
 // Extend Highlight with tiptap-markdown serializer so ==text== roundtrips correctly.
 const HighlightMarkdown = Highlight.extend({
@@ -86,6 +89,29 @@ const MarkdownBlockPasteExtension = Extension.create({
         key: new PluginKey('markdownBlockPaste'),
         props: {
           handlePaste: (view, event) => {
+            // Image paste takes priority: store the file in the assets folder and
+            // insert an inline asset image node. Requires a storage folder (Edge/Chrome).
+            const items = event.clipboardData?.items
+            const imageItem = items && Array.from(items).find(it => it.type.startsWith('image/'))
+            if (imageItem) {
+              const file = imageItem.getAsFile()
+              if (file) {
+                event.preventDefault()
+                if (!assetsSupported()) {
+                  toast.error('Pasting images needs a storage folder — open in Edge/Chrome and pick a folder in Settings → Data.')
+                  return true
+                }
+                saveAssetImage(file)
+                  .then(filename => {
+                    editor.chain().focus().insertContent({
+                      type: 'image',
+                      attrs: { src: buildAssetSrc(filename, DEFAULT_ASSET_WIDTH, 'image') },
+                    }).run()
+                  })
+                  .catch(err => toast.error(`Failed to save image: ${err instanceof Error ? err.message : String(err)}`))
+                return true
+              }
+            }
             const text = event.clipboardData?.getData('text/plain')
             if (!text) return false
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -223,6 +249,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
       TableCell,
       HighlightMarkdown,
       Typography,
+      AssetImage,
       MarkdownBlockPasteExtension,
       ...(enableWikiLinks ? [wikiLinkExtension] : []),
     ],

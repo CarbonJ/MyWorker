@@ -4,7 +4,7 @@ import { BookOpen, Plus, Trash2, Search, X, FileDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { exportNote, type NoteExportFormat } from '@/lib/noteExport'
+import { exportNote, exportNoteZip, type NoteExportFormat } from '@/lib/noteExport'
 import { toast } from 'sonner'
 import { MarkdownField } from '@/components/MarkdownField'
 import {
@@ -265,7 +265,7 @@ export default function NotebookPage() {
                       <FileDown className="h-3 w-3" />
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-36 p-1" align="end" onClick={e => e.stopPropagation()}>
+                  <PopoverContent className="w-44 p-1" align="end" onClick={e => e.stopPropagation()}>
                     {(['md', 'pdf'] as NoteExportFormat[]).map(fmt => (
                       <button
                         key={fmt}
@@ -276,6 +276,13 @@ export default function NotebookPage() {
                         {fmt === 'md' ? 'Markdown (.md)' : 'PDF (print)'}
                       </button>
                     ))}
+                    <button
+                      type="button"
+                      className="w-full text-left px-2 py-1 text-sm rounded hover:bg-accent transition-colors"
+                      onClick={() => exportNoteZip(page).catch(err => toast.error(`Export failed: ${err instanceof Error ? err.message : String(err)}`))}
+                    >
+                      ZIP (note + images)
+                    </button>
                   </PopoverContent>
                 </Popover>
                 <button

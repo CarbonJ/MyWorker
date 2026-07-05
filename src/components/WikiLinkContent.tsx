@@ -1,8 +1,10 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import ReactMarkdown from 'react-markdown'
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useWikiEntities } from '@/hooks/useWikiEntities'
+import { parseAssetSrc } from '@/db/assets'
+import { AssetImageDisplay } from '@/components/AssetImageDisplay'
 import type { WikiEntity } from '@/types'
 
 interface Props {
@@ -39,7 +41,16 @@ export function WikiLinkContent({ children, className, wikiEntities: propEntitie
     <div className={`prose prose-sm dark:prose-invert max-w-none ${className ?? ''}`}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
+        // Preserve the custom asset:// scheme (react-markdown strips unknown schemes by default).
+        urlTransform={(url) => (url.startsWith('asset://') ? url : defaultUrlTransform(url))}
         components={{
+          img({ src, alt }) {
+            const parts = parseAssetSrc(typeof src === 'string' ? src : '')
+            if (parts) {
+              return <AssetImageDisplay filename={parts.filename} width={parts.width} display={parts.display} />
+            }
+            return <img src={typeof src === 'string' ? src : undefined} alt={alt ?? ''} className="inline-block max-w-full rounded border border-border align-top" />
+          },
           a({ href, children, ...props }) {
             // Internal app routes start with / — use SPA navigation, never a new tab
             if (href?.startsWith('/')) {

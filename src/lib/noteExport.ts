@@ -1,5 +1,6 @@
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import { parseAssetRefs, readAssetBlob } from '@/db/assets'
 
 export type NoteExportFormat = 'md' | 'pdf'
 
@@ -98,6 +99,38 @@ export function exportNote(page: ExportablePage, format: NoteExportFormat) {
   } else {
     openHtmlForPrint(notesToHtml([page]))
   }
+}
+
+/** Rewrite `asset://name?query` image srcs to a portable relative `assets/name` path. */
+function rewriteAssetSrcs(body: string): string {
+  return body.replace(/asset:\/\/([^)\s?"'>]+)(\?[^)\s"'>]*)?/g, (_m, file: string) => `assets/${file}`)
+}
+
+/**
+ * Export a single note as a ZIP containing `<title>.md` plus an `assets/` folder
+ * with every pasted image it references. Image srcs in the .md are rewritten to
+ * the relative `assets/<file>` path so the bundle is self-contained and portable.
+ */
+export async function exportNoteZip(page: ExportablePage): Promise<void> {
+  const name = safeFilename(page.title)
+  const md = rewriteAssetSrcs(cleanMarkdownExport(page.body))
+  const enc = new TextEncoder()
+  const entries: ZipEntry[] = [{ name: `${name}.md`, data: enc.encode(md) }]
+
+  for (const filename of parseAssetRefs(page.body)) {
+    const blob = await readAssetBlob(filename)
+    if (!blob) continue
+    entries.push({ name: `assets/${filename}`, data: new Uint8Array(await blob.arrayBuffer()) })
+  }
+
+  const zip = buildZip(entries)
+  const blob = new Blob([zip as unknown as BlobPart], { type: 'application/zip' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${name}.zip`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 // ── Minimal store-only (uncompressed) ZIP writer ───────────────────────────

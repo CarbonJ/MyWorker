@@ -1,4 +1,5 @@
 import { query, run, lastInsertId } from './index'
+import { deleteNoteAssets } from './assets'
 import type { WorkLogEntry } from '@/types'
 
 function rowToEntry(row: Record<string, unknown>): WorkLogEntry {
@@ -57,7 +58,11 @@ export async function updateWorkLogEntry(id: number, note: string): Promise<void
 }
 
 export async function deleteWorkLogEntry(id: number): Promise<void> {
+  // Read the note first so any pasted image files can be removed from the assets folder.
+  const rows = await query(`SELECT note FROM work_log_entries WHERE id = ?`, [id])
+  const note = rows[0]?.note as string | undefined
   await run(`DELETE FROM work_log_entries WHERE id = ?`, [id])
+  if (note) await deleteNoteAssets(note)
 }
 
 export interface WorkLogEntryWithProject extends WorkLogEntry {

@@ -2,6 +2,8 @@ import { useEffect, useState, useRef } from 'react'
 import { TEXT_COLOR_HEX, buttonStyle, workItemStyle } from '@/lib/guiSettings'
 import { toast } from 'sonner'
 import { exportToJson, importFromJson } from '@/db/importExport'
+import { getAssetsFolderName, setAssetsFolderName, DEFAULT_ASSETS_FOLDER } from '@/db/assets'
+import { Input } from '@/components/ui/input'
 import { setUserFolderHandle, query } from '@/db'
 import { getAllNotebookPages } from '@/db/notebook'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -30,6 +32,7 @@ const AREA_BTN_PROJECTS_KEY = 'myworker:area-filter-buttons-projects'
 export default function Settings() {
   const importRef = useRef<HTMLInputElement>(null)
   const [importing, setImporting] = useState(false)
+  const [assetsFolder, setAssetsFolder] = useState(() => getAssetsFolderName())
   const [dataStats, setDataStats] = useState<DataStats | null>(null)
   const [areaFilterButtons, setAreaFilterButtons] = useState(
     () => localStorage.getItem(AREA_BTN_KEY) === 'true'
@@ -509,6 +512,23 @@ export default function Settings() {
                 <Button variant="outline" onClick={handleChangeFolder}>
                   Change storage folder…
                 </Button>
+                <div className="pt-2 space-y-1.5 max-w-sm">
+                  <label htmlFor="assets-folder" className="text-sm font-medium">Image assets folder</label>
+                  <Input
+                    id="assets-folder"
+                    value={assetsFolder}
+                    placeholder={DEFAULT_ASSETS_FOLDER}
+                    onChange={e => setAssetsFolder(e.target.value)}
+                    onBlur={() => {
+                      const clean = assetsFolder.trim() || DEFAULT_ASSETS_FOLDER
+                      setAssetsFolderName(clean)
+                      setAssetsFolder(clean)
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Subfolder (next to your database) where pasted images are stored. Changing this only affects newly pasted images; existing files are not moved.
+                  </p>
+                </div>
               </>
             ) : (
               <div className="rounded-md border border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300 px-4 py-3 text-sm space-y-1">
