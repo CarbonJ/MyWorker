@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useEditor, useEditorState, EditorContent } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
@@ -159,9 +160,11 @@ interface Props {
   onWikiLinkClick?: (name: string) => void
   /** Remove the minimum height floor so the editor shrinks to fit its content. */
   autoHeight?: boolean
+  /** Extra action buttons rendered in the header row, left of the raw/expand icons. */
+  headerActions?: React.ReactNode
 }
 
-export function MarkdownField({ id, label, headerLabel, value, onChange, placeholder, rows = 2, onKeyDown, initialFocused = false, expandable = false, enableWikiLinks = false, wikiEntities = [], onWikiLinkClick, autoHeight = false }: Props) {
+export function MarkdownField({ id, label, headerLabel, value, onChange, placeholder, rows = 2, onKeyDown, initialFocused = false, expandable = false, enableWikiLinks = false, wikiEntities = [], onWikiLinkClick, autoHeight = false, headerActions }: Props) {
   const [focused, setFocused] = useState(initialFocused)
   const [sizeMode, setSizeMode] = useState<SizeMode>('default')
   const [rawMode, setRawMode] = useState(false)
@@ -494,10 +497,11 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
     </button>
   )
 
-  const labelRow = (label || expandable) && (
+  const labelRow = (label || expandable || headerActions) && (
     <div className="flex items-center justify-between">
       {label ? <Label htmlFor={id}>{label}</Label> : <span />}
       <div className="flex items-center gap-1">
+        {headerActions}
         {rawMode && rawBtn}
         {expandBtn}
       </div>
@@ -589,8 +593,12 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
     </BubbleMenu>
   )
 
-  // Wiki-link suggestion dropdown (position: fixed so it renders above everything)
-  const wikiDropdown = enableWikiLinks && wikiSuggest.active && wikiSuggestions.length > 0 && (
+  // Wiki-link suggestion dropdown. Rendered in a portal to document.body: it uses
+  // position:fixed with viewport coords (from coordsAtPos), but when MarkdownField
+  // sits inside a transformed ancestor (e.g. a Radix Dialog centered via translate),
+  // a fixed child would resolve against that transform and land far off-screen.
+  // Portalling to body escapes the transform so the coords stay viewport-relative.
+  const wikiDropdown = enableWikiLinks && wikiSuggest.active && wikiSuggestions.length > 0 && createPortal(
     <div
       style={{
         position: 'fixed',
@@ -617,7 +625,8 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
           <span className="truncate">{entity.name}</span>
         </button>
       ))}
-    </div>
+    </div>,
+    document.body,
   )
 
   if (sizeMode === 'fullscreen') {
@@ -637,6 +646,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
               <span className="text-sm font-medium">{headerLabel ?? label}</span>
             )}
             <div className="ml-auto flex items-center gap-2">
+              {headerActions}
               {rawBtn}
               <button
                 type="button"

@@ -534,6 +534,22 @@ const migrations: Migration[] = [
       UPDATE work_log_entries SET is_system = 1 WHERE note LIKE '✓ Completed%';
     `,
   },
+  {
+    version: 22,
+    up: `
+      -- Favourite/star flag for notebook pages so they can be filtered later.
+      ALTER TABLE notebook_pages ADD COLUMN starred INTEGER NOT NULL DEFAULT 0;
+
+      -- Rescope the updated_at trigger to content columns only, so toggling the
+      -- star does not bump updated_at (which would reorder the note list).
+      DROP TRIGGER IF EXISTS notebook_pages_updated_at;
+      CREATE TRIGGER notebook_pages_updated_at
+      AFTER UPDATE OF title, body ON notebook_pages
+      BEGIN
+        UPDATE notebook_pages SET updated_at = datetime('now') WHERE id = NEW.id;
+      END;
+    `,
+  },
 ]
 
 export async function runMigrations(handle: DbHandle): Promise<void> {

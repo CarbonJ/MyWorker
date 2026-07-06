@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { BookOpen, Plus, Trash2, Search, X, FileDown } from 'lucide-react'
+import { BookOpen, Plus, Trash2, Search, X, FileDown, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -10,6 +10,7 @@ import { MarkdownField } from '@/components/MarkdownField'
 import {
   getAllNotebookPages, getNotebookPageById, createNotebookPage,
   updateNotebookPage, deleteNotebookPage, rebuildLinks, rebuildAllLinks,
+  setNotebookPageStarred,
 } from '@/db/notebook'
 import { getAllProjects } from '@/db/projects'
 import { getAllContacts } from '@/db/contacts'
@@ -36,7 +37,9 @@ export default function NotebookPage() {
   const [pages, setPages] = useState<NotebookPage[]>([])
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
+  const [starred, setStarred] = useState(false)
   const [listSearch, setListSearch] = useState('')
+  const [starredOnly, setStarredOnly] = useState(false)
   const [wikiEntities, setWikiEntities] = useState<WikiEntity[]>([])
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
   const [isNew, setIsNew] = useState(false)
@@ -85,6 +88,7 @@ export default function NotebookPage() {
       if (!isNew) {
         setTitle('')
         setBody('')
+        setStarred(false)
       }
       currentPageId.current = null
       return
@@ -94,6 +98,7 @@ export default function NotebookPage() {
       if (p) {
         setTitle(p.title)
         setBody(p.body)
+        setStarred(p.starred)
         setIsNew(false)
         setSaveStatus('saved')
         currentPageId.current = p.id
@@ -162,10 +167,27 @@ export default function NotebookPage() {
     setIsNew(true)
     setTitle('')
     setBody('')
+    setStarred(false)
     setSaveStatus('unsaved')
     currentPageId.current = null
     setSearchParams({})
   }, [setSearchParams])
+
+  const toggleStar = async () => {
+    const id = currentPageId.current
+    if (id === null) return
+    const next = !starred
+    setStarred(next)
+    setPages(prev => prev.map(p => p.id === id ? { ...p, starred: next } : p))
+    try {
+      await setNotebookPageStarred(id, next)
+    } catch (err) {
+      // Roll back optimistic update on failure
+      setStarred(!next)
+      setPages(prev => prev.map(p => p.id === id ? { ...p, starred: !next } : p))
+      toast.error(`Failed to update star: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
 
   const handleDelete = async (page: NotebookPage, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -188,13 +210,16 @@ export default function NotebookPage() {
   }
 
   const filteredPages = useMemo(() => {
+    let list = starredOnly ? pages.filter(p => p.starred) : pages
     const q = listSearch.trim().toLowerCase()
-    if (!q) return pages
-    return pages.filter(p =>
-      (p.title || 'Untitled').toLowerCase().includes(q) ||
-      p.body.toLowerCase().includes(q)
-    )
-  }, [pages, listSearch])
+    if (q) {
+      list = list.filter(p =>
+        (p.title || 'Untitled').toLowerCase().includes(q) ||
+        p.body.toLowerCase().includes(q)
+      )
+    }
+    return list
+  }, [pages, listSearch, starredOnly])
 
   const showEditor = isNew || selectedId !== null
 
@@ -212,8 +237,8 @@ export default function NotebookPage() {
             <Plus className="h-4 w-4" />
           </Button>
         </div>
-        <div className="px-2 py-2 border-b shrink-0">
-          <div className="relative">
+        <div className="px-2 py-2 border-b shrink-0 flex items-center gap-1.5">
+          <div className="relative flex-1">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground pointer-events-none" />
             <Input
               value={listSearch}
@@ -230,6 +255,15 @@ export default function NotebookPage() {
               </button>
             )}
           </div>
+          <button
+            onClick={() => setStarredOnly(v => !v)}
+            title={starredOnly ? 'Show all notes' : 'Show starred only'}
+            className={`h-7 w-7 shrink-0 flex items-center justify-center rounded border transition-colors ${
+              starredOnly ? 'text-amber-500 border-amber-400/60 bg-amber-500/10' : 'text-muted-foreground border-input hover:text-foreground hover:bg-accent'
+            }`}
+          >
+            <Star className={`h-3.5 w-3.5 ${starredOnly ? 'fill-amber-500' : ''}`} />
+          </button>
         </div>
         <div className="flex-1 overflow-y-auto">
           {isNew && !currentPageId.current && (
@@ -253,7 +287,11 @@ export default function NotebookPage() {
                 <div className="text-sm font-medium truncate">{page.title || 'Untitled'}</div>
                 <div className="text-xs text-muted-foreground">{relativeTime(page.updatedAt)}</div>
               </div>
-              <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 shrink-0 mt-0.5">
+              <div className="flex items-start gap-1 shrink-0 mt-0.5">
+                {page.starred && (
+                  <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500 shrink-0" aria-label="Starred" />
+                )}
+                <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 shrink-0">
                 <Popover>
                   <PopoverTrigger asChild>
                     <button
@@ -293,12 +331,13 @@ export default function NotebookPage() {
                 >
                   <Trash2 className="h-3 w-3" />
                 </button>
+                </div>
               </div>
             </div>
           ))}
           {filteredPages.length === 0 && !isNew && (
             <div className="px-3 py-8 text-center text-xs text-muted-foreground">
-              {listSearch ? 'No pages match.' : 'No pages yet.'}
+              {listSearch ? 'No pages match.' : starredOnly ? 'No starred notes.' : 'No pages yet.'}
             </div>
           )}
         </div>
@@ -332,6 +371,16 @@ export default function NotebookPage() {
                 expandable
                 enableWikiLinks
                 wikiEntities={wikiEntities}
+                headerActions={currentPageId.current !== null ? (
+                  <button
+                    type="button"
+                    onClick={toggleStar}
+                    title={starred ? 'Unstar this note' : 'Star this note'}
+                    className={`transition-colors p-0.5 rounded ${starred ? 'text-amber-500' : 'text-muted-foreground hover:text-foreground'}`}
+                  >
+                    <Star size={14} className={starred ? 'fill-amber-500' : ''} />
+                  </button>
+                ) : undefined}
               />
             </div>
           </>

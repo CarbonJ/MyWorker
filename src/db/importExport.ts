@@ -168,10 +168,11 @@ export async function restoreFromData(raw: unknown): Promise<void> {
     // Restore notebook pages (v2). notebook_links are derived and rebuilt below.
     for (const n of data.notebookPages ?? []) {
       await exec(sqlite, db,
-        `INSERT INTO notebook_pages (id, title, body, created_at, updated_at)
-         VALUES (?, ?, ?, COALESCE(?, datetime('now')), COALESCE(?, datetime('now')))`,
+        `INSERT INTO notebook_pages (id, title, body, starred, created_at, updated_at)
+         VALUES (?, ?, ?, ?, COALESCE(?, datetime('now')), COALESCE(?, datetime('now')))`,
         [
           n.id as number, n.title as string, n.body as string,
+          (n.starred as number) ?? 0,
           (n.created_at as string | null) ?? null,
           (n.updated_at as string | null) ?? null,
         ],

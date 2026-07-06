@@ -63,7 +63,9 @@ export function RecurringCompleteDialog({ task, open, onReschedule, onMarkDone, 
 
   return (
     <Dialog open={open} onOpenChange={v => !v && handleCancel()}>
-      <DialogContent className="max-w-sm">
+      {/* Wiki-link suggestion dropdown portals to document.body (to escape the dialog's
+          transform); preventDefault stops Radix treating a click on it as "interact outside". */}
+      <DialogContent className="max-w-sm" onInteractOutside={e => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <RefreshCw className="h-4 w-4 text-blue-500" />

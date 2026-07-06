@@ -4,6 +4,7 @@ import { getWorkLogByDate, type WorkLogEntryWithProject } from '@/db/workLog'
 import { getNotebookPageByTitle, createNotebookPage, getLinkedNotebookEntriesByDateRange, type LinkedNotebookEntry } from '@/db/notebook'
 import { WikiLinkContent } from '@/components/WikiLinkContent'
 import { MarkdownField } from '@/components/MarkdownField'
+import { useWikiEntities } from '@/hooks/useWikiEntities'
 import { ChevronLeft, ChevronRight, CalendarDays, FileText, BookOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toLocalDateString } from '@/lib/utils'
@@ -52,6 +53,8 @@ export default function DailyDigestView() {
   const [notebooks, setNotebooks] = useState<LinkedNotebookEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [meetings, setMeetings] = useState(() => localStorage.getItem(MEETINGS_KEY(toLocalDateString(new Date()))) ?? '')
+  // Entity list so resolved [[wiki links]] in the Journal render blue (live) vs muted (unlinked)
+  const wikiEntities = useWikiEntities()
 
   useEffect(() => {
     setLoading(true)
@@ -74,7 +77,7 @@ export default function DailyDigestView() {
     let page = await getNotebookPageByTitle(name)
     if (!page) {
       const id = await createNotebookPage(name, '')
-      page = { id, title: name, body: '', createdAt: '', updatedAt: '' }
+      page = { id, title: name, body: '', starred: false, createdAt: '', updatedAt: '' }
     }
     navigate(`/notebook?page=${page.id}`)
   }, [navigate])
@@ -147,6 +150,7 @@ export default function DailyDigestView() {
             autoHeight
             expandable
             enableWikiLinks
+            wikiEntities={wikiEntities}
             onWikiLinkClick={handleWikiLinkClick}
           />
         </div>

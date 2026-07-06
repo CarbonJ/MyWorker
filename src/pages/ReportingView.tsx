@@ -577,6 +577,24 @@ export default function ReportingView() {
           width="w-40"
         />
 
+        {/* Area filter — mirrors the pill row but adds a "No Area" option (value '' matches
+            projects with a null product area, per the areaFilters predicate) so area-less
+            projects can be isolated. "No Area" only appears when such a project exists. */}
+        <MultiSelectFilter
+          options={[
+            ...productAreas.map(a => ({
+              value: String(a.id),
+              label: a.label,
+              prefix: a.color ? <span className={`w-2 h-2 rounded-full shrink-0 ${dotClass(a.color)}`} /> : undefined,
+            })),
+            ...(projects.some(p => p.productAreaId === null) ? [{ value: '', label: 'No Area' }] : []),
+          ]}
+          value={areaFilters}
+          onChange={setAreaFilters}
+          placeholder="All Areas"
+          width="w-40"
+        />
+
         {/* Tags filter — includes tags from both projects and tasks */}
         {(() => {
           const tagSet = new Set<string>()

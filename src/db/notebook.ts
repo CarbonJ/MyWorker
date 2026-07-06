@@ -7,6 +7,7 @@ function rowToPage(row: Record<string, unknown>): NotebookPage {
     id: row.id as number,
     title: row.title as string,
     body: row.body as string,
+    starred: !!(row.starred as number),
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   }
@@ -67,6 +68,11 @@ export async function createNotebookPage(title: string, body: string): Promise<n
 
 export async function updateNotebookPage(id: number, title: string, body: string): Promise<void> {
   await run(`UPDATE notebook_pages SET title = ?, body = ? WHERE id = ?`, [title, body, id])
+}
+
+/** Toggle/set a page's starred (favourite) flag. Does not touch updated_at (see migration 22). */
+export async function setNotebookPageStarred(id: number, starred: boolean): Promise<void> {
+  await run(`UPDATE notebook_pages SET starred = ? WHERE id = ?`, [starred ? 1 : 0, id])
 }
 
 export async function deleteNotebookPage(id: number): Promise<void> {

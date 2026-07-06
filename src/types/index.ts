@@ -81,6 +81,7 @@ export interface NotebookPage {
   id: number
   title: string
   body: string
+  starred: boolean
   createdAt: string
   updatedAt: string
 }
