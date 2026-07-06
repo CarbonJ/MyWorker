@@ -164,7 +164,7 @@ function AppInner() {
         {showSplit ? (
           <div className="h-[calc(100vh-57px)] flex">
             <SplitPane
-              initialSplitPct={65}
+              initialSplitPct={50}
               persistKey="myworker:pinned-split-pct"
               left={<AppRoutes />}
               right={<PinnedPane />}
