@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { BookOpen, Plus, Trash2, Search, X, FileDown, Star } from 'lucide-react'
+import { BookOpen, Plus, Trash2, Search, X, FileDown, Star, PanelRight } from 'lucide-react'
+import { usePinnedView } from '@/contexts/PinnedViewContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -33,6 +34,7 @@ function relativeTime(dateStr: string): string {
 export default function NotebookPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const selectedId = searchParams.get('page') ? Number(searchParams.get('page')) : null
+  const { pin } = usePinnedView()
 
   const [pages, setPages] = useState<NotebookPage[]>([])
   const [title, setTitle] = useState('')
@@ -372,14 +374,24 @@ export default function NotebookPage() {
                 enableWikiLinks
                 wikiEntities={wikiEntities}
                 headerActions={currentPageId.current !== null ? (
-                  <button
-                    type="button"
-                    onClick={toggleStar}
-                    title={starred ? 'Unstar this note' : 'Star this note'}
-                    className={`transition-colors p-0.5 rounded ${starred ? 'text-amber-500' : 'text-muted-foreground hover:text-foreground'}`}
-                  >
-                    <Star size={14} className={starred ? 'fill-amber-500' : ''} />
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => pin(`/notebook?page=${currentPageId.current}`)}
+                      title="Pin this note beside the main area"
+                      className="transition-colors p-0.5 rounded text-muted-foreground hover:text-foreground"
+                    >
+                      <PanelRight size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={toggleStar}
+                      title={starred ? 'Unstar this note' : 'Star this note'}
+                      className={`transition-colors p-0.5 rounded ${starred ? 'text-amber-500' : 'text-muted-foreground hover:text-foreground'}`}
+                    >
+                      <Star size={14} className={starred ? 'fill-amber-500' : ''} />
+                    </button>
+                  </>
                 ) : undefined}
               />
             </div>

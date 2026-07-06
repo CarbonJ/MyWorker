@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BrowserRouter, Routes, Route, NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { BrowserRouter, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 import { DbProvider } from '@/hooks/useDb'
@@ -7,26 +7,20 @@ import { consumeRecoveryNotice } from '@/db'
 import { TaskModal } from '@/components/TaskModal'
 import { ProjectModal } from '@/components/ProjectModal'
 import { SearchProvider, useSearch } from '@/contexts/SearchContext'
+import { PinnedViewProvider, usePinnedView } from '@/contexts/PinnedViewContext'
 import { Input } from '@/components/ui/input'
-import { X, Moon, Sun, Search as SearchIcon, BookOpen } from 'lucide-react'
+import { X, Moon, Sun, Search as SearchIcon, BookOpen, PanelRight } from 'lucide-react'
 
 import { loadGuiSettings, buttonStyle } from '@/lib/guiSettings'
-import Prime from '@/pages/Prime'
-import ProjectDetail from '@/pages/ProjectDetail'
-import ReportingView from '@/pages/ReportingView'
-import ArchiveView from '@/pages/ArchiveView'
-import Settings from '@/pages/Settings'
-import DailyDigestView from '@/pages/DailyDigestView'
-import WeeklyReportView from '@/pages/WeeklyReportView'
-import MonthlyReportView from '@/pages/MonthlyReportView'
-import SearchPage from '@/pages/SearchPage'
-import ContactsPage from '@/pages/ContactsPage'
-import NotebookPage from '@/pages/NotebookPage'
+import { AppRoutes } from '@/components/AppRoutes'
+import { SplitPane } from '@/components/project/SplitPane'
+import { PinnedPane } from '@/components/PinnedPane'
 import { CommandPalette } from '@/components/CommandPalette'
 
 
 function NavBar({ isDark, onToggleDark }: { isDark: boolean; onToggleDark: () => void }) {
   const { query, setQuery } = useSearch()
+  const { pinnedUrl, pin, unpin } = usePinnedView()
   const location = useLocation()
   // Force a re-render whenever button GUI settings change (Settings page dispatches this)
   const [, forceGuiUpdate] = useState(0)
@@ -85,6 +79,14 @@ function NavBar({ isDark, onToggleDark }: { isDark: boolean; onToggleDark: () =>
           </button>
         )}
       </div>
+      <button
+        onClick={() => pinnedUrl ? unpin() : pin(location.pathname + location.search)}
+        className={`ml-2 transition-colors ${pinnedUrl ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+        title={pinnedUrl ? 'Close pinned pane' : 'Pin this view beside the main area (split screen)'}
+        aria-label="Toggle pinned pane"
+      >
+        <PanelRight className="h-4 w-4" />
+      </button>
       <button onClick={onToggleDark} className="ml-2 text-muted-foreground hover:text-foreground" aria-label="Toggle dark mode">
         {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
       </button>
@@ -94,6 +96,18 @@ function NavBar({ isDark, onToggleDark }: { isDark: boolean; onToggleDark: () =>
 
 function AppInner() {
   const navigate = useNavigate()
+  const { pinnedUrl } = usePinnedView()
+  // Only split on a wide enough viewport — the app is desktop-first and a docked
+  // pane on a narrow window would be unusable. The pin persists; the pane returns
+  // when the window is widened again.
+  const [wideEnough, setWideEnough] = useState(() => window.matchMedia('(min-width: 1024px)').matches)
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)')
+    const onChange = () => setWideEnough(mq.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+  const showSplit = !!pinnedUrl && wideEnough
   const [quickTaskOpen, setQuickTaskOpen] = useState(false)
   const [quickTaskAreaId, setQuickTaskAreaId] = useState<number | null>(null)
   const [quickProjectOpen, setQuickProjectOpen] = useState(false)
@@ -147,19 +161,18 @@ function AppInner() {
       <NavBar isDark={isDark} onToggleDark={toggleDark} />
 
       <main className="flex-1 overflow-hidden">
-        <Routes>
-          <Route path="/" element={<Prime />} />
-          <Route path="/projects/:id" element={<ProjectDetail />} />
-          <Route path="/reporting" element={<ReportingView />} />
-          <Route path="/digest" element={<DailyDigestView />} />
-          <Route path="/weekly" element={<WeeklyReportView />} />
-          <Route path="/monthly" element={<MonthlyReportView />} />
-          <Route path="/archive" element={<ArchiveView />} />
-          <Route path="/contacts" element={<ContactsPage />} />
-          <Route path="/notebook" element={<NotebookPage />} />
-          <Route path="/search" element={<SearchPage />} />
-          <Route path="/settings" element={<Settings />} />
-        </Routes>
+        {showSplit ? (
+          <div className="h-[calc(100vh-57px)] flex">
+            <SplitPane
+              initialSplitPct={65}
+              persistKey="myworker:pinned-split-pct"
+              left={<AppRoutes />}
+              right={<PinnedPane />}
+            />
+          </div>
+        ) : (
+          <AppRoutes />
+        )}
       </main>
       <CommandPalette
         open={paletteOpen}
@@ -192,7 +205,9 @@ export default function App() {
   return (
     <DbProvider>
       <BrowserRouter>
-        <AppInner />
+        <PinnedViewProvider>
+          <AppInner />
+        </PinnedViewProvider>
       </BrowserRouter>
     </DbProvider>
   )

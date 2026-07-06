@@ -13,10 +13,18 @@ interface Props {
   left: ReactNode
   right: ReactNode
   initialSplitPct?: number
+  /** When set, the divider position is remembered in localStorage under this key. */
+  persistKey?: string
 }
 
-export function SplitPane({ left, right, initialSplitPct = SPLIT_DEFAULT_PCT }: Props) {
-  const [splitPct, setSplitPct] = useState(initialSplitPct)
+export function SplitPane({ left, right, initialSplitPct = SPLIT_DEFAULT_PCT, persistKey }: Props) {
+  const [splitPct, setSplitPct] = useState(() => {
+    if (persistKey) {
+      const saved = Number(localStorage.getItem(persistKey))
+      if (Number.isFinite(saved) && saved >= SPLIT_MIN_PCT && saved <= SPLIT_MAX_PCT) return saved
+    }
+    return initialSplitPct
+  })
   const containerRef = useRef<HTMLDivElement>(null)
   const dragging = useRef(false)
 
@@ -27,8 +35,9 @@ export function SplitPane({ left, right, initialSplitPct = SPLIT_DEFAULT_PCT }: 
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!dragging.current || !containerRef.current) return
     const { left, width } = containerRef.current.getBoundingClientRect()
-    const pct = ((e.clientX - left) / width) * 100
-    setSplitPct(Math.min(SPLIT_MAX_PCT, Math.max(SPLIT_MIN_PCT, pct)))
+    const pct = Math.min(SPLIT_MAX_PCT, Math.max(SPLIT_MIN_PCT, ((e.clientX - left) / width) * 100))
+    setSplitPct(pct)
+    if (persistKey) localStorage.setItem(persistKey, String(Math.round(pct)))
   }
   const onPointerUp = () => { dragging.current = false }
 

@@ -15,7 +15,8 @@ import { ProjectStats } from '@/components/project/ProjectStats'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Check, ChevronDown, ChevronUp } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, PanelRight } from 'lucide-react'
+import { usePinnedView } from '@/contexts/PinnedViewContext'
 import { pillClass, dotClass, dotOnPillClass, RAG_OPTIONS } from '@/lib/colors'
 import { DESC_EXPAND_CHAR_THRESHOLD, DESC_EXPAND_LINE_THRESHOLD } from '@/lib/constants'
 import { localToday } from '@/lib/utils'
@@ -41,6 +42,7 @@ export function ProjectHeader({
   isArchived, onSaveField, onMarkComplete, onReopen, onEdit,
 }: Props) {
   const navigate = useNavigate()
+  const { pin } = usePinnedView()
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSED_KEY) === 'true')
   const [descExpanded, setDescExpanded] = useState(false)
   const [editingStatus, setEditingStatus] = useState(false)
@@ -106,9 +108,14 @@ export function ProjectHeader({
         <button onClick={() => navigate(-1)} className="text-sm text-muted-foreground hover:text-foreground">
           ← Back
         </button>
-        <button onClick={toggleCollapsed} title="Collapse header" className="text-muted-foreground hover:text-foreground p-1 rounded transition-colors">
-          <ChevronUp className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button onClick={() => pin(`/projects/${project.id}`)} title="Pin this project beside the main area" className="text-muted-foreground hover:text-foreground p-1 rounded transition-colors">
+            <PanelRight className="h-4 w-4" />
+          </button>
+          <button onClick={toggleCollapsed} title="Collapse header" className="text-muted-foreground hover:text-foreground p-1 rounded transition-colors">
+            <ChevronUp className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       {isProjectOverdue && (
