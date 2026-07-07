@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Search, FolderKanban, CheckSquare, ScrollText, BookOpen, ChevronDown, ChevronRight } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { MultiSelectFilter } from '@/components/ui/MultiSelectFilter'
@@ -62,8 +62,10 @@ interface GroupState {
 
 export default function SearchPage() {
   const navigate = useNavigate()
-  const [input, setInput] = useState('')
-  const [query, setQuery] = useState('')
+  const [searchParams] = useSearchParams()
+  // Seed from ?q= so the nav-bar search (or a shared link) can jump straight to results
+  const [input, setInput] = useState(() => searchParams.get('q') ?? '')
+  const [query, setQuery] = useState(() => searchParams.get('q') ?? '')
   const [scope, setScope] = useState<ScopeFilter>('all')
   const [taskStatuses, setTaskStatuses] = useState<string[]>(() => {
     try {

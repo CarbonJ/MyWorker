@@ -482,6 +482,11 @@ export default function Settings() {
                     alt:  null,
                     desc: 'Return to main screen when no modal is open',
                   },
+                  {
+                    keys: ['/'],
+                    alt:  null,
+                    desc: 'Focus the top search box from anywhere; press Enter to jump to full search results',
+                  },
                 ].map(({ keys, alt, desc }) => (
                   <div key={desc} className="flex items-center gap-4 px-3 py-2">
                     <div className="flex items-center gap-1 shrink-0 w-44">

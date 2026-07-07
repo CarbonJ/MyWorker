@@ -22,11 +22,25 @@ function NavBar({ isDark, onToggleDark }: { isDark: boolean; onToggleDark: () =>
   const { query, setQuery } = useSearch()
   const { pinnedUrl, pin, unpin } = usePinnedView()
   const location = useLocation()
+  const navigate = useNavigate()
   // Force a re-render whenever button GUI settings change (Settings page dispatches this)
   const [, forceGuiUpdate] = useState(0)
 
   // Clear search when navigating to a different route
   useEffect(() => { setQuery('') }, [location.pathname, setQuery])
+
+  // "/" focuses the search box from anywhere (unless typing in a field/editor)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return
+      const el = document.activeElement as HTMLElement | null
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable || el.closest('.ProseMirror'))) return
+      e.preventDefault()
+      document.getElementById('navbar-search')?.focus()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   useEffect(() => {
     const handler = () => forceGuiUpdate(n => n + 1)
@@ -64,9 +78,19 @@ function NavBar({ isDark, onToggleDark }: { isDark: boolean; onToggleDark: () =>
       {/* Global search — top right */}
       <div className="ml-auto relative flex items-center">
         <Input
-          placeholder="Search…"
+          id="navbar-search"
+          placeholder="Search…  ( / )"
           value={query}
           onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => {
+            // On pages where the box already live-filters the view, leave Enter alone so
+            // the user's filter isn't lost. On every other page it's otherwise inert, so
+            // Enter jumps to the full-text Search page with the current query.
+            const filterRoutes = new Set(['/', '/reporting', '/archive', '/weekly', '/monthly'])
+            if (e.key === 'Enter' && query.trim() && !filterRoutes.has(location.pathname)) {
+              navigate(`/search?q=${encodeURIComponent(query.trim())}`)
+            }
+          }}
           className="h-8 w-56 text-sm pr-7"
         />
         {query && (
