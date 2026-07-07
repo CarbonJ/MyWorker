@@ -771,7 +771,7 @@ export default function Settings() {
           <div>
             <h3 className="text-sm font-semibold mb-3">Markdown Reference</h3>
             <p className="text-xs text-muted-foreground mb-4">
-              All text fields in MyWorker use a rich markdown editor. You can type markdown syntax directly or use the floating toolbar that appears when text is selected.
+              All text fields in MyWorker use a rich markdown editor. You can type markdown syntax directly or use the formatting toolbar — fixed at the top of the Notebook editor, and floating (appears while editing) in the smaller note fields.
             </p>
 
             {([
@@ -798,8 +798,7 @@ export default function Settings() {
                 rows: [
                   ['`- item`', 'Bullet list (also `*` or `+`)'],
                   ['`1. item`', 'Numbered list'],
-                  ['`- [ ] task`', 'Task list item (unchecked)'],
-                  ['`- [x] task`', 'Task list item (checked)'],
+                  ['`[ ] task`', 'Task list — type `[ ] ` (or `[x] ` for checked) at the start of a line to get a clickable checkbox. Note: a leading dash (`- [ ] `) makes a normal bullet while typing, but pasted or saved `- [ ] ` markdown still renders as a checkbox.'],
                 ],
               },
               {

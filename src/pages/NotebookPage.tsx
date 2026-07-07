@@ -226,7 +226,7 @@ export default function NotebookPage() {
   const showEditor = isNew || selectedId !== null
 
   return (
-    <div className="flex h-[calc(100vh-57px)] overflow-hidden">
+    <div className="flex h-[calc(100vh-64px)] overflow-hidden">
       {/* Left sidebar */}
       <div className="w-80 shrink-0 border-r flex flex-col">
         <div className="px-3 py-3 border-b flex items-center gap-2 shrink-0">
@@ -363,13 +363,15 @@ export default function NotebookPage() {
                 {saveStatus === 'saved' ? 'Saved' : saveStatus === 'saving' ? 'Saving…' : 'Unsaved changes'}
               </span>
             </div>
-            <div className="flex-1 overflow-y-auto px-8 py-4">
+            <div className="flex-1 min-h-0 flex flex-col px-8 py-6">
               <MarkdownField
                 id="notebook-body"
                 value={body}
                 onChange={v => { setBody(v); scheduleSave(title, v) }}
                 placeholder="Start writing… type [[ to link to a project, contact, area, or another note."
                 rows={16}
+                fillHeight
+                fixedToolbar
                 expandable
                 enableWikiLinks
                 wikiEntities={wikiEntities}

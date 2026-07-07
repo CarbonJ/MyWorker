@@ -15,6 +15,8 @@ import { Label } from '@/components/ui/label'
 import type { WikiEntity } from '@/types'
 import { Maximize2, Fullscreen, Minimize2, Bold, Italic, Heading1, Heading2, Heading3, Pilcrow, Code2, Highlighter } from 'lucide-react'
 import { Table as TipTapTable, TableCell, TableHeader, TableRow } from '@tiptap/extension-table'
+import TaskList from '@tiptap/extension-task-list'
+import TaskItem from '@tiptap/extension-task-item'
 import { ToolbarBtn, TableInsertPopover, TableControlsRow } from '@/components/MarkdownTableControls'
 import Highlight from '@tiptap/extension-highlight'
 import Typography from '@tiptap/extension-typography'
@@ -162,9 +164,15 @@ interface Props {
   autoHeight?: boolean
   /** Extra action buttons rendered in the header row, left of the raw/expand icons. */
   headerActions?: React.ReactNode
+  /** Stretch the editor to fill the parent's available height instead of sizing to content.
+   *  The parent must be a flex column with a defined height. */
+  fillHeight?: boolean
+  /** Show a static formatting toolbar in the header row instead of the floating bubble menu.
+   *  Best for large editors (the Notebook) where the bubble would cover referenced content. */
+  fixedToolbar?: boolean
 }
 
-export function MarkdownField({ id, label, headerLabel, value, onChange, placeholder, rows = 2, onKeyDown, initialFocused = false, expandable = false, enableWikiLinks = false, wikiEntities = [], onWikiLinkClick, autoHeight = false, headerActions }: Props) {
+export function MarkdownField({ id, label, headerLabel, value, onChange, placeholder, rows = 2, onKeyDown, initialFocused = false, expandable = false, enableWikiLinks = false, wikiEntities = [], onWikiLinkClick, autoHeight = false, headerActions, fillHeight = false, fixedToolbar = false }: Props) {
   const [focused, setFocused] = useState(initialFocused)
   const [sizeMode, setSizeMode] = useState<SizeMode>('default')
   const [rawMode, setRawMode] = useState(false)
@@ -252,6 +260,8 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
       TableCell,
       HighlightMarkdown,
       Typography,
+      TaskList,
+      TaskItem.configure({ nested: true }),
       AssetImage,
       MarkdownBlockPasteExtension,
       ...(enableWikiLinks ? [wikiLinkExtension] : []),
@@ -497,25 +507,52 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
     </button>
   )
 
-  const labelRow = (label || expandable || headerActions) && (
-    <div className="flex items-center justify-between">
-      {label ? <Label htmlFor={id}>{label}</Label> : <span />}
-      <div className="flex items-center gap-1">
-        {headerActions}
-        {rawMode && rawBtn}
-        {expandBtn}
+  // Shared formatting button set — used by both the floating bubble menu (small inline
+  // fields) and the fixed toolbar (large editors, via fixedToolbar).
+  const formatButtons = editor && tb && (
+    <div className="flex items-center gap-0.5 flex-wrap">
+      <ToolbarBtn active={tb.bold} onClick={() => editor.chain().focus().toggleBold().run()} title="Bold (⌘B)"><Bold size={13} /></ToolbarBtn>
+      <ToolbarBtn active={tb.italic} onClick={() => editor.chain().focus().toggleItalic().run()} title="Italic (⌘I)"><Italic size={13} /></ToolbarBtn>
+      <ToolbarBtn active={tb.highlight} onClick={() => editor.chain().focus().toggleHighlight().run()} title="Highlight (==text==)"><Highlighter size={13} /></ToolbarBtn>
+      <div className="w-px h-4 bg-border mx-0.5" />
+      <ToolbarBtn active={tb.h1} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} title="Heading 1"><Heading1 size={13} /></ToolbarBtn>
+      <ToolbarBtn active={tb.h2} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} title="Heading 2"><Heading2 size={13} /></ToolbarBtn>
+      <ToolbarBtn active={tb.h3} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} title="Heading 3"><Heading3 size={13} /></ToolbarBtn>
+      <ToolbarBtn active={tb.paragraph} onClick={() => editor.chain().focus().setParagraph().run()} title="Plain text"><Pilcrow size={13} /></ToolbarBtn>
+      <div className="w-px h-4 bg-border mx-0.5" />
+      <TableInsertPopover editor={editor} disabled={tb.inTable} />
+      <div className="w-px h-4 bg-border mx-0.5" />
+      <ToolbarBtn active={false} onClick={toggleRaw} title="Edit raw markdown (view/edit URLs and source)"><Code2 size={13} /></ToolbarBtn>
+    </div>
+  )
+  const tableControlsRow = editor && tb && tb.inTable && (
+    <TableControlsRow editor={editor} inHeaderRow={tb.inHeaderRow} />
+  )
+
+  const labelRow = (label || expandable || headerActions || fixedToolbar) && (
+    <div className={fixedToolbar ? 'space-y-1' : undefined}>
+      <div className="flex items-center justify-between gap-2">
+        {fixedToolbar && !rawMode
+          ? formatButtons
+          : (label ? <Label htmlFor={id}>{label}</Label> : <span />)}
+        <div className="flex items-center gap-1 shrink-0">
+          {headerActions}
+          {rawMode && rawBtn}
+          {expandBtn}
+        </div>
       </div>
+      {fixedToolbar && !rawMode && tableControlsRow}
     </div>
   )
 
-  const minHeight = autoHeight ? undefined : `${rows * 1.5 + 1}rem`
+  const minHeight = (autoHeight || fillHeight) ? undefined : `${rows * 1.5 + 1}rem`
 
   const containerClass = [
     'rounded-md border px-3 py-2 text-sm cursor-text transition-colors overflow-y-auto overflow-x-hidden',
     focused
       ? 'border-ring ring-1 ring-ring bg-background'
       : 'border-input bg-background hover:border-ring/50',
-    sizeMode === 'large' ? 'h-64 overflow-y-auto' : '',
+    fillHeight ? 'flex-1 min-h-0' : (sizeMode === 'large' ? 'h-64 overflow-y-auto' : ''),
   ].filter(Boolean).join(' ')
 
   const rawTextarea = (
@@ -532,7 +569,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
     />
   )
 
-  const toolbar = editor && tb && !rawMode && (
+  const toolbar = editor && tb && !rawMode && !fixedToolbar && (
     <BubbleMenu
       editor={editor}
       shouldShow={({ editor: e, state }) => {
@@ -542,53 +579,8 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
       options={{ placement: 'top-start' }}
     >
       <div className="flex flex-col rounded-md border border-border bg-popover shadow-md p-0.5">
-        <div className="flex items-center gap-0.5">
-          <ToolbarBtn
-            active={tb.bold}
-            onClick={() => editor.chain().focus().toggleBold().run()}
-            title="Bold (⌘B)"
-          ><Bold size={13} /></ToolbarBtn>
-          <ToolbarBtn
-            active={tb.italic}
-            onClick={() => editor.chain().focus().toggleItalic().run()}
-            title="Italic (⌘I)"
-          ><Italic size={13} /></ToolbarBtn>
-          <ToolbarBtn
-            active={tb.highlight}
-            onClick={() => editor.chain().focus().toggleHighlight().run()}
-            title="Highlight (==text==)"
-          ><Highlighter size={13} /></ToolbarBtn>
-          <div className="w-px h-4 bg-border mx-0.5" />
-          <ToolbarBtn
-            active={tb.h1}
-            onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-            title="Heading 1"
-          ><Heading1 size={13} /></ToolbarBtn>
-          <ToolbarBtn
-            active={tb.h2}
-            onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-            title="Heading 2"
-          ><Heading2 size={13} /></ToolbarBtn>
-          <ToolbarBtn
-            active={tb.h3}
-            onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-            title="Heading 3"
-          ><Heading3 size={13} /></ToolbarBtn>
-          <ToolbarBtn
-            active={tb.paragraph}
-            onClick={() => editor.chain().focus().setParagraph().run()}
-            title="Plain text"
-          ><Pilcrow size={13} /></ToolbarBtn>
-          <div className="w-px h-4 bg-border mx-0.5" />
-          <TableInsertPopover editor={editor} disabled={tb.inTable} />
-          <div className="w-px h-4 bg-border mx-0.5" />
-          <ToolbarBtn
-            active={false}
-            onClick={toggleRaw}
-            title="Edit raw markdown (view/edit URLs and source)"
-          ><Code2 size={13} /></ToolbarBtn>
-        </div>
-        {tb.inTable && <TableControlsRow editor={editor} inHeaderRow={tb.inHeaderRow} />}
+        {formatButtons}
+        {tableControlsRow}
       </div>
     </BubbleMenu>
   )
@@ -645,6 +637,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
             {(headerLabel || label) && (
               <span className="text-sm font-medium">{headerLabel ?? label}</span>
             )}
+            {fixedToolbar && !rawMode && formatButtons}
             <div className="ml-auto flex items-center gap-2">
               {headerActions}
               {rawBtn}
@@ -686,7 +679,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
   }
 
   return (
-    <div className="space-y-1.5">
+    <div className={fillHeight ? 'flex flex-col flex-1 min-h-0 gap-1.5' : 'space-y-1.5'}>
       {toolbar}
       {labelRow}
       {rawMode ? rawTextarea : (
