@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { remarkHighlight } from '@/lib/remarkHighlight'
 import { useWikiEntities } from '@/hooks/useWikiEntities'
 import { parseAssetSrc } from '@/db/assets'
 import { AssetImageDisplay } from '@/components/AssetImageDisplay'
@@ -40,7 +41,7 @@ export function WikiLinkContent({ children, className, wikiEntities: propEntitie
   return (
     <div className={`prose prose-sm dark:prose-invert max-w-none ${className ?? ''}`}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkHighlight]}
         // Preserve the custom asset:// scheme (react-markdown strips unknown schemes by default).
         urlTransform={(url) => (url.startsWith('asset://') ? url : defaultUrlTransform(url))}
         components={{

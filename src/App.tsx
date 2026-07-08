@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { BrowserRouter, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
@@ -13,8 +13,8 @@ import { X, Moon, Sun, Search as SearchIcon, BookOpen, PanelRight } from 'lucide
 
 import { loadGuiSettings, buttonStyle } from '@/lib/guiSettings'
 import { AppRoutes } from '@/components/AppRoutes'
-import { SplitPane } from '@/components/project/SplitPane'
 import { PinnedPane } from '@/components/PinnedPane'
+import { SPLIT_MIN_PCT, SPLIT_MAX_PCT } from '@/lib/constants'
 import { CommandPalette } from '@/components/CommandPalette'
 
 
@@ -132,6 +132,33 @@ function AppInner() {
     return () => mq.removeEventListener('change', onChange)
   }, [])
   const showSplit = !!pinnedUrl && wideEnough
+
+  // Docked-pane split is inlined here (rather than the SplitPane component) so the left
+  // side — <AppRoutes/> — stays mounted at a stable position whether or not the pane is
+  // open. Swapping between a bare <AppRoutes/> and one nested in a wrapper would remount
+  // it and discard unsaved in-progress edits (e.g. a half-typed work-log entry) when the
+  // pane is closed. The wrapper is `display:contents` when not split so pages render
+  // exactly as before.
+  const SPLIT_KEY = 'myworker:pinned-split-pct'
+  const [leftPct, setLeftPct] = useState(() => {
+    const saved = Number(localStorage.getItem(SPLIT_KEY))
+    return Number.isFinite(saved) && saved >= SPLIT_MIN_PCT && saved <= SPLIT_MAX_PCT ? saved : 50
+  })
+  const mainRef = useRef<HTMLElement>(null)
+  const dragging = useRef(false)
+  const onDividerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId)
+    dragging.current = true
+  }
+  const onDividerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragging.current || !mainRef.current) return
+    const { left, width } = mainRef.current.getBoundingClientRect()
+    const pct = Math.min(SPLIT_MAX_PCT, Math.max(SPLIT_MIN_PCT, ((e.clientX - left) / width) * 100))
+    setLeftPct(pct)
+    localStorage.setItem(SPLIT_KEY, String(Math.round(pct)))
+  }
+  const onDividerUp = () => { dragging.current = false }
+
   const [quickTaskOpen, setQuickTaskOpen] = useState(false)
   const [quickTaskAreaId, setQuickTaskAreaId] = useState<number | null>(null)
   const [quickProjectOpen, setQuickProjectOpen] = useState(false)
@@ -184,18 +211,31 @@ function AppInner() {
     <div className="min-h-screen bg-background flex flex-col">
       <NavBar isDark={isDark} onToggleDark={toggleDark} />
 
-      <main className="flex-1 overflow-hidden">
-        {showSplit ? (
-          <div className="h-[calc(100vh-57px)] flex">
-            <SplitPane
-              initialSplitPct={50}
-              persistKey="myworker:pinned-split-pct"
-              left={<AppRoutes />}
-              right={<PinnedPane />}
-            />
-          </div>
-        ) : (
+      <main
+        ref={mainRef}
+        className={showSplit ? 'overflow-hidden flex h-[calc(100vh-57px)]' : 'flex-1 overflow-hidden'}
+      >
+        {/* Left / main content — ALWAYS rendered at this position so it never remounts
+            when the pane opens/closes. `contents` makes the wrapper layout-transparent
+            when not split, so pages behave exactly as without the pane. */}
+        <div
+          className={showSplit ? 'flex flex-col overflow-hidden min-w-0 min-h-0' : 'contents'}
+          style={showSplit ? { width: `${leftPct}%` } : undefined}
+        >
           <AppRoutes />
+        </div>
+        {showSplit && (
+          <>
+            <div
+              className="w-1 shrink-0 cursor-col-resize bg-border hover:bg-primary/40 transition-colors"
+              onPointerDown={onDividerDown}
+              onPointerMove={onDividerMove}
+              onPointerUp={onDividerUp}
+            />
+            <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+              <PinnedPane />
+            </div>
+          </>
         )}
       </main>
       <CommandPalette

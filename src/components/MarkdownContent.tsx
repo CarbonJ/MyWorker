@@ -1,5 +1,6 @@
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { remarkHighlight } from '@/lib/remarkHighlight'
 
 interface Props {
   children: string
@@ -20,7 +21,7 @@ const components = {
 export function MarkdownContent({ children, className }: Props) {
   return (
     <div className={`prose prose-sm dark:prose-invert max-w-none ${className ?? ''}`}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+      <ReactMarkdown remarkPlugins={[remarkGfm, remarkHighlight]} components={components}>
         {children}
       </ReactMarkdown>
     </div>
