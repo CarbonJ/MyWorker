@@ -13,7 +13,7 @@ import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { DOMParser as PMDOMParser } from '@tiptap/pm/model'
 import { Label } from '@/components/ui/label'
 import type { WikiEntity } from '@/types'
-import { Maximize2, Fullscreen, Minimize2, Bold, Italic, Heading1, Heading2, Heading3, Pilcrow, Code2, Highlighter } from 'lucide-react'
+import { Maximize2, Fullscreen, Minimize2, Bold, Italic, Heading1, Heading2, Heading3, Pilcrow, Code2, Highlighter, Strikethrough, Code, Quote, ListChecks, List, ListOrdered } from 'lucide-react'
 import { Table as TipTapTable, TableCell, TableHeader, TableRow } from '@tiptap/extension-table'
 import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
@@ -370,10 +370,16 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
       bold: e.isActive('bold'),
       italic: e.isActive('italic'),
       highlight: e.isActive('highlight'),
+      strike: e.isActive('strike'),
+      code: e.isActive('code'),
       h1: e.isActive('heading', { level: 1 }),
       h2: e.isActive('heading', { level: 2 }),
       h3: e.isActive('heading', { level: 3 }),
       paragraph: e.isActive('paragraph'),
+      blockquote: e.isActive('blockquote'),
+      bulletList: e.isActive('bulletList'),
+      orderedList: e.isActive('orderedList'),
+      taskList: e.isActive('taskList'),
       inTable: e.isActive('table'),
       inHeaderRow: e.isActive('tableHeader'),
     } : null,
@@ -514,11 +520,18 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
       <ToolbarBtn active={tb.bold} onClick={() => editor.chain().focus().toggleBold().run()} title="Bold (⌘B)"><Bold size={13} /></ToolbarBtn>
       <ToolbarBtn active={tb.italic} onClick={() => editor.chain().focus().toggleItalic().run()} title="Italic (⌘I)"><Italic size={13} /></ToolbarBtn>
       <ToolbarBtn active={tb.highlight} onClick={() => editor.chain().focus().toggleHighlight().run()} title="Highlight (==text==)"><Highlighter size={13} /></ToolbarBtn>
+      <ToolbarBtn active={tb.strike} onClick={() => editor.chain().focus().toggleStrike().run()} title="Strikethrough (~~text~~)"><Strikethrough size={13} /></ToolbarBtn>
+      <ToolbarBtn active={tb.code} onClick={() => editor.chain().focus().toggleCode().run()} title="Inline code (`text`)"><Code size={13} /></ToolbarBtn>
       <div className="w-px h-4 bg-border mx-0.5" />
       <ToolbarBtn active={tb.h1} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} title="Heading 1"><Heading1 size={13} /></ToolbarBtn>
       <ToolbarBtn active={tb.h2} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} title="Heading 2"><Heading2 size={13} /></ToolbarBtn>
       <ToolbarBtn active={tb.h3} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} title="Heading 3"><Heading3 size={13} /></ToolbarBtn>
       <ToolbarBtn active={tb.paragraph} onClick={() => editor.chain().focus().setParagraph().run()} title="Plain text"><Pilcrow size={13} /></ToolbarBtn>
+      <ToolbarBtn active={tb.blockquote} onClick={() => editor.chain().focus().toggleBlockquote().run()} title="Blockquote (> text)"><Quote size={13} /></ToolbarBtn>
+      <div className="w-px h-4 bg-border mx-0.5" />
+      <ToolbarBtn active={tb.bulletList} onClick={() => editor.chain().focus().toggleBulletList().run()} title="Bullet list (- item)"><List size={13} /></ToolbarBtn>
+      <ToolbarBtn active={tb.orderedList} onClick={() => editor.chain().focus().toggleOrderedList().run()} title="Numbered list (1. item)"><ListOrdered size={13} /></ToolbarBtn>
+      <ToolbarBtn active={tb.taskList} onClick={() => editor.chain().focus().toggleTaskList().run()} title="Task list ([ ] item)"><ListChecks size={13} /></ToolbarBtn>
       <div className="w-px h-4 bg-border mx-0.5" />
       <TableInsertPopover editor={editor} disabled={tb.inTable} />
       <div className="w-px h-4 bg-border mx-0.5" />
