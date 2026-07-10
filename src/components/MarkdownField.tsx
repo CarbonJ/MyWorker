@@ -404,11 +404,18 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
     }
   }, [sizeMode, editor, rawMode])
 
-  // Re-run decorations when entities load/change so live/dead colouring updates immediately
+  // Re-run wiki-link decorations only when the set of entity NAMES actually changes.
+  // Callers (e.g. NotebookPage) hand us a fresh wikiEntities array after every autosave;
+  // dispatching a transaction each time forces an editor re-render that resets the
+  // browser's spell-check pass mid-writing (squiggles flicker / go missing). The live/dead
+  // colouring only depends on which names exist, so a stable signature avoids the churn.
+  const entitySigRef = useRef('')
   useEffect(() => {
-    if (editor && enableWikiLinks) {
-      editor.view.dispatch(editor.state.tr)
-    }
+    if (!editor || !enableWikiLinks) return
+    const sig = wikiEntities.map(e => e.name.toLowerCase()).sort().join(' ')
+    if (sig === entitySigRef.current) return
+    entitySigRef.current = sig
+    editor.view.dispatch(editor.state.tr)
   }, [wikiEntities, editor, enableWikiLinks])
 
   // Wiki-link detection: watch cursor position for [[ pattern
