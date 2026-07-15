@@ -160,6 +160,40 @@ export async function deleteTask(id: number): Promise<void> {
   await run(`DELETE FROM tasks WHERE id = ?`, [id])
 }
 
+export interface CompletedAreaTask {
+  id: number
+  title: string
+  productAreaId: number | null
+  areaName: string | null
+  completedAt: string
+}
+
+/**
+ * Completed tasks that have NO project, for a given local date, joined to their direct
+ * product area. Completion date is inferred from updated_at (the app's convention — there
+ * is no separate completed_at column). Used by the Daily Digest, since project-less task
+ * completions create no work-log entry and would otherwise never surface.
+ */
+export async function getCompletedGeneralTasksByDate(date: string): Promise<CompletedAreaTask[]> {
+  const rows = await query(
+    `SELECT t.id, t.title, t.product_area_id, t.updated_at,
+            d.label AS area_name, d.sort_order AS area_sort
+     FROM tasks t
+     LEFT JOIN dropdown_options d ON d.id = t.product_area_id AND d.type = 'product_area'
+     WHERE t.project_id IS NULL AND t.status = 'done'
+       AND DATE(t.updated_at, 'localtime') = ?
+     ORDER BY (d.sort_order IS NULL), d.sort_order, t.updated_at`,
+    [date],
+  )
+  return rows.map(r => ({
+    id: r.id as number,
+    title: r.title as string,
+    productAreaId: (r.product_area_id as number | null) ?? null,
+    areaName: (r.area_name as string | null) ?? null,
+    completedAt: r.updated_at as string,
+  }))
+}
+
 /** When archiving a project: bulk-mark all open/in_progress tasks as done,
  *  saving their current status so they can be restored on reopen. */
 export async function archiveTasksByProject(projectId: number): Promise<void> {

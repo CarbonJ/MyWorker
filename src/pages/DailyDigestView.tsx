@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getWorkLogByDate, type WorkLogEntryWithProject } from '@/db/workLog'
 import { getNotebookPageByTitle, createNotebookPage, getLinkedNotebookEntriesByDateRange, type LinkedNotebookEntry } from '@/db/notebook'
+import { getCompletedGeneralTasksByDate, type CompletedAreaTask } from '@/db/tasks'
 import { WikiLinkContent } from '@/components/WikiLinkContent'
 import { MarkdownField } from '@/components/MarkdownField'
 import { useWikiEntities } from '@/hooks/useWikiEntities'
@@ -43,6 +44,19 @@ function mergeGroups(
   return Array.from(map.values())
 }
 
+interface AreaTaskGroup { key: string; areaName: string; tasks: CompletedAreaTask[] }
+
+/** Group completed project-less tasks by their product area (rows already sorted by area). */
+function groupByArea(tasks: CompletedAreaTask[]): AreaTaskGroup[] {
+  const map = new Map<string, AreaTaskGroup>()
+  for (const t of tasks) {
+    const key = String(t.productAreaId ?? 'none')
+    if (!map.has(key)) map.set(key, { key, areaName: t.areaName ?? 'No Area', tasks: [] })
+    map.get(key)!.tasks.push(t)
+  }
+  return Array.from(map.values())
+}
+
 const MEETINGS_KEY = (date: string) => `myworker:digest-meetings:${date}`
 
 export default function DailyDigestView() {
@@ -51,6 +65,7 @@ export default function DailyDigestView() {
   const [date, setDate] = useState(today)
   const [entries, setEntries] = useState<WorkLogEntryWithProject[]>([])
   const [notebooks, setNotebooks] = useState<LinkedNotebookEntry[]>([])
+  const [completedTasks, setCompletedTasks] = useState<CompletedAreaTask[]>([])
   const [loading, setLoading] = useState(true)
   const [meetings, setMeetings] = useState(() => localStorage.getItem(MEETINGS_KEY(toLocalDateString(new Date()))) ?? '')
   // Entity list so resolved [[wiki links]] in the Journal render blue (live) vs muted (unlinked)
@@ -61,9 +76,11 @@ export default function DailyDigestView() {
     Promise.all([
       getWorkLogByDate(date),
       getLinkedNotebookEntriesByDateRange(date, date),
-    ]).then(([wl, nb]) => {
+      getCompletedGeneralTasksByDate(date),
+    ]).then(([wl, nb, ct]) => {
       setEntries(wl)
       setNotebooks(nb)
+      setCompletedTasks(ct)
     }).finally(() => setLoading(false))
     setMeetings(localStorage.getItem(MEETINGS_KEY(date)) ?? '')
   }, [date])
@@ -88,7 +105,8 @@ export default function DailyDigestView() {
         Promise.all([
           getWorkLogByDate(date),
           getLinkedNotebookEntriesByDateRange(date, date),
-        ]).then(([wl, nb]) => { setEntries(wl); setNotebooks(nb) }).catch(() => {})
+          getCompletedGeneralTasksByDate(date),
+        ]).then(([wl, nb, ct]) => { setEntries(wl); setNotebooks(nb); setCompletedTasks(ct) }).catch(() => {})
       }
     }
     window.addEventListener('myworker:task-saved', handler)
@@ -103,7 +121,12 @@ export default function DailyDigestView() {
 
   const isToday = date === today
   const groups = mergeGroups(entries, notebooks)
-  const hasActivity = entries.length > 0 || notebooks.length > 0
+  const taskGroups = groupByArea(completedTasks)
+  const hasActivity = entries.length > 0 || notebooks.length > 0 || completedTasks.length > 0
+  const summary = [
+    groups.length > 0 ? `${groups.length} project${groups.length === 1 ? '' : 's'}` : '',
+    completedTasks.length > 0 ? `${completedTasks.length} task${completedTasks.length === 1 ? '' : 's'}` : '',
+  ].filter(Boolean).join(' · ')
 
   return (
     <div className="flex flex-col h-[calc(100vh-57px)] overflow-hidden">
@@ -132,7 +155,7 @@ export default function DailyDigestView() {
           <FileText className="h-3.5 w-3.5" /> Weekly Report
         </Button>
         <span className="text-sm text-muted-foreground">
-          {loading ? '' : !hasActivity ? 'No entries' : `${groups.length} project${groups.length === 1 ? '' : 's'}`}
+          {loading ? '' : !hasActivity ? 'No entries' : summary}
         </span>
       </div>
 
@@ -201,6 +224,28 @@ export default function DailyDigestView() {
             </div>
           </div>
         ))}
+
+        {/* Completed tasks with no project — grouped by their area */}
+        {!loading && taskGroups.length > 0 && (
+          <div className="mb-6">
+            <h2 className="text-sm font-semibold mb-2 text-foreground">Completed tasks (no project)</h2>
+            <div className="border rounded-lg divide-y divide-border">
+              {taskGroups.map(g => (
+                <div key={g.key} className="px-4 py-3">
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">{g.areaName}</div>
+                  <ul className="space-y-1">
+                    {g.tasks.map(t => (
+                      <li key={t.id} className="text-sm flex items-start gap-2">
+                        <span className="text-green-600 dark:text-green-400 shrink-0">✓</span>
+                        <span>{t.title}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
