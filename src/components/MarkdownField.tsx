@@ -180,6 +180,9 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
   sizeModeRef.current = sizeMode
   const onKeyDownRef = useRef(onKeyDown)
   onKeyDownRef.current = onKeyDown
+  // The visible bordered box. The floating bubble anchors to its top edge (not the
+  // caret) so it floats above the whole field instead of covering the text being read.
+  const containerRef = useRef<HTMLDivElement | null>(null)
 
   // Navigation + entity refs (used in handleClick inside useEditor — stale-closure safe via refs)
   const navigate = useNavigate()
@@ -520,6 +523,11 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
     </button>
   )
 
+  // When expanded to large/fullscreen, always use the fixed toolbar: a floating bubble
+  // would cover the very content the user enlarged the editor to reference. Small
+  // default-size fields keep the floating bubble unless a caller opts into fixedToolbar.
+  const useFixedToolbar = fixedToolbar || sizeMode !== 'default'
+
   // Shared formatting button set — used by both the floating bubble menu (small inline
   // fields) and the fixed toolbar (large editors, via fixedToolbar).
   const formatButtons = editor && tb && (
@@ -549,10 +557,10 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
     <TableControlsRow editor={editor} inHeaderRow={tb.inHeaderRow} />
   )
 
-  const labelRow = (label || expandable || headerActions || fixedToolbar) && (
-    <div className={fixedToolbar ? 'space-y-1' : undefined}>
+  const labelRow = (label || expandable || headerActions || useFixedToolbar) && (
+    <div className={useFixedToolbar ? 'space-y-1' : undefined}>
       <div className="flex items-center justify-between gap-2">
-        {fixedToolbar && !rawMode
+        {useFixedToolbar && !rawMode
           ? formatButtons
           : (label ? <Label htmlFor={id}>{label}</Label> : <span />)}
         <div className="flex items-center gap-1 shrink-0">
@@ -561,7 +569,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
           {expandBtn}
         </div>
       </div>
-      {fixedToolbar && !rawMode && tableControlsRow}
+      {useFixedToolbar && !rawMode && tableControlsRow}
     </div>
   )
 
@@ -589,14 +597,20 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
     />
   )
 
-  const toolbar = editor && tb && !rawMode && !fixedToolbar && (
+  const toolbar = editor && tb && !rawMode && !useFixedToolbar && (
     <BubbleMenu
       editor={editor}
       shouldShow={({ editor: e, state }) => {
         const { empty } = state.selection
         return e.isFocused || !empty || e.isActive('heading')
       }}
-      options={{ placement: 'top-start' }}
+      // Anchor to the field's top edge rather than the caret so the palette floats
+      // above the whole text box and never covers the line being edited. flip lets it
+      // drop below only when there's no room above (e.g. field at the top of the viewport).
+      getReferencedVirtualElement={() =>
+        containerRef.current ? { getBoundingClientRect: () => containerRef.current!.getBoundingClientRect() } : null
+      }
+      options={{ placement: 'top-start', offset: 6 }}
     >
       <div className="flex flex-col rounded-md border border-border bg-popover shadow-md p-0.5">
         {formatButtons}
@@ -657,7 +671,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
             {(headerLabel || label) && (
               <span className="text-sm font-medium">{headerLabel ?? label}</span>
             )}
-            {fixedToolbar && !rawMode && formatButtons}
+            {useFixedToolbar && !rawMode && formatButtons}
             <div className="ml-auto flex items-center gap-2">
               {headerActions}
               {rawBtn}
@@ -704,6 +718,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
       {labelRow}
       {rawMode ? rawTextarea : (
         <div
+          ref={containerRef}
           className={containerClass}
           style={{ minHeight }}
           onClick={() => editor?.chain().focus().run()}

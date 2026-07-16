@@ -15,6 +15,7 @@ import { useWikiEntities } from '@/hooks/useWikiEntities'
 import type { Contact, WikiEntity } from '@/types'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty } from '@/components/ui/command'
+import { MultiSelectFilter } from '@/components/ui/MultiSelectFilter'
 
 interface FormState {
   name: string
@@ -200,7 +201,7 @@ export default function ContactsPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState(() => searchParams.get('q') ?? '')
   const [groupFilter, setGroupFilter] = useState<string | null>(null)
-  const [tagFilter, setTagFilter] = useState<string | null>(null)
+  const [tagFilters, setTagFilters] = useState<string[]>([])
   const highlightRef = useRef<HTMLDivElement | null>(null)
   const [editingId, setEditingId] = useState<number | 'new' | null>(null)
   const [expandedId, setExpandedId] = useState<number | null>(null)
@@ -239,7 +240,7 @@ export default function ContactsPage() {
       c.groupName.toLowerCase().includes(q) ||
       c.tags.some(t => t.toLowerCase().includes(q))
     const matchesGroup = !groupFilter || c.groupName === groupFilter
-    const matchesTag = !tagFilter || c.tags.includes(tagFilter)
+    const matchesTag = tagFilters.length === 0 || tagFilters.some(t => c.tags.includes(t))
     return matchesSearch && matchesGroup && matchesTag
   })
 
@@ -318,22 +319,23 @@ export default function ContactsPage() {
           />
         )}
 
-        {/* Tag filter — searchable dropdown */}
+        {/* Tag filter — multi-select (same style as the main project screen) */}
         {allTags.length > 0 && (
-          <SearchableSelect
-            value={tagFilter}
-            onChange={setTagFilter}
-            options={allTags}
-            placeholder="Search tags…"
-            allLabel="All Tags"
+          <MultiSelectFilter
+            options={allTags.map(t => ({ value: t, label: t }))}
+            value={tagFilters}
+            onChange={setTagFilters}
+            placeholder="All Tags"
+            width="w-[110px]"
+            searchable
           />
         )}
 
         {/* Clear filters */}
-        {(groupFilter || tagFilter) && (
+        {(groupFilter || tagFilters.length > 0) && (
           <button
             type="button"
-            onClick={() => { setGroupFilter(null); setTagFilter(null) }}
+            onClick={() => { setGroupFilter(null); setTagFilters([]) }}
             className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
           >
             <X className="h-3 w-3" /> Clear
