@@ -23,7 +23,7 @@ import { SplitPane } from '@/components/project/SplitPane'
 import { TaskModal } from '@/components/TaskModal'
 import { RecurringCompleteDialog } from '@/components/RecurringCompleteDialog'
 import { ProjectModal } from '@/components/ProjectModal'
-import { CalendarIcon, RotateCcw } from 'lucide-react'
+import { CalendarIcon, RotateCcw, RefreshCw } from 'lucide-react'
 import { MarkdownContent } from '@/components/MarkdownContent'
 
 interface PageData {
@@ -1294,9 +1294,10 @@ function ProjectRows({ p, ctx }: { p: Project; ctx: ProjectRowsCtx }) {
                 <PopoverTrigger asChild>
                   <button
                     onClick={e => e.stopPropagation()}
-                    className="hover:opacity-70 transition-opacity"
+                    className="hover:opacity-70 transition-opacity flex items-center gap-1"
                     title={t.dueDate ? `Due ${fmtDate(t.dueDate)} — click to change` : t.startDate ? `Start ${fmtDate(t.startDate)} — click to set due date` : 'Set due date'}
                   >
+                    {t.isRecurring && <RefreshCw className="w-2.5 h-2.5 shrink-0 opacity-60" />}
                     {t.dueDate ? (
                       <span className={`text-xs whitespace-nowrap ${dueDateTextClass(t.dueDate)}`}>
                         {fmtDate(t.dueDate)}

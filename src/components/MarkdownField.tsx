@@ -299,10 +299,17 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
             })
             return true
           }
-          if ((event.key === 'Enter' || event.key === 'Tab') && wikiHighlightRef.current >= 0) {
-            event.preventDefault()
-            selectWikiSuggestionRef.current?.(wikiSuggestionsRef.current[wikiHighlightRef.current])
-            return true
+          if (event.key === 'Enter' || event.key === 'Tab') {
+            // Use the highlighted row; if nothing is highlighted but there's
+            // exactly one suggestion, select it so Enter alone accepts it.
+            const idx = wikiHighlightRef.current >= 0
+              ? wikiHighlightRef.current
+              : (wikiSuggestionsRef.current.length === 1 ? 0 : -1)
+            if (idx >= 0) {
+              event.preventDefault()
+              selectWikiSuggestionRef.current?.(wikiSuggestionsRef.current[idx])
+              return true
+            }
           }
           if (event.key === 'Escape') {
             event.stopPropagation()
@@ -463,8 +470,14 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
   const wikiSuggestions = useMemo(() => {
     if (!wikiSuggest.active || !wikiEntities.length) return []
     const partial = wikiSuggest.partial.toLowerCase()
+    // Areas are listed first in the palette, then the remaining types in their
+    // original order (stable within each type).
+    const typeRank = (t: WikiEntity['type']) => (t === 'area' ? 0 : 1)
     return wikiEntities
       .filter(e => !partial || e.name.toLowerCase().includes(partial))
+      .map((e, i) => ({ e, i }))
+      .sort((a, b) => typeRank(a.e.type) - typeRank(b.e.type) || a.i - b.i)
+      .map(({ e }) => e)
       .slice(0, 12)
   }, [wikiSuggest.active, wikiSuggest.partial, wikiEntities])
   wikiSuggestionsRef.current = wikiSuggestions
