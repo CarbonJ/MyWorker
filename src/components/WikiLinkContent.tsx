@@ -59,7 +59,7 @@ export function WikiLinkContent({ children, className, wikiEntities: propEntitie
                 <button
                   type="button"
                   onClick={() => navigate(href!)}
-                  className="text-primary underline decoration-dotted hover:opacity-75 cursor-pointer bg-transparent border-none p-0 font-[inherit] text-[inherit] inline"
+                  className="text-blue-600 dark:text-blue-400 underline decoration-dotted hover:opacity-75 cursor-pointer bg-transparent border-none p-0 font-[inherit] inline"
                 >
                   {children}
                 </button>

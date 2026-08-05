@@ -470,9 +470,10 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
   const wikiSuggestions = useMemo(() => {
     if (!wikiSuggest.active || !wikiEntities.length) return []
     const partial = wikiSuggest.partial.toLowerCase()
-    // Areas are listed first in the palette, then the remaining types in their
-    // original order (stable within each type).
-    const typeRank = (t: WikiEntity['type']) => (t === 'area' ? 0 : 1)
+    // Palette type order: Areas, then Contacts, then Projects, then everything
+    // else (stable within each type).
+    const typeOrder: Record<string, number> = { area: 0, contact: 1, project: 2 }
+    const typeRank = (t: WikiEntity['type']) => typeOrder[t] ?? 3
     return wikiEntities
       .filter(e => !partial || e.name.toLowerCase().includes(partial))
       .map((e, i) => ({ e, i }))

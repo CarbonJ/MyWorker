@@ -207,6 +207,21 @@
   color: oklch(0.707 0.165 254.624); /* blue-400 */
 }
 
+/* Plain URLs/links inside the editor and read-only markdown render blue too,
+   consistent with wiki-links (overrides the typography plugin's default link
+   colour so typed URLs aren't near-black). */
+.prose a {
+  color: oklch(0.546 0.245 262.881); /* blue-600 */
+}
+@media (prefers-color-scheme: dark) {
+  .prose a {
+    color: oklch(0.707 0.165 254.624); /* blue-400 */
+  }
+}
+.dark .prose a {
+  color: oklch(0.707 0.165 254.624); /* blue-400 */
+}
+
 /* Tighter list spacing in prose (editor + read-only renderer) */
 .prose ul, .prose ol {
   margin-top: 0.25em;
