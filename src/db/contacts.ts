@@ -1,4 +1,6 @@
 import { query, run, insert } from './index'
+import { renameStakeholder } from './projects'
+import { renameWikiLinks } from './links'
 import { parseTags, stringifyTags } from '@/lib/tags'
 import type { Contact } from '@/types'
 
@@ -73,6 +75,12 @@ export async function updateContact(input: UpdateContactInput): Promise<void> {
       input.id,
     ],
   )
+  // A renamed contact keeps their place on projects' stakeholder lists and in [[links]]
+  const newName = (input.name ?? current.name).trim()
+  if (newName !== current.name) {
+    await renameStakeholder(current.name, newName)
+    await renameWikiLinks(current.name, newName)
+  }
 }
 
 export async function deleteContact(id: number): Promise<void> {

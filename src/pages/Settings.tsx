@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { exportToJson, importFromJson } from '@/db/importExport'
 import { getAssetsFolderName, setAssetsFolderName, DEFAULT_ASSETS_FOLDER, findUnusedAssets, deleteAssetImage, type UnusedAsset } from '@/db/assets'
 import { Input } from '@/components/ui/input'
-import { setUserFolderHandle, query, checkFolderSync, persistToUserFolder } from '@/db'
+import { setUserFolderHandle, query, checkFolderSync, persistToUserFolder, getFolderSaveStatus, FOLDER_SAVE_EVENT } from '@/db'
 import { getAllNotebookPages } from '@/db/notebook'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { exportAllNotes, exportAllNotesZip, type NoteExportFormat } from '@/lib/noteExport'
@@ -34,6 +34,12 @@ export default function Settings() {
   const [importing, setImporting] = useState(false)
   const [assetsFolder, setAssetsFolder] = useState(() => getAssetsFolderName())
   const [dataStats, setDataStats] = useState<DataStats | null>(null)
+  const [folderSave, setFolderSave] = useState(getFolderSaveStatus)
+  useEffect(() => {
+    const handler = () => setFolderSave(getFolderSaveStatus())
+    window.addEventListener(FOLDER_SAVE_EVENT, handler)
+    return () => window.removeEventListener(FOLDER_SAVE_EVENT, handler)
+  }, [])
   // null = not scanned yet
   const [unusedAssets, setUnusedAssets] = useState<UnusedAsset[] | null>(null)
   const [scanningAssets, setScanningAssets] = useState(false)
@@ -558,9 +564,20 @@ export default function Settings() {
                 <p className="text-sm text-muted-foreground">
                   MyWorker saves your database to your chosen folder (e.g. OneDrive) automatically on every change.
                 </p>
-                <Button variant="outline" onClick={handleChangeFolder}>
-                  Change storage folder…
-                </Button>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <Button variant="outline" onClick={handleChangeFolder}>
+                    Change storage folder…
+                  </Button>
+                  {folderSave.error ? (
+                    <span className="text-sm text-destructive">
+                      Last save to the folder failed: {folderSave.error}
+                    </span>
+                  ) : folderSave.lastSavedAt ? (
+                    <span className="text-sm text-muted-foreground">
+                      Last saved to folder at {new Date(folderSave.lastSavedAt).toLocaleTimeString()}
+                    </span>
+                  ) : null}
+                </div>
                 <div className="pt-2 space-y-1.5 max-w-sm">
                   <label htmlFor="assets-folder" className="text-sm font-medium">Image assets folder</label>
                   <Input
@@ -575,7 +592,7 @@ export default function Settings() {
                     }}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Subfolder (next to your database) where pasted images are stored. Changing this only affects newly pasted images; existing files are not moved.
+                    Subfolder (next to your database) where pasted images are stored. Changing this only affects newly pasted images; existing files stay in the earlier folder and keep working from there.
                   </p>
                 </div>
                 <div className="pt-2 space-y-1.5">

@@ -646,6 +646,38 @@ const migrations: Migration[] = [
       FROM contacts;
     `,
   },
+  {
+    version: 25,
+    up: `
+      -- When a task was completed. Until now "completed on" was inferred from
+      -- updated_at, so editing a finished task moved it to a different day in
+      -- the Digest. Maintained by triggers so every way of changing status is
+      -- covered; existing done tasks are back-filled from updated_at.
+      ALTER TABLE tasks ADD COLUMN completed_at TEXT;
+      UPDATE tasks SET completed_at = updated_at WHERE status = 'done';
+
+      CREATE TRIGGER tasks_completed_at_set
+      AFTER UPDATE OF status ON tasks
+      WHEN NEW.status = 'done' AND OLD.status <> 'done'
+      BEGIN
+        UPDATE tasks SET completed_at = datetime('now') WHERE id = NEW.id;
+      END;
+
+      CREATE TRIGGER tasks_completed_at_clear
+      AFTER UPDATE OF status ON tasks
+      WHEN NEW.status <> 'done' AND OLD.status = 'done'
+      BEGIN
+        UPDATE tasks SET completed_at = NULL WHERE id = NEW.id;
+      END;
+
+      CREATE TRIGGER tasks_completed_at_insert
+      AFTER INSERT ON tasks
+      WHEN NEW.status = 'done' AND NEW.completed_at IS NULL
+      BEGIN
+        UPDATE tasks SET completed_at = datetime('now') WHERE id = NEW.id;
+      END;
+    `,
+  },
 ]
 
 export async function runMigrations(handle: DbHandle): Promise<void> {

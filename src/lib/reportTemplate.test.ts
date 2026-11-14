@@ -18,7 +18,7 @@ function makeTask(over: Partial<Task> & { id: number; title: string; projectId: 
   return {
     productAreaId: null, description: '', notes: '', status: 'open', priorityId: null,
     tags: [], startDate: null, dueDate: null, createdAt: 'x', updatedAt: 'x',
-    preArchiveStatus: null, isRecurring: false,
+    completedAt: null, preArchiveStatus: null, isRecurring: false,
     ...over,
   }
 }

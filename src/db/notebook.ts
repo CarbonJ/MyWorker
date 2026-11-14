@@ -1,4 +1,5 @@
 import { query, run, insert, exec, getDb } from './index'
+import { renameWikiLinks } from './links'
 import type { NotebookPage, NotebookBacklink } from '@/types'
 
 function rowToPage(row: Record<string, unknown>): NotebookPage {
@@ -65,7 +66,11 @@ export async function createNotebookPage(title: string, body: string): Promise<n
 }
 
 export async function updateNotebookPage(id: number, title: string, body: string): Promise<void> {
+  const before = await query(`SELECT title FROM notebook_pages WHERE id = ?`, [id])
   await run(`UPDATE notebook_pages SET title = ?, body = ? WHERE id = ?`, [title, body, id])
+  // Keep [[links]] to this page working after its title changes
+  const oldTitle = before[0]?.title as string | undefined
+  if (oldTitle !== undefined && oldTitle !== title) await renameWikiLinks(oldTitle, title)
 }
 
 /** Toggle/set a page's starred (favourite) flag. Does not touch updated_at (see migration 22). */

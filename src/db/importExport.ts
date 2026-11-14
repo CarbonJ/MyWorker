@@ -134,8 +134,8 @@ export async function restoreFromData(raw: unknown): Promise<void> {
       await exec(sqlite, db,
         `INSERT INTO tasks
            (id, project_id, product_area_id, title, description, notes, status, owner,
-            start_date, due_date, priority_id, is_recurring, tags, pre_archive_status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            start_date, due_date, priority_id, is_recurring, tags, pre_archive_status, completed_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           t.id as number, (t.project_id as number | null) ?? null,
           (t.product_area_id as number | null) ?? null,
@@ -146,6 +146,8 @@ export async function restoreFromData(raw: unknown): Promise<void> {
           t.is_recurring ? 1 : 0,
           (t.tags as string | undefined) ?? '',
           (t.pre_archive_status as string | null) ?? null,
+          // Backups from before completed_at existed: fall back to updated_at, as migration 25 did
+          (t.completed_at as string | null) ?? (t.status === 'done' ? (t.updated_at as string) : null),
           t.created_at as string, t.updated_at as string,
         ],
       )

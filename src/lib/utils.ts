@@ -27,6 +27,17 @@ export function toLocalDateString(date: Date): string {
   return `${y}-${m}-${d}`
 }
 
+/**
+ * Local calendar date (YYYY-MM-DD) of a database timestamp. SQLite's
+ * datetime('now') values are UTC ("YYYY-MM-DD HH:MM:SS"), so slicing the first
+ * ten characters gives the wrong day around midnight.
+ */
+export function utcTimestampToLocalDate(ts: string | null | undefined): string | null {
+  if (!ts) return null
+  const d = new Date(ts.replace(' ', 'T').replace(/([^Z])$/, '$1Z'))
+  return Number.isNaN(d.getTime()) ? null : toLocalDateString(d)
+}
+
 /** Today's date as YYYY-MM-DD in the user's local timezone. */
 export function localToday(): string {
   return toLocalDateString(new Date())

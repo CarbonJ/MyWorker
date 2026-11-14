@@ -3,7 +3,7 @@ import { BrowserRouter, NavLink, useNavigate, useLocation } from 'react-router-d
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 import { DbProvider } from '@/hooks/useDb'
-import { consumeRecoveryNotice, FOLDER_CONFLICT_EVENT } from '@/db'
+import { consumeRecoveryNotice, FOLDER_CONFLICT_EVENT, FOLDER_SAVE_EVENT, getFolderSaveStatus, persistToUserFolder } from '@/db'
 import { TaskModal } from '@/components/TaskModal'
 import { ProjectModal } from '@/components/ProjectModal'
 import { SearchProvider, useSearch } from '@/contexts/SearchContext'
@@ -192,6 +192,24 @@ function AppInner() {
     )
     window.addEventListener(FOLDER_CONFLICT_EVENT, handler)
     return () => window.removeEventListener(FOLDER_CONFLICT_EVENT, handler)
+  }, [])
+
+  // Saving to the storage folder failed (permission lapsed, file locked, folder
+  // gone…). Data is still safe in this browser, but the folder copy is the backup
+  // and what other devices read, so say so — and clear the warning once it works again.
+  useEffect(() => {
+    const TOAST_ID = 'folder-save-failed'
+    const handler = () => {
+      const { error } = getFolderSaveStatus()
+      if (!error) { toast.dismiss(TOAST_ID); return }
+      toast.error(
+        `Couldn't save to your storage folder (${error}). Your changes are safe in this browser, ` +
+        'but the folder copy is out of date. Check the folder in Settings → Data.',
+        { id: TOAST_ID, duration: Infinity, closeButton: true, action: { label: 'Retry', onClick: () => { persistToUserFolder() } } },
+      )
+    }
+    window.addEventListener(FOLDER_SAVE_EVENT, handler)
+    return () => window.removeEventListener(FOLDER_SAVE_EVENT, handler)
   }, [])
 
   useEffect(() => {

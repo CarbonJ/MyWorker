@@ -176,6 +176,13 @@ export default function NotebookPage() {
   // (e.g. user presses Escape or navigates away before the 800ms timer fires).
   useEffect(() => flushSave, [flushSave])
 
+  // …and when the tab is hidden or closed, rather than waiting out the timer
+  useEffect(() => {
+    const onHide = () => { if (document.visibilityState === 'hidden') flushSave() }
+    document.addEventListener('visibilitychange', onHide)
+    return () => document.removeEventListener('visibilitychange', onHide)
+  }, [flushSave])
+
   const handleNewPage = useCallback(() => {
     flushSave()
     pendingCreate.current = null

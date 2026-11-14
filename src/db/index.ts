@@ -495,6 +495,30 @@ export async function resolveFolderConflict(choice: 'folder' | 'local'): Promise
   conflictFileData = null
 }
 
+/** Window event fired whenever the outcome of saving to the folder changes (see getFolderSaveStatus). */
+export const FOLDER_SAVE_EVENT = 'myworker:folder-save-status'
+
+export interface FolderSaveStatus {
+  /** When the folder file was last written successfully this session (ms epoch), or null. */
+  lastSavedAt: number | null
+  /** Why the most recent save failed, or null when it succeeded. */
+  error: string | null
+}
+
+let folderSave: FolderSaveStatus = { lastSavedAt: null, error: null }
+
+/** Outcome of the most recent save to the folder. Data is always safe in the browser either way. */
+export function getFolderSaveStatus(): FolderSaveStatus {
+  return folderSave
+}
+
+function setFolderSave(next: FolderSaveStatus): void {
+  const changed = (next.error === null) !== (folderSave.error === null)
+  folderSave = next
+  // Only announce transitions (ok → failing, failing → ok), not every save
+  if (changed || next.error === null) window.dispatchEvent(new Event(FOLDER_SAVE_EVENT))
+}
+
 // Persists run one at a time so two writes can't interleave on the same file.
 let persistChain: Promise<void> = Promise.resolve()
 
@@ -536,9 +560,12 @@ async function persistNow(): Promise<void> {
 
     const fileHandle = await writeJsonFile(dir, DATA_FILE, data)
     await setMeta(FOLDER_MTIME_KEY, String((await fileHandle.getFile()).lastModified))
-  } catch {
-    // Non-fatal — data is still safe in IndexedDB
-    console.warn('[db] Failed to persist to OneDrive folder')
+    setFolderSave({ lastSavedAt: Date.now(), error: null })
+  } catch (err) {
+    // Non-fatal — data is still safe in IndexedDB — but the user must know the
+    // folder copy (their backup, and what other devices read) has stopped updating.
+    console.warn('[db] Failed to persist to OneDrive folder', err)
+    setFolderSave({ ...folderSave, error: err instanceof Error ? err.message : String(err) })
   }
 }
 
@@ -635,10 +662,35 @@ let persistTimer: ReturnType<typeof setTimeout> | null = null
 
 function schedulePersist(): void {
   if (persistTimer) clearTimeout(persistTimer)
+  // Tab already hidden/closing (e.g. an editor flushing its autosave on the way
+  // out): there may be no "later", so write straight away.
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+    persistTimer = null
+    persistToUserFolder()
+    return
+  }
   persistTimer = setTimeout(() => {
     persistTimer = null
     persistToUserFolder() // fire-and-forget; errors already caught inside
   }, 1500)
+}
+
+/** Write a debounced folder save now instead of waiting out the timer. */
+export function flushPendingPersist(): void {
+  if (!persistTimer) return
+  clearTimeout(persistTimer)
+  persistTimer = null
+  persistToUserFolder()
+}
+
+// When the tab is hidden or closed, don't leave the last changes waiting on the
+// debounce timer — start the folder write immediately so it has the best chance
+// of finishing before the page goes away.
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushPendingPersist()
+  })
+  window.addEventListener('pagehide', flushPendingPersist)
 }
 
 /**

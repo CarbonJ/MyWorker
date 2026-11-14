@@ -17,7 +17,7 @@ import { Check, Bookmark, X as XIcon, ChevronDown } from 'lucide-react'
 import { pillClass, dotClass, dotOnPillClass, pillClassActive, RAG_ORDER, RAG_OPTIONS, PILL_DIMMED_CLASS } from '@/lib/colors'
 import { loadGuiSettings, buttonStyle, workItemStyle } from '@/lib/guiSettings'
 import { collectTags, tagKey } from '@/lib/tags'
-import { fmtDate, dueDateTextClass, localToday, toLocalDateString, getUpcomingCutoff, loadUpcomingBusinessDays, type UpcomingMode, nextDayShortcut } from '@/lib/utils'
+import { fmtDate, dueDateTextClass, localToday, toLocalDateString, getUpcomingCutoff, loadUpcomingBusinessDays, type UpcomingMode, nextDayShortcut, utcTimestampToLocalDate } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { useDataLoader } from '@/hooks/useDataLoader'
 import { SplitPane } from '@/components/project/SplitPane'
@@ -390,7 +390,7 @@ export default function Prime() {
       if (generalStatusFilters.length > 0) {
         list = list.filter(t => {
           for (const f of generalStatusFilters) {
-            if (f === 'active' && (t.status !== 'done' || t.updatedAt.slice(0, 10) === today)) return true
+            if (f === 'active' && (t.status !== 'done' || utcTimestampToLocalDate(t.completedAt) === today)) return true
             if (f === 'inbox' && t.productAreaId === null) return true
             if (f === t.status) return true
           }
@@ -515,7 +515,7 @@ export default function Prime() {
     }
     await updateTask({ id: t.id, status: next })
     await logTaskStatusChange(t, t.status, next)
-    patchData(prev => ({ ...prev, allTasks: prev.allTasks.map(task => task.id === t.id ? { ...task, status: next } : task) }))
+    patchData(prev => ({ ...prev, allTasks: prev.allTasks.map(task => task.id === t.id ? { ...task, status: next, completedAt: next === 'done' ? new Date().toISOString() : null } : task) }))
   }
 
   const handleReschedule = async (newDueDate: string, note: string) => {
@@ -1401,7 +1401,7 @@ function GeneralTaskRow({ t, ctx }: { t: Task; ctx: GeneralTaskRowCtx }) {
   const priorityOpt = priorities.find(p => p.id === t.priorityId)
   const dueDateObj  = t.dueDate ? new Date(t.dueDate + 'T12:00:00') : undefined
   const today = localToday()
-  const completedToday = t.status === 'done' && t.updatedAt.slice(0, 10) === today
+  const completedToday = t.status === 'done' && utcTimestampToLocalDate(t.completedAt) === today
   const [dueDateOpen, setDueDateOpen] = useState(false)
 
   return (

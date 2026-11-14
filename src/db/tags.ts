@@ -42,7 +42,7 @@ export interface TagUsage {
   refs: TagRef[]
 }
 
-interface SourceDef {
+export interface SourceDef {
   type: TagSourceType
   table: string
   /** SELECT returning id, title, project_id, date plus the tag and text columns. */
@@ -57,7 +57,8 @@ interface SourceDef {
   hasUpdatedAt: boolean
 }
 
-const SOURCES: SourceDef[] = [
+/** Every table that holds user-written markdown text and/or a tag list. */
+export const SOURCES: SourceDef[] = [
   {
     type: 'project', table: 'projects',
     select: `SELECT id, work_item AS title, id AS project_id, updated_at AS date, tags, work_desc, latest_status FROM projects`,
@@ -94,7 +95,7 @@ const SOURCES: SourceDef[] = [
 /** Window event fired after a rename/merge/delete so cached tag lists refresh. */
 export const TAGS_CHANGED_EVENT = 'myworker:tags-changed'
 
-function snippetAround(text: string, index: number, length: number): string {
+export function snippetAround(text: string, index: number, length: number): string {
   const start = Math.max(0, index - 50)
   const end = Math.min(text.length, index + length + 70)
   return (start > 0 ? '…' : '') +
@@ -171,13 +172,16 @@ export async function getKnownTagNames(): Promise<string[]> {
 }
 
 /**
- * Rewrite one tag everywhere it is used, in a single transaction.
- * `replacement` is the new name (renaming onto an existing tag merges the two),
- * or null to delete the tag: it is removed from tag fields, and inline "#tag"
- * becomes the plain word "tag". Each record's updated_at is preserved.
+ * Rewrite text (and optionally tag lists) across every record, in a single
+ * transaction. `text` is applied to each markdown column and `tags` to each tag
+ * list; only records that actually change are written. Each record's
+ * updated_at is preserved — this is maintenance, not an edit by the user.
  * Returns the number of records changed.
  */
-async function rewriteTag(name: string, replacement: string | null): Promise<number> {
+export async function rewriteRecords(
+  text: (value: string) => string,
+  tags?: (list: string[]) => string[],
+): Promise<number> {
   const { sqlite, db } = getDb()
   let changed = 0
   await exec(sqlite, db, 'BEGIN')
@@ -188,9 +192,9 @@ async function rewriteTag(name: string, replacement: string | null): Promise<num
       for (const row of await exec(sqlite, db, `SELECT ${select} FROM ${src.table}`)) {
         const sets: string[] = []
         const params: (string | number)[] = []
-        if (src.tagColumn) {
+        if (tags && src.tagColumn) {
           const before = parseTags((row[src.tagColumn] as string) ?? '', src.legacyCommaTags)
-          const after = replaceInTagList(before, name, replacement)
+          const after = tags(before)
           if (after.length !== before.length || after.some((t, i) => t !== before[i])) {
             sets.push(`${src.tagColumn} = ?`)
             params.push(stringifyTags(after))
@@ -198,7 +202,7 @@ async function rewriteTag(name: string, replacement: string | null): Promise<num
         }
         for (const col of src.textColumns) {
           const before = (row[col] as string | null) ?? ''
-          const after = replaceHashtag(before, name, replacement)
+          const after = text(before)
           if (after !== before) {
             sets.push(`${col} = ?`)
             params.push(after)
@@ -220,7 +224,20 @@ async function rewriteTag(name: string, replacement: string | null): Promise<num
     await exec(sqlite, db, 'ROLLBACK')
     throw err
   }
-  await persistToUserFolder()
+  if (changed > 0) await persistToUserFolder()
+  return changed
+}
+
+/**
+ * Rewrite one tag everywhere it is used. `replacement` is the new name (renaming
+ * onto an existing tag merges the two), or null to delete the tag: it is removed
+ * from tag fields, and inline "#tag" becomes the plain word "tag".
+ */
+async function rewriteTag(name: string, replacement: string | null): Promise<number> {
+  const changed = await rewriteRecords(
+    text => replaceHashtag(text, name, replacement),
+    list => replaceInTagList(list, name, replacement),
+  )
   window.dispatchEvent(new Event(TAGS_CHANGED_EVENT))
   return changed
 }

@@ -1,6 +1,7 @@
-import { query, run, insert } from './index'
+import { query, run, insert, exec, getDb, persistToUserFolder } from './index'
 import { parseTags, stringifyTags } from '@/lib/tags'
 import { getKnownTagNames } from './tags'
+import { renameWikiLinks } from './links'
 import type { Project, RagStatus, Stakeholder } from '@/types'
 
 function parseStakeholders(raw: string): Stakeholder[] {
@@ -54,6 +55,46 @@ export async function getAllProjectsIncludingArchived(): Promise<Project[]> {
 export async function getArchivedProjects(): Promise<Project[]> {
   const rows = await query(`SELECT * FROM projects WHERE is_archived = 1 ORDER BY updated_at DESC`)
   return rows.map(rowToProject)
+}
+
+/**
+ * Close a project in one transaction: write the closing note to its work log,
+ * mark its open tasks done (remembering their status for a later reopen),
+ * archive it, and optionally set its status. All of it happens or none of it.
+ */
+export async function closeProject(id: number, closingNote: string, doneStatusId: number | null): Promise<void> {
+  const { sqlite, db } = getDb()
+  await exec(sqlite, db, 'BEGIN')
+  try {
+    await exec(sqlite, db, `INSERT INTO work_log_entries (project_id, note, is_system) VALUES (?, ?, 0)`, [id, closingNote])
+    await exec(sqlite, db,
+      `UPDATE tasks SET pre_archive_status = status, status = 'done'
+       WHERE project_id = ? AND status IN ('open', 'in_progress')`, [id])
+    await exec(sqlite, db,
+      `UPDATE projects SET is_archived = 1, status_id = COALESCE(?, status_id) WHERE id = ?`, [doneStatusId, id])
+    await exec(sqlite, db, 'COMMIT')
+  } catch (err) {
+    await exec(sqlite, db, 'ROLLBACK')
+    throw err
+  }
+  await persistToUserFolder()
+}
+
+/** Reopen an archived project in one transaction, restoring the tasks that closing it auto-completed. */
+export async function reopenProject(id: number): Promise<void> {
+  const { sqlite, db } = getDb()
+  await exec(sqlite, db, 'BEGIN')
+  try {
+    await exec(sqlite, db,
+      `UPDATE tasks SET status = pre_archive_status, pre_archive_status = NULL
+       WHERE project_id = ? AND pre_archive_status IS NOT NULL`, [id])
+    await exec(sqlite, db, `UPDATE projects SET is_archived = 0, status_id = NULL WHERE id = ?`, [id])
+    await exec(sqlite, db, 'COMMIT')
+  } catch (err) {
+    await exec(sqlite, db, 'ROLLBACK')
+    throw err
+  }
+  await persistToUserFolder()
 }
 
 /** Marks a project as archived (independent of its status label). */
@@ -139,6 +180,8 @@ export async function updateProject(input: UpdateProjectInput): Promise<void> {
       input.id,
     ],
   )
+  // Keep [[links]] to this project working after a rename
+  if (input.workItem !== undefined) await renameWikiLinks(current.workItem, input.workItem)
 }
 
 export async function deleteProject(id: number): Promise<void> {

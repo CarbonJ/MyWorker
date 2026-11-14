@@ -1,4 +1,5 @@
 import { query, run, insert, exec, getDb, persistToUserFolder } from './index'
+import { renameWikiLinks } from './links'
 import type { DropdownOption, DropdownType } from '@/types'
 
 function rowToOption(row: Record<string, unknown>): DropdownOption {
@@ -53,34 +54,39 @@ export async function updateDropdownOption(
   sortOrder: number,
   color?: string,
 ): Promise<void> {
+  const before = await query(`SELECT type, label FROM dropdown_options WHERE id = ?`, [id])
   await run(
     `UPDATE dropdown_options SET label = ?, sort_order = ?, color = ? WHERE id = ?`,
     [label, sortOrder, color ?? '', id],
   )
+  // Areas can be [[linked]] — keep those links working after a rename
+  if (before[0]?.type === 'product_area' && before[0].label !== label) {
+    await renameWikiLinks(before[0].label as string, label)
+  }
 }
 
 export async function deleteDropdownOption(id: number): Promise<void> {
   await run(`DELETE FROM dropdown_options WHERE id = ?`, [id])
 }
 
-/** Count how many active projects (and tasks) reference a given dropdown option. */
+/** Count how many projects (archived ones included — deleting clears it on them too) and tasks reference a dropdown option. */
 export async function getOptionUsageCount(id: number, type: DropdownType): Promise<number> {
   let n = 0
   if (type === 'priority') {
     const [pr, ta] = await Promise.all([
-      query(`SELECT COUNT(*) as n FROM projects WHERE priority_id = ? AND is_archived = 0`, [id]),
+      query(`SELECT COUNT(*) as n FROM projects WHERE priority_id = ?`, [id]),
       query(`SELECT COUNT(*) as n FROM tasks WHERE priority_id = ?`, [id]),
     ])
     n = Number((pr[0] as Record<string, unknown>).n) + Number((ta[0] as Record<string, unknown>).n)
   } else if (type === 'product_area') {
     const [pr, ta] = await Promise.all([
-      query(`SELECT COUNT(*) as n FROM projects WHERE product_area_id = ? AND is_archived = 0`, [id]),
+      query(`SELECT COUNT(*) as n FROM projects WHERE product_area_id = ?`, [id]),
       query(`SELECT COUNT(*) as n FROM tasks WHERE product_area_id = ?`, [id]),
     ])
     n = Number((pr[0] as Record<string, unknown>).n) + Number((ta[0] as Record<string, unknown>).n)
   } else if (type === 'project_status') {
     const [pr] = await Promise.all([
-      query(`SELECT COUNT(*) as n FROM projects WHERE status_id = ? AND is_archived = 0`, [id]),
+      query(`SELECT COUNT(*) as n FROM projects WHERE status_id = ?`, [id]),
     ])
     n = Number((pr[0] as Record<string, unknown>).n)
   }

@@ -1,4 +1,4 @@
-import { useEffect, useState, startTransition } from 'react'
+import { useEffect, useRef, useState, startTransition } from 'react'
 import { useWikiEntities } from '@/hooks/useWikiEntities'
 import { toast } from 'sonner'
 import { createTask, updateTask, deleteTask, logTaskStatusChange } from '@/db/tasks'
@@ -74,32 +74,56 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
     if (propProjects) setProjects(propProjects)
   }, [propProjects])
 
+  // What the form held when it opened, as one comparable value — used to tell
+  // whether closing it would throw away changes. Same field order as formSnapshot.
+  const initialFormRef = useRef<string | null>(null)
+
   // Populate fields when task/open changes
   useEffect(() => {
-    if (task) {
-      setTitle(task.title)
-      setDescription(task.description)
-      setNotes(task.notes)
-      setStatus(task.status)
-      setPriorityId(task.priorityId?.toString() ?? '')
-      setProductAreaId(task.productAreaId?.toString() ?? '')
-      setTags(task.tags ?? [])
-      setStartDate(task.startDate ?? '')
-      setDueDate(task.dueDate ?? '')
-      setSelectedProjectId(task.projectId)
-      setIsRecurring(task.isRecurring)
-    } else {
-      setTitle(''); setDescription(''); setNotes('')
-      setStatus('open'); setPriorityId('')
-      setProductAreaId(initialProductAreaId ? String(initialProductAreaId) : '')
-      setTags([])
-      setStartDate(''); setDueDate('')
-      setIsRecurring(false)
-      setSelectedProjectId(initialProjectId ?? null)
+    const init = task ? {
+      title: task.title, description: task.description, notes: task.notes,
+      status: task.status,
+      priorityId: task.priorityId?.toString() ?? '',
+      productAreaId: task.productAreaId?.toString() ?? '',
+      tags: task.tags ?? [],
+      startDate: task.startDate ?? '', dueDate: task.dueDate ?? '',
+      isRecurring: task.isRecurring,
+      selectedProjectId: task.projectId,
+    } : {
+      title: '', description: '', notes: '',
+      status: 'open' as TaskStatus,
+      priorityId: '',
+      productAreaId: initialProductAreaId ? String(initialProductAreaId) : '',
+      tags: [] as string[],
+      startDate: '', dueDate: '',
+      isRecurring: false,
+      selectedProjectId: initialProjectId ?? null,
     }
+    setTitle(init.title); setDescription(init.description); setNotes(init.notes)
+    setStatus(init.status); setPriorityId(init.priorityId)
+    setProductAreaId(init.productAreaId)
+    setTags(init.tags)
+    setStartDate(init.startDate); setDueDate(init.dueDate)
+    setIsRecurring(init.isRecurring)
+    setSelectedProjectId(init.selectedProjectId)
     setProjectSearch('')
     setProjectOpen(false)
+    initialFormRef.current = JSON.stringify([
+      init.title, init.description, init.notes, init.status, init.priorityId, init.productAreaId,
+      init.tags, init.startDate, init.dueDate, init.isRecurring, init.selectedProjectId,
+    ])
   }, [task, open, initialProjectId, initialProductAreaId])
+
+  const formSnapshot = JSON.stringify([
+    title, description, notes, status, priorityId, productAreaId, tags, startDate, dueDate, isRecurring, selectedProjectId,
+  ])
+
+  /** Close without saving — asks first if there are unsaved changes. */
+  const requestClose = () => {
+    const dirty = initialFormRef.current !== null && initialFormRef.current !== formSnapshot
+    if (dirty && !confirm('Discard your unsaved changes to this task?')) return
+    onClose()
+  }
 
   // A recurring task being set to Done from this form: the form closes and the
   // same "next due date" prompt the status circle uses takes over.
@@ -204,7 +228,7 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
 
   return (
     <>
-    <Dialog open={open} onOpenChange={v => !v && onClose()}>
+    <Dialog open={open} onOpenChange={v => !v && requestClose()}>
       <DialogContent
         className="max-w-2xl flex flex-col max-h-[90vh]"
         // Prevent Radix from treating clicks inside Select/Popover portals (rendered
@@ -479,7 +503,7 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
             </Button>
           )}
           <p className="text-xs text-muted-foreground mr-auto">⌘/Ctrl+↵ to save</p>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" onClick={requestClose}>Cancel</Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Task'}
           </Button>

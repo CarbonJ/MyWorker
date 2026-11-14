@@ -65,6 +65,8 @@ export interface Task {
   dueDate: string | null
   createdAt: string
   updatedAt: string
+  /** When the task was last set to done (UTC timestamp); null while it isn't done. */
+  completedAt: string | null
   preArchiveStatus: TaskStatus | null
   isRecurring: boolean
 }

@@ -90,8 +90,13 @@ export default function DailyDigestView() {
     }
   }, [])
 
-  // Save anything pending when leaving the page
+  // Save anything pending when leaving the page, or when the tab is hidden/closed
   useEffect(() => flushJournal, [flushJournal])
+  useEffect(() => {
+    const onHide = () => { if (document.visibilityState === 'hidden') flushJournal() }
+    document.addEventListener('visibilitychange', onHide)
+    return () => document.removeEventListener('visibilitychange', onHide)
+  }, [flushJournal])
   // Entity list so resolved [[wiki links]] in the Journal render blue (live) vs muted (unlinked)
   const wikiEntities = useWikiEntities()
 

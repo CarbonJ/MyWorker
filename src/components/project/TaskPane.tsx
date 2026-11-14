@@ -14,7 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar'
 import { Check, RefreshCw } from 'lucide-react'
 import { pillClass, dotClass } from '@/lib/colors'
-import { fmtDate, dueDateTextClass, localToday, nextDayShortcut, toLocalDateString } from '@/lib/utils'
+import { fmtDate, dueDateTextClass, localToday, nextDayShortcut, toLocalDateString, utcTimestampToLocalDate } from '@/lib/utils'
 import { useErrorHandler } from '@/hooks/useErrorHandler'
 import { RecurringCompleteDialog } from '@/components/RecurringCompleteDialog'
 
@@ -73,7 +73,7 @@ export function TaskPane({
       list = list.filter(t => {
         // Special 'active' pseudo-status
         if (filterStatuses.includes('active')) {
-          const isActive = t.status !== 'done' || t.updatedAt.slice(0, 10) === today
+          const isActive = t.status !== 'done' || utcTimestampToLocalDate(t.completedAt) === today
           if (isActive) return true
         }
         // Literal status values
@@ -235,7 +235,7 @@ export function TaskPane({
         )}
         {visibleTasks.map(task => {
           const isDone = task.status === 'done'
-          const completedToday = isDone && task.updatedAt.slice(0, 10) === today
+          const completedToday = isDone && utcTimestampToLocalDate(task.completedAt) === today
           return (
             <div
               key={task.id}

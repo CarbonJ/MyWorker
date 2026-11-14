@@ -12,11 +12,13 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { getProjectById, updateProject, archiveProject, restoreProject } from '@/db/projects'
-import { getTasksByProject, getTaskById, archiveTasksByProject, restoreTasksByProject } from '@/db/tasks'
-import { getWorkLogByProject, addWorkLogEntry } from '@/db/workLog'
+import { getProjectById, updateProject, closeProject, reopenProject } from '@/db/projects'
+import { getTasksByProject, getTaskById } from '@/db/tasks'
+import { getWorkLogByProject } from '@/db/workLog'
 import { getDropdownOptions } from '@/db/dropdownOptions'
 import { getBacklinks } from '@/db/notebook'
+import { getMentions } from '@/db/links'
+import type { TagRef } from '@/db/tags'
 import type { Project, Task, WorkLogEntry, DropdownOption, NotebookBacklink } from '@/types'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -54,6 +56,7 @@ export default function ProjectDetail() {
   const [tasks,          setTasks]          = useState<Task[]>([])
   const [workLog,        setWorkLog]        = useState<WorkLogEntry[]>([])
   const [notebookRefs,   setNotebookRefs]   = useState<NotebookBacklink[]>([])
+  const [mentions,       setMentions]       = useState<TagRef[]>([])
   const [priorities,     setPriorities]     = useState<DropdownOption[]>([])
   const [productAreas,   setProductAreas]   = useState<DropdownOption[]>([])
   const [projectStatuses,setProjectStatuses]= useState<DropdownOption[]>([])
@@ -101,6 +104,10 @@ export default function ProjectDetail() {
       setProjectStatuses(statuses)
       // Fetch notebook backlinks after project is known (needs workItem for fallback scan)
       getBacklinks('project', projectId, p.workItem).then(setNotebookRefs).catch(() => {})
+      // [[links]] to this project from anywhere else — not its own log, tasks or description
+      getMentions(p.workItem)
+        .then(refs => setMentions(refs.filter(r => r.projectId !== projectId)))
+        .catch(() => {})
       // Default task filter to 'done' for archived projects on first load
       if (!initialFilterSet.current) {
         initialFilterSet.current = true
@@ -157,10 +164,7 @@ export default function ProjectDetail() {
     if (!project || !closingNote.trim()) return
     setClosing(true)
     try {
-      await addWorkLogEntry(project.id, closingNote.trim())
-      await archiveTasksByProject(project.id)
-      await archiveProject(project.id)
-      if (doneOpt) await updateProject({ id: project.id, statusId: doneOpt.id })
+      await closeProject(project.id, closingNote.trim(), doneOpt?.id ?? null)
       toast.success('Project closed')
       navigate('/')
     } catch (err) {
@@ -171,12 +175,10 @@ export default function ProjectDetail() {
     }
   }
 
-  const reopenProject = async () => {
+  const handleReopen = async () => {
     if (!project) return
     try {
-      await restoreTasksByProject(project.id)
-      await restoreProject(project.id)
-      await updateProject({ id: project.id, statusId: null })
+      await reopenProject(project.id)
       toast.success('Project reopened')
       await load()
     } catch (err) {
@@ -211,7 +213,7 @@ export default function ProjectDetail() {
         isArchived={isArchived}
         onSaveField={saveField}
         onMarkComplete={markComplete}
-        onReopen={reopenProject}
+        onReopen={handleReopen}
         onEdit={() => setEditModalOpen(true)}
       />
 
@@ -239,6 +241,7 @@ export default function ProjectDetail() {
             projectName={project?.workItem}
             workLog={workLog}
             notebookRefs={notebookRefs}
+            mentions={mentions}
             onSaved={load}
           />
         }

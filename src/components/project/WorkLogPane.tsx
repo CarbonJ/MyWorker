@@ -16,7 +16,9 @@ import { updateWorkLogEntry, deleteWorkLogEntry } from '@/db/workLog'
 import { WorkLogEntryForm } from '@/components/WorkLogEntry'
 import { WikiLinkContent } from '@/components/WikiLinkContent'
 import { MarkdownField } from '@/components/MarkdownField'
-import { Pencil, Trash2, Filter, Search, X, BookOpen } from 'lucide-react'
+import { Pencil, Trash2, Filter, Search, X, BookOpen, Link2 } from 'lucide-react'
+import type { TagRef } from '@/db/tags'
+import { recordRoute } from '@/lib/refRoutes'
 import { loadGuiSettings, altRowStyle } from '@/lib/guiSettings'
 import { useWikiEntities } from '@/hooks/useWikiEntities'
 
@@ -25,14 +27,24 @@ interface Props {
   projectName?: string
   workLog: WorkLogEntry[]
   notebookRefs?: NotebookBacklink[]
+  /** Records elsewhere (other projects' logs and tasks, journal, contacts) that [[link]] to this project. */
+  mentions?: TagRef[]
   onSaved: () => void
 }
 
 type LogItem =
   | { kind: 'log'; entry: WorkLogEntry; sortKey: string }
   | { kind: 'note'; ref: NotebookBacklink; sortKey: string }
+  | { kind: 'mention'; ref: TagRef; sortKey: string }
 
-export function WorkLogPane({ projectId, projectName, workLog, notebookRefs = [], onSaved }: Props) {
+const MENTION_LABEL: Record<TagRef['sourceType'], string> = {
+  project: 'Project', task: 'Task', worklog: 'Work log', note: 'Note', contact: 'Contact', journal: 'Journal',
+}
+
+/** Timeline sort key for a mention: journal entries carry a bare date, others a UTC timestamp. */
+const mentionSortKey = (ref: TagRef) => ref.date.length === 10 ? `${ref.date} 12:00:00` : ref.date
+
+export function WorkLogPane({ projectId, projectName, workLog, notebookRefs = [], mentions = [], onSaved }: Props) {
   const navigate = useNavigate()
   const wikiEntities = useWikiEntities()
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -64,24 +76,38 @@ export function WorkLogPane({ projectId, projectName, workLog, notebookRefs = []
     const noteItems: LogItem[] = notebookRefs.map(r => ({
       kind: 'note', ref: r, sortKey: r.createdAt,
     }))
-    return [...logItems, ...noteItems].sort((a, b) => b.sortKey.localeCompare(a.sortKey))
-  }, [filteredByCompletion, notebookRefs])
+    const mentionItems: LogItem[] = mentions.map(r => ({
+      kind: 'mention', ref: r, sortKey: mentionSortKey(r),
+    }))
+    return [...logItems, ...noteItems, ...mentionItems].sort((a, b) => b.sortKey.localeCompare(a.sortKey))
+  }, [filteredByCompletion, notebookRefs, mentions])
 
   const visibleItems = searchTerms.length > 0
     ? mergedItems.filter(item => {
         const text = item.kind === 'log'
           ? item.entry.note
-          : `${item.ref.pageTitle} ${item.ref.snippet}`
+          : item.kind === 'note'
+            ? `${item.ref.pageTitle} ${item.ref.snippet}`
+            : `${item.ref.title} ${item.ref.snippet ?? ''}`
         return searchTerms.every(term => text.toLowerCase().includes(term))
       })
     : mergedItems
 
+  /** True if it's fine to drop the entry edit in progress (nothing changed, or the user agreed). */
+  const canDiscardEdit = () => {
+    if (editingId === null) return true
+    const original = workLog.find(e => e.id === editingId)?.note ?? ''
+    return editDraft.trim() === original.trim() || confirm('Discard your unsaved changes to this entry?')
+  }
+
   const startEdit = (entry: WorkLogEntry) => {
+    if (!canDiscardEdit()) return
     setEditingId(entry.id)
     setEditDraft(entry.note)
   }
 
   const cancelEdit = () => {
+    if (!canDiscardEdit()) return
     setEditingId(null)
     setEditDraft('')
   }
@@ -182,6 +208,29 @@ export function WorkLogPane({ projectId, projectName, workLog, notebookRefs = []
                   className="text-left group"
                 >
                   <p className="text-sm font-medium text-primary group-hover:underline">{ref.pageTitle || 'Untitled'}</p>
+                  {ref.snippet && (
+                    <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{ref.snippet}</p>
+                  )}
+                </button>
+              </div>
+            )
+          }
+
+          if (item.kind === 'mention') {
+            const ref = item.ref
+            const when = ref.date.length === 10
+              ? new Date(ref.date + 'T12:00:00').toLocaleDateString()
+              : new Date(ref.date.replace(' ', 'T').replace(/([^Z])$/, '$1Z')).toLocaleString()
+            return (
+              <div key={`mention-${ref.sourceType}-${ref.id}`} className="px-3 py-2" style={altRowStyle(rowColor, rowOpacity, index)}>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Link2 className="h-3 w-3 text-muted-foreground shrink-0" />
+                  <p className="text-xs text-muted-foreground">{when} · mentioned in {MENTION_LABEL[ref.sourceType].toLowerCase()}</p>
+                </div>
+                <button type="button" onClick={() => navigate(recordRoute(ref))} className="text-left group">
+                  <p className="text-sm font-medium text-primary group-hover:underline">
+                    {ref.sourceType === 'journal' ? `Journal ${ref.title}` : ref.title}
+                  </p>
                   {ref.snippet && (
                     <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{ref.snippet}</p>
                   )}

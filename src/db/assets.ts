@@ -19,8 +19,28 @@ export function getAssetsFolderName(): string {
   return v || DEFAULT_ASSETS_FOLDER
 }
 
+/**
+ * Folder names used before the current one. Renaming the setting doesn't move
+ * files, so images saved under an earlier name are still read from there.
+ */
+const ASSETS_FOLDER_HISTORY_KEY = 'myworker:assets-folder-history'
+
+function previousAssetsFolders(): string[] {
+  let history: string[] = []
+  try {
+    const parsed = JSON.parse(localStorage.getItem(ASSETS_FOLDER_HISTORY_KEY) ?? '[]')
+    if (Array.isArray(parsed)) history = parsed.filter((n): n is string => typeof n === 'string')
+  } catch { /* unreadable history — fall back to the default folder only */ }
+  const current = getAssetsFolderName()
+  return [...new Set([...history, DEFAULT_ASSETS_FOLDER])].filter(n => n !== current)
+}
+
 export function setAssetsFolderName(name: string): void {
   const clean = name.trim() || DEFAULT_ASSETS_FOLDER
+  const current = getAssetsFolderName()
+  if (clean === current) return
+  const history = previousAssetsFolders().filter(n => n !== clean)
+  localStorage.setItem(ASSETS_FOLDER_HISTORY_KEY, JSON.stringify([current, ...history]))
   localStorage.setItem(ASSETS_FOLDER_KEY, clean)
 }
 
@@ -81,16 +101,24 @@ export async function saveAssetImage(blob: Blob): Promise<string> {
   return filename
 }
 
-/** Read an image file from the assets folder as a Blob, or null if missing. */
+/**
+ * Read an image file as a Blob, or null if missing. Looks in the current assets
+ * folder first, then in folders the setting pointed at before it was changed.
+ */
 export async function readAssetBlob(filename: string): Promise<Blob | null> {
-  const dir = await getAssetsDir(false)
-  if (!dir) return null
-  try {
-    const fileHandle = await dir.getFileHandle(filename, { create: false })
-    return await fileHandle.getFile()
-  } catch {
-    return null
+  let root: FileSystemDirectoryHandle | null = null
+  try { root = getDb().dirHandle } catch { return null }
+  if (!root) return null
+  for (const folder of [getAssetsFolderName(), ...previousAssetsFolders()]) {
+    try {
+      const dir = await root.getDirectoryHandle(folder, { create: false })
+      const fileHandle = await dir.getFileHandle(filename, { create: false })
+      return await fileHandle.getFile()
+    } catch {
+      // Not in this folder — try the next one
+    }
   }
+  return null
 }
 
 /** Delete an image file from the assets folder (ignores a missing file). */

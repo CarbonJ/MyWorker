@@ -18,6 +18,7 @@ function rowToTask(row: Record<string, unknown>): Task {
     dueDate: row.due_date as string | null,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
+    completedAt: (row.completed_at as string | null) ?? null,
     preArchiveStatus: (row.pre_archive_status as TaskStatus | null) ?? null,
     isRecurring: !!(row.is_recurring as number),
   }
@@ -169,20 +170,19 @@ export interface CompletedAreaTask {
 }
 
 /**
- * Completed tasks that have NO project, for a given local date, joined to their direct
- * product area. Completion date is inferred from updated_at (the app's convention — there
- * is no separate completed_at column). Used by the Daily Digest, since project-less task
+ * Completed tasks that have NO project, for a given local date (by completed_at), joined
+ * to their direct product area. Used by the Daily Digest, since project-less task
  * completions create no work-log entry and would otherwise never surface.
  */
 export async function getCompletedGeneralTasksByDate(date: string): Promise<CompletedAreaTask[]> {
   const rows = await query(
-    `SELECT t.id, t.title, t.product_area_id, t.updated_at,
+    `SELECT t.id, t.title, t.product_area_id, t.completed_at,
             d.label AS area_name, d.sort_order AS area_sort
      FROM tasks t
      LEFT JOIN dropdown_options d ON d.id = t.product_area_id AND d.type = 'product_area'
      WHERE t.project_id IS NULL AND t.status = 'done'
-       AND DATE(t.updated_at, 'localtime') = ?
-     ORDER BY (d.sort_order IS NULL), d.sort_order, t.updated_at`,
+       AND DATE(t.completed_at, 'localtime') = ?
+     ORDER BY (d.sort_order IS NULL), d.sort_order, t.completed_at`,
     [date],
   )
   return rows.map(r => ({
@@ -190,7 +190,7 @@ export async function getCompletedGeneralTasksByDate(date: string): Promise<Comp
     title: r.title as string,
     productAreaId: (r.product_area_id as number | null) ?? null,
     areaName: (r.area_name as string | null) ?? null,
-    completedAt: r.updated_at as string,
+    completedAt: r.completed_at as string,
   }))
 }
 
