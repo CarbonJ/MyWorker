@@ -4,7 +4,7 @@
  * A tag can live in two places:
  *   - a tag field  (projects.tags, tasks.tags, contacts.tags — JSON arrays)
  *   - inline text  (#tag written in any markdown field: work log, task
- *                   description/notes, notebook pages, project description, …)
+ *                   description/notes, notebook pages, journal, project description, …)
  *
  * The text and tag fields are the only source of truth: there is no tag table.
  * Usage is found by scanning (fast at single-user scale, and it can never drift
@@ -18,12 +18,12 @@ import {
   replaceHashtag, replaceInTagList,
 } from '@/lib/tags'
 
-export type TagSourceType = 'project' | 'task' | 'worklog' | 'note' | 'contact'
+export type TagSourceType = 'project' | 'task' | 'worklog' | 'note' | 'contact' | 'journal'
 
 export interface TagRef {
   sourceType: TagSourceType
   id: number
-  /** Display title of the record (work log entries use their project's name). */
+  /** Display title of the record (work log entries use their project's name; journal entries their YYYY-MM-DD date). */
   title: string
   /** Project to open for tasks and work log entries; null for a project-less task. */
   projectId: number | null
@@ -83,6 +83,11 @@ const SOURCES: SourceDef[] = [
     type: 'contact', table: 'contacts',
     select: `SELECT id, name AS title, NULL AS project_id, updated_at AS date, tags, notes, whos_who FROM contacts`,
     tagColumn: 'tags', textColumns: ['notes', 'whos_who'], legacyCommaTags: true, hasUpdatedAt: true,
+  },
+  {
+    type: 'journal', table: 'journal_entries',
+    select: `SELECT id, entry_date AS title, NULL AS project_id, entry_date AS date, body FROM journal_entries`,
+    tagColumn: null, textColumns: ['body'], hasUpdatedAt: true,
   },
 ]
 

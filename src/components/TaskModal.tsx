@@ -1,7 +1,8 @@
 import { useEffect, useState, startTransition } from 'react'
 import { useWikiEntities } from '@/hooks/useWikiEntities'
 import { toast } from 'sonner'
-import { createTask, updateTask, deleteTask } from '@/db/tasks'
+import { createTask, updateTask, deleteTask, logTaskStatusChange } from '@/db/tasks'
+import { RecurringCompleteDialog } from '@/components/RecurringCompleteDialog'
 import { getAllProjects, getAllTagNames } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
 import type { Task, TaskStatus, DropdownOption, Project } from '@/types'
@@ -15,7 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Calendar } from '@/components/ui/calendar'
 import { ChevronsUpDown, Check, X, CalendarIcon } from 'lucide-react'
-import { cn, localToday, localTomorrow, toLocalDateString } from '@/lib/utils'
+import { cn, fmtDate, localToday, nextDayShortcut, toLocalDateString } from '@/lib/utils'
 import { Checkbox } from '@/components/ui/checkbox'
 import { TagInput } from '@/components/TagInput'
 
@@ -100,6 +101,24 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
     setProjectOpen(false)
   }, [task, open, initialProjectId, initialProductAreaId])
 
+  // A recurring task being set to Done from this form: the form closes and the
+  // same "next due date" prompt the status circle uses takes over.
+  const [recurringPrompt, setRecurringPrompt] = useState<Task | null>(null)
+
+  const finishRecurring = async (apply: (t: Task) => Promise<void>) => {
+    const t = recurringPrompt
+    if (!t) return
+    try {
+      await apply(t)
+      window.dispatchEvent(new Event('myworker:task-saved'))
+      onSaved()
+    } catch (err) {
+      toast.error(`Failed to update task: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setRecurringPrompt(null)
+    }
+  }
+
   const handleSave = async () => {
     if (!title.trim()) { toast.error('Title is required'); return }
     setSaving(true)
@@ -119,10 +138,21 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
         isRecurring,
       }
       if (isEdit && task) {
+        if (status === 'done' && task.status !== 'done' && isRecurring) {
+          // Save the other edits now; the prompt decides the status and next due date
+          await updateTask({ id: task.id, ...input, status: task.status })
+          setRecurringPrompt({ ...task, ...input, status: task.status })
+          onSaved()
+          onClose()
+          return
+        }
         await updateTask({ id: task.id, ...input })
+        await logTaskStatusChange(input, task.status, status)
         toast.success('Task updated')
       } else {
         await createTask(input)
+        // A task created already started or finished is logged like any other status change
+        await logTaskStatusChange(input, 'open', status)
         toast.success('Task created')
       }
       onSaved()
@@ -173,6 +203,7 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
   const fieldClass = 'space-y-1.5'
 
   return (
+    <>
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
       <DialogContent
         className="max-w-2xl flex flex-col max-h-[90vh]"
@@ -391,7 +422,7 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
                   <div className="border-t px-3 py-2 flex gap-2">
                     <button type="button" className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setStartDate('')}>Clear</button>
                     <button type="button" className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setStartDate(localToday())}>Today</button>
-                    <button type="button" className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setStartDate(localTomorrow())}>Tomorrow</button>
+                    <button type="button" className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setStartDate(nextDayShortcut().date)}>{nextDayShortcut().label}</button>
                   </div>
                 </PopoverContent>
               </Popover>
@@ -425,7 +456,7 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
                   <div className="border-t px-3 py-2 flex gap-2">
                     <button type="button" className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setDueDate('')}>Clear</button>
                     <button type="button" className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setDueDate(localToday())}>Today</button>
-                    <button type="button" className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setDueDate(localTomorrow())}>Tomorrow</button>
+                    <button type="button" className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setDueDate(nextDayShortcut().date)}>{nextDayShortcut().label}</button>
                   </div>
                 </PopoverContent>
               </Popover>
@@ -455,5 +486,21 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    {recurringPrompt && (
+      <RecurringCompleteDialog
+        task={recurringPrompt}
+        open
+        onReschedule={(newDueDate, note) => finishRecurring(async t => {
+          await updateTask({ id: t.id, status: 'open', dueDate: newDueDate })
+          await logTaskStatusChange(t, t.status, 'done', `. Next due: ${fmtDate(newDueDate)}${note ? `. ${note}` : ''}`)
+        })}
+        onMarkDone={() => finishRecurring(async t => {
+          await updateTask({ id: t.id, status: 'done', isRecurring: false })
+          await logTaskStatusChange(t, t.status, 'done')
+        })}
+        onCancel={() => setRecurringPrompt(null)}
+      />
+    )}
+    </>
   )
 }

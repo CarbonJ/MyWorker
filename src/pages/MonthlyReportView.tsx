@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { ReportRangeTabs } from '@/components/ReportRangeTabs'
 import { getWorkLogByDateRange, type WorkLogEntryWithProject } from '@/db/workLog'
 import { getLinkedNotebookEntriesByDateRange, type LinkedNotebookEntry } from '@/db/notebook'
 import { WikiLinkContent } from '@/components/WikiLinkContent'
@@ -215,6 +216,7 @@ export default function MonthlyReportView() {
       <div className="shrink-0 border-b bg-background px-6 py-4 flex items-center gap-3 flex-wrap">
         <FileText className="h-5 w-5 text-muted-foreground shrink-0" />
         <h1 className="text-lg font-semibold">Monthly Report</h1>
+        <ReportRangeTabs />
 
         {/* Month navigation */}
         <div className="flex items-center gap-1 ml-4">

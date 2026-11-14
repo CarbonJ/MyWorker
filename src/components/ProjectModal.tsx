@@ -15,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar'
 import { CalendarIcon } from 'lucide-react'
 import { TagInput } from '@/components/TagInput'
-import { localToday, localTomorrow, toLocalDateString } from '@/lib/utils'
+import { localToday, nextDayShortcut, toLocalDateString } from '@/lib/utils'
 
 interface Props {
   project?: Project | null   // null/undefined = create mode, Project = edit mode
@@ -313,7 +313,7 @@ export function ProjectModal({ project, open, onClose, onSaved }: Props) {
                 <div className="border-t px-3 py-2 flex gap-2">
                   <button type="button" className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setDueDate('')}>Clear</button>
                   <button type="button" className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setDueDate(localToday())}>Today</button>
-                  <button type="button" className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setDueDate(localTomorrow())}>Tomorrow</button>
+                  <button type="button" className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setDueDate(nextDayShortcut().date)}>{nextDayShortcut().label}</button>
                 </div>
               </PopoverContent>
             </Popover>

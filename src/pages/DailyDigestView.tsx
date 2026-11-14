@@ -1,13 +1,16 @@
-import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { toast } from 'sonner'
+import { getJournalEntry, saveJournalEntry } from '@/db/journal'
 import { getWorkLogByDate, type WorkLogEntryWithProject } from '@/db/workLog'
 import { getNotebookPageByTitle, createNotebookPage, getLinkedNotebookEntriesByDateRange, type LinkedNotebookEntry } from '@/db/notebook'
 import { getCompletedGeneralTasksByDate, type CompletedAreaTask } from '@/db/tasks'
 import { WikiLinkContent } from '@/components/WikiLinkContent'
 import { MarkdownField } from '@/components/MarkdownField'
 import { useWikiEntities } from '@/hooks/useWikiEntities'
-import { ChevronLeft, ChevronRight, CalendarDays, FileText, BookOpen } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CalendarDays, BookOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ReportRangeTabs } from '@/components/ReportRangeTabs'
 import { toLocalDateString } from '@/lib/utils'
 
 function formatDisplayDate(dateStr: string): string {
@@ -57,17 +60,38 @@ function groupByArea(tasks: CompletedAreaTask[]): AreaTaskGroup[] {
   return Array.from(map.values())
 }
 
-const MEETINGS_KEY = (date: string) => `myworker:digest-meetings:${date}`
-
 export default function DailyDigestView() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const today = toLocalDateString(new Date())
-  const [date, setDate] = useState(today)
+  // ?date=YYYY-MM-DD opens a specific day (used by search results and the Tags screen)
+  const [date, setDate] = useState(() => {
+    const d = searchParams.get('date')
+    return d && /^\d{4}-\d{2}-\d{2}$/.test(d) && d <= today ? d : today
+  })
   const [entries, setEntries] = useState<WorkLogEntryWithProject[]>([])
   const [notebooks, setNotebooks] = useState<LinkedNotebookEntry[]>([])
   const [completedTasks, setCompletedTasks] = useState<CompletedAreaTask[]>([])
   const [loading, setLoading] = useState(true)
-  const [meetings, setMeetings] = useState(() => localStorage.getItem(MEETINGS_KEY(toLocalDateString(new Date()))) ?? '')
+  const [meetings, setMeetings] = useState('')
+  // Unsaved journal text, bound to the day it was typed for so a debounced save
+  // can never land on a different day after the date changes.
+  const pendingJournal = useRef<{ date: string; body: string } | null>(null)
+  const journalTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const flushJournal = useCallback(() => {
+    if (journalTimer.current) clearTimeout(journalTimer.current)
+    journalTimer.current = null
+    const pending = pendingJournal.current
+    pendingJournal.current = null
+    if (pending) {
+      saveJournalEntry(pending.date, pending.body)
+        .catch(err => toast.error(`Failed to save journal: ${err instanceof Error ? err.message : String(err)}`))
+    }
+  }, [])
+
+  // Save anything pending when leaving the page
+  useEffect(() => flushJournal, [flushJournal])
   // Entity list so resolved [[wiki links]] in the Journal render blue (live) vs muted (unlinked)
   const wikiEntities = useWikiEntities()
 
@@ -82,12 +106,19 @@ export default function DailyDigestView() {
       setNotebooks(nb)
       setCompletedTasks(ct)
     }).finally(() => setLoading(false))
-    setMeetings(localStorage.getItem(MEETINGS_KEY(date)) ?? '')
-  }, [date])
+    // Save the previous day's pending text first, then load this day's entry
+    flushJournal()
+    let live = true
+    setMeetings('')
+    getJournalEntry(date).then(body => { if (live) setMeetings(body) }).catch(() => {})
+    return () => { live = false }
+  }, [date, flushJournal])
 
   const handleMeetingsChange = (v: string) => {
     setMeetings(v)
-    localStorage.setItem(MEETINGS_KEY(date), v)
+    pendingJournal.current = { date, body: v }
+    if (journalTimer.current) clearTimeout(journalTimer.current)
+    journalTimer.current = setTimeout(flushJournal, 600)
   }
 
   const handleWikiLinkClick = useCallback(async (name: string) => {
@@ -134,6 +165,7 @@ export default function DailyDigestView() {
       <div className="shrink-0 border-b bg-background px-6 py-4 flex items-center gap-3">
         <CalendarDays className="h-5 w-5 text-muted-foreground shrink-0" />
         <h1 className="text-lg font-semibold">Daily Digest</h1>
+        <ReportRangeTabs />
         <div className="flex items-center gap-1 ml-4">
           <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={() => shiftDay(-1)} title="Previous day">
             <ChevronLeft className="h-4 w-4" />
@@ -150,11 +182,7 @@ export default function DailyDigestView() {
             Today
           </Button>
         )}
-        <Button variant="ghost" size="sm" className="ml-auto gap-1.5 text-muted-foreground"
-          onClick={() => navigate('/weekly')}>
-          <FileText className="h-3.5 w-3.5" /> Weekly Report
-        </Button>
-        <span className="text-sm text-muted-foreground">
+        <span className="ml-auto text-sm text-muted-foreground">
           {loading ? '' : !hasActivity ? 'No entries' : summary}
         </span>
       </div>

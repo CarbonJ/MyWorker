@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { toLocalDateString, localToday, localTomorrow, isOverdue, isDueToday, fmtDate, getUpcomingCutoff } from './utils'
+import { toLocalDateString, localToday, localTomorrow, isOverdue, isDueToday, fmtDate, getUpcomingCutoff, nextDayShortcut } from './utils'
 
 function shiftDays(days: number): string {
   const d = new Date()
@@ -73,5 +73,18 @@ describe('getUpcomingCutoff', () => {
     expect(getUpcomingCutoff('1', false, fri)).toBe('2026-11-14')
     expect(getUpcomingCutoff('3', false, fri)).toBe('2026-11-16')
     expect(getUpcomingCutoff('week', false, fri)).toBe('2026-11-20')
+  })
+})
+
+describe('nextDayShortcut', () => {
+  // Business days are the default when the setting has never been saved
+  const store = new Map<string, string>()
+  globalThis.localStorage ??= { getItem: (k: string) => store.get(k) ?? null } as Storage
+
+  it('offers tomorrow mid-week and Monday on a Friday', () => {
+    expect(nextDayShortcut(new Date(2026, 10, 12))).toEqual({ date: '2026-11-13', label: 'Tomorrow' })
+    const fri = nextDayShortcut(new Date(2026, 10, 13))
+    expect(fri.date).toBe('2026-11-16')
+    expect(fri.label).not.toBe('Tomorrow')
   })
 })

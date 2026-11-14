@@ -6,7 +6,9 @@ import {
   CommandGroup, CommandItem, CommandSeparator,
 } from '@/components/ui/command'
 import { getAllProjects } from '@/db/projects'
-import type { Project } from '@/types'
+import { getAllNotebookPages } from '@/db/notebook'
+import { getAllContacts } from '@/db/contacts'
+import type { Project, NotebookPage, Contact } from '@/types'
 import { LayoutDashboard, BarChart2, Archive, Settings, BookOpen, FolderOpen, Plus, ClipboardList, FileText, UserRound, NotebookPen, Hash } from 'lucide-react'
 
 interface Props {
@@ -19,9 +21,14 @@ interface Props {
 export function CommandPalette({ open, onClose, onNewTask, onNewProject }: Props) {
   const navigate = useNavigate()
   const [projects, setProjects] = useState<Project[]>([])
+  const [notes, setNotes] = useState<NotebookPage[]>([])
+  const [contacts, setContacts] = useState<Contact[]>([])
 
   useEffect(() => {
-    if (open) getAllProjects().then(setProjects).catch(() => {})
+    if (!open) return
+    getAllProjects().then(setProjects).catch(() => {})
+    getAllNotebookPages().then(setNotes).catch(() => {})
+    getAllContacts().then(setContacts).catch(() => {})
   }, [open])
 
   const go = (path: string) => { navigate(path); onClose() }
@@ -30,7 +37,7 @@ export function CommandPalette({ open, onClose, onNewTask, onNewProject }: Props
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
       <DialogContent showCloseButton={false} className="p-0 gap-0 max-w-lg overflow-hidden">
         <Command>
-          <CommandInput placeholder="Search projects or jump to…" autoFocus />
+          <CommandInput placeholder="Search projects, notes, contacts or jump to…" autoFocus />
           <CommandList className="max-h-[420px]">
             <CommandEmpty>No results found.</CommandEmpty>
 
@@ -93,6 +100,42 @@ export function CommandPalette({ open, onClose, onNewTask, onNewProject }: Props
                     >
                       <FolderOpen className="text-muted-foreground" />
                       <span className="flex-1 truncate">{p.workItem}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </>
+            )}
+
+            {notes.length > 0 && (
+              <>
+                <CommandSeparator />
+                <CommandGroup heading="Notes">
+                  {notes.map(n => (
+                    <CommandItem
+                      key={n.id}
+                      value={`note ${n.id} ${n.title}`}
+                      onSelect={() => go(`/notebook?page=${n.id}`)}
+                    >
+                      <BookOpen className="text-muted-foreground" />
+                      <span className="flex-1 truncate">{n.title || 'Untitled'}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </>
+            )}
+
+            {contacts.length > 0 && (
+              <>
+                <CommandSeparator />
+                <CommandGroup heading="Contacts">
+                  {contacts.map(c => (
+                    <CommandItem
+                      key={c.id}
+                      value={`contact ${c.id} ${c.name}`}
+                      onSelect={() => go(`/contacts?q=${encodeURIComponent(c.name)}`)}
+                    >
+                      <UserRound className="text-muted-foreground" />
+                      <span className="flex-1 truncate">{c.name}</span>
                     </CommandItem>
                   ))}
                 </CommandGroup>

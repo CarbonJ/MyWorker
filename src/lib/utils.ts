@@ -72,6 +72,20 @@ export function getUpcomingCutoff(mode: UpcomingMode, businessDays: boolean, fro
   return toLocalDateString(d)
 }
 
+/**
+ * The "next day" quick-pick in date pickers. Follows the same business-days
+ * setting as the upcoming filters, so on a Friday it offers Monday rather than
+ * Saturday. `label` is "Tomorrow" when that's what the date is, else the weekday.
+ */
+export function nextDayShortcut(from: Date = new Date()): { date: string; label: string } {
+  const date = getUpcomingCutoff('1', loadUpcomingBusinessDays(), from)
+  const tomorrow = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 1, 12)
+  const label = date === toLocalDateString(tomorrow)
+    ? 'Tomorrow'
+    : new Date(date + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'long' })
+  return { date, label }
+}
+
 /** Returns true if the given due date is strictly before today (overdue). */
 export function isOverdue(dueDate: string | null): boolean {
   if (!dueDate) return false

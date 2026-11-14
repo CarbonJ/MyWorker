@@ -585,6 +585,67 @@ const migrations: Migration[] = [
       END;
     `,
   },
+  {
+    version: 24,
+    up: `
+      -- Daily Digest journal, one entry per calendar day. Previously kept in
+      -- localStorage (myworker:digest-meetings:<date>), where it was invisible
+      -- to search and tags and tied to one browser; existing entries are moved
+      -- over at startup by importLegacyJournal() in journal.ts.
+      CREATE TABLE journal_entries (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        entry_date TEXT NOT NULL UNIQUE,
+        body       TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE TRIGGER journal_entries_updated_at
+      AFTER UPDATE OF body ON journal_entries
+      BEGIN
+        UPDATE journal_entries SET updated_at = datetime('now') WHERE id = NEW.id;
+      END;
+
+      CREATE TRIGGER fts_journal_insert AFTER INSERT ON journal_entries BEGIN
+        INSERT INTO fts_index(content, source_type, source_id, project_id)
+        VALUES (NEW.body, 'journal', NEW.id, 0);
+      END;
+
+      CREATE TRIGGER fts_journal_update AFTER UPDATE OF body ON journal_entries BEGIN
+        DELETE FROM fts_index WHERE source_type = 'journal' AND source_id = OLD.id;
+        INSERT INTO fts_index(content, source_type, source_id, project_id)
+        VALUES (NEW.body, 'journal', NEW.id, 0);
+      END;
+
+      CREATE TRIGGER fts_journal_delete AFTER DELETE ON journal_entries BEGIN
+        DELETE FROM fts_index WHERE source_type = 'journal' AND source_id = OLD.id;
+      END;
+
+      -- Contacts join the search index (they were the one record type left out).
+      CREATE TRIGGER fts_contacts_insert AFTER INSERT ON contacts BEGIN
+        INSERT INTO fts_index(content, source_type, source_id, project_id)
+        VALUES (NEW.name || ' ' || NEW.role || ' ' || NEW.group_name || ' ' || NEW.notes || ' ' || NEW.tags || ' ' || NEW.whos_who,
+                'contact', NEW.id, 0);
+      END;
+
+      CREATE TRIGGER fts_contacts_update
+      AFTER UPDATE OF name, role, group_name, notes, tags, whos_who ON contacts BEGIN
+        DELETE FROM fts_index WHERE source_type = 'contact' AND source_id = OLD.id;
+        INSERT INTO fts_index(content, source_type, source_id, project_id)
+        VALUES (NEW.name || ' ' || NEW.role || ' ' || NEW.group_name || ' ' || NEW.notes || ' ' || NEW.tags || ' ' || NEW.whos_who,
+                'contact', NEW.id, 0);
+      END;
+
+      CREATE TRIGGER fts_contacts_delete AFTER DELETE ON contacts BEGIN
+        DELETE FROM fts_index WHERE source_type = 'contact' AND source_id = OLD.id;
+      END;
+
+      INSERT INTO fts_index(content, source_type, source_id, project_id)
+      SELECT name || ' ' || role || ' ' || group_name || ' ' || notes || ' ' || tags || ' ' || whos_who,
+             'contact', id, 0
+      FROM contacts;
+    `,
+  },
 ]
 
 export async function runMigrations(handle: DbHandle): Promise<void> {

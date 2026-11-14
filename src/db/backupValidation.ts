@@ -21,6 +21,8 @@ export interface ExportData {
   contacts?: Record<string, unknown>[]
   notebookPages?: Record<string, unknown>[]
   savedViews?: Record<string, unknown>[]
+  /** Daily Digest journal (added after v2 shipped; absent from older v2 files). */
+  journalEntries?: Record<string, unknown>[]
   /** myworker:* localStorage keys (UI prefs, filters, digest meeting notes). */
   localPrefs?: Record<string, string>
 }
@@ -53,7 +55,7 @@ export function validateBackupData(raw: unknown): ExportData {
   }
   const optionalArrayKeys = [
     'dropdownOptions', 'workLogEntries', 'tasks',
-    'contacts', 'notebookPages', 'savedViews',
+    'contacts', 'notebookPages', 'savedViews', 'journalEntries',
   ] as const
   for (const key of optionalArrayKeys) {
     if (data[key] !== undefined && !Array.isArray(data[key])) {
@@ -142,5 +144,11 @@ export function validateBackupData(raw: unknown): ExportData {
       throw new Error(`savedViews[${i}]: data must be a string`)
   }
 
+  for (const [i, j] of (data.journalEntries ?? []).entries()) {
+    if (typeof j.entry_date !== 'string' || !ISO_DATE_RE.test(j.entry_date))
+      throw new Error(`journalEntries[${i}]: entry_date must be a YYYY-MM-DD date string`)
+    if (typeof j.body !== 'string')
+      throw new Error(`journalEntries[${i}]: body must be a string`)
+  }
   return data
 }

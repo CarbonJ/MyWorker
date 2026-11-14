@@ -27,7 +27,6 @@ interface DataStats {
   dbSizeMb: string
 }
 
-const AREA_BTN_KEY          = 'myworker:area-filter-buttons'
 const AREA_BTN_PROJECTS_KEY = 'myworker:area-filter-buttons-projects'
 
 export default function Settings() {
@@ -66,18 +65,10 @@ export default function Settings() {
       setScanningAssets(false)
     }
   }
-  const [areaFilterButtons, setAreaFilterButtons] = useState(
-    () => localStorage.getItem(AREA_BTN_KEY) === 'true'
-  )
   // Area filter buttons on Projects screen — defaults to true (enabled)
   const [areaFilterButtonsProjects, setAreaFilterButtonsProjects] = useState(
     () => localStorage.getItem(AREA_BTN_PROJECTS_KEY) !== 'false'
   )
-
-  const toggleAreaFilterButtons = (checked: boolean) => {
-    setAreaFilterButtons(checked)
-    localStorage.setItem(AREA_BTN_KEY, String(checked))
-  }
 
   const toggleAreaFilterButtonsProjects = (checked: boolean) => {
     setAreaFilterButtonsProjects(checked)
@@ -291,16 +282,6 @@ export default function Settings() {
                   />
                   <label htmlFor="area-filter-buttons-projects" className="text-sm cursor-pointer select-none text-muted-foreground">
                     Show area filter as buttons on the Projects screen
-                  </label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="area-filter-buttons"
-                    checked={areaFilterButtons}
-                    onCheckedChange={v => toggleAreaFilterButtons(v === true)}
-                  />
-                  <label htmlFor="area-filter-buttons" className="text-sm cursor-pointer select-none text-muted-foreground">
-                    Show area filter as buttons on the Tasks screen
                   </label>
                 </div>
                 <div className="flex items-center gap-2">

@@ -4,7 +4,8 @@
  * Shows the chronological list of work log entries (newest first) and
  * an inline form to add new entries. Each entry has a pencil icon that
  * switches it to edit mode; the created_at timestamp is preserved on save.
- * Entries can also be deleted via the trash icon.
+ * Entries can also be deleted via the trash icon. App-written task status
+ * lines (started / completed / reopened) are hidden unless the filter is off.
  */
 
 import { useState, useEffect, useMemo } from 'react'
@@ -117,7 +118,7 @@ export function WorkLogPane({ projectId, projectName, workLog, notebookRefs = []
           <button
             onClick={() => setFilterCompleted(f => !f)}
             className={`p-0.5 rounded transition-colors ${filterCompleted ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-            title={filterCompleted ? 'Showing manual entries only (click to show all)' : 'Showing all entries (click to hide task completions)'}
+            title={filterCompleted ? 'Showing manual entries only (click to show all)' : 'Showing all entries (click to hide task status updates)'}
           >
             <Filter className="h-3.5 w-3.5" />
           </button>
@@ -162,7 +163,7 @@ export function WorkLogPane({ projectId, projectName, workLog, notebookRefs = []
           <p className="px-4 py-6 text-sm text-muted-foreground text-center">No entries match your search.</p>
         )}
         {mergedItems.length > 0 && visibleItems.length === 0 && searchTerms.length === 0 && (
-          <p className="px-4 py-6 text-sm text-muted-foreground text-center">All entries are task completions. Click the filter button to show them.</p>
+          <p className="px-4 py-6 text-sm text-muted-foreground text-center">All entries are task status updates. Click the filter button to show them.</p>
         )}
         {visibleItems.map((item, index) => {
           if (item.kind === 'note') {

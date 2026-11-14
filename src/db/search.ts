@@ -7,7 +7,7 @@ import {
   SNIPPET_MARK_END,
 } from '@/lib/searchQuery'
 
-export type SearchSourceType = 'project' | 'task' | 'work_log' | 'notebook'
+export type SearchSourceType = 'project' | 'task' | 'work_log' | 'notebook' | 'contact' | 'journal'
 
 export interface SearchResult {
   sourceType: SearchSourceType
@@ -28,7 +28,8 @@ export interface EnrichedSearchResult extends SearchResult {
 }
 
 /**
- * Full-text search across projects, tasks, and work log entries.
+ * Full-text search across projects, tasks, work log entries, notebook pages,
+ * contacts and Daily Digest journal entries.
  *
  * Supports:
  *   - Partial prefix matching: "repo" matches "report", "reporting"
@@ -79,7 +80,8 @@ export async function searchProjectIds(rawQuery: string): Promise<number[]> {
   const seen = new Set<number>()
   const ids: number[] = []
   for (const r of results) {
-    if (r.sourceType === 'notebook') continue
+    // Notes, contacts and journal entries don't belong to a project (project_id 0)
+    if (!(r.projectId > 0)) continue
     if (!seen.has(r.projectId)) {
       seen.add(r.projectId)
       ids.push(r.projectId)
@@ -182,6 +184,26 @@ export async function searchEnriched(
     wRows.forEach(r => wlMap.set(r.id as number, r))
   }
 
+  const contactIds = results.filter(r => r.sourceType === 'contact').map(r => r.sourceId)
+  const contactMap = new Map<number, string>()
+  if (contactIds.length > 0) {
+    const cRows = await query(
+      `SELECT id, name FROM contacts WHERE id IN (${contactIds.map(() => '?').join(', ')})`,
+      contactIds,
+    )
+    cRows.forEach(r => contactMap.set(r.id as number, r.name as string))
+  }
+
+  const journalIds = results.filter(r => r.sourceType === 'journal').map(r => r.sourceId)
+  const journalMap = new Map<number, string>()
+  if (journalIds.length > 0) {
+    const jRows = await query(
+      `SELECT id, entry_date FROM journal_entries WHERE id IN (${journalIds.map(() => '?').join(', ')})`,
+      journalIds,
+    )
+    jRows.forEach(r => journalMap.set(r.id as number, r.entry_date as string))
+  }
+
   const notebookMap = new Map<number, string>()
   if (notebookIds.length > 0) {
     const nbRows = await query(
@@ -219,6 +241,13 @@ export async function searchEnriched(
         title: notebookMap.get(r.sourceId) ?? 'Notebook Page',
         projectName: '',
       }
+    }
+    if (r.sourceType === 'contact') {
+      return { ...r, title: contactMap.get(r.sourceId) ?? 'Contact', projectName: '' }
+    }
+    if (r.sourceType === 'journal') {
+      // title is the entry's YYYY-MM-DD date
+      return { ...r, title: journalMap.get(r.sourceId) ?? '', projectName: '' }
     }
     // work_log
     const wl = wlMap.get(r.sourceId)

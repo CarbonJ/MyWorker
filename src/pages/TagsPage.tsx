@@ -9,7 +9,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Hash, Search, X, Pencil, Trash2, FolderKanban, CheckSquare, ScrollText, BookOpen, UserRound } from 'lucide-react'
+import { Hash, Search, X, Pencil, Trash2, FolderKanban, CheckSquare, ScrollText, BookOpen, UserRound, CalendarDays } from 'lucide-react'
 import { getTagUsage, renameTag, deleteTag, type TagUsage, type TagRef, type TagSourceType } from '@/db/tags'
 import { tagKey, isHashtagName } from '@/lib/tags'
 import { Button } from '@/components/ui/button'
@@ -21,11 +21,14 @@ const GROUPS: { type: TagSourceType; label: string; icon: typeof Hash }[] = [
   { type: 'task', label: 'Tasks', icon: CheckSquare },
   { type: 'worklog', label: 'Work log', icon: ScrollText },
   { type: 'note', label: 'Notes', icon: BookOpen },
+  { type: 'journal', label: 'Journal', icon: CalendarDays },
   { type: 'contact', label: 'Contacts', icon: UserRound },
 ]
 
 function fmtWhen(date: string): string {
   if (!date) return ''
+  // Journal entries carry a bare YYYY-MM-DD date
+  if (date.length === 10) return new Date(date + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
   return new Date(date.replace(' ', 'T').replace(/([^Z])$/, '$1Z')).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
@@ -123,6 +126,7 @@ export default function TagsPage() {
       case 'worklog': return navigate(`/projects/${ref.projectId}`)
       case 'task': return navigate(ref.projectId ? `/projects/${ref.projectId}` : `/search?q=${encodeURIComponent(ref.title)}`)
       case 'note': return navigate(`/notebook?page=${ref.id}`)
+      case 'journal': return navigate(`/digest?date=${ref.title}`)
       case 'contact': return navigate(`/contacts?q=${encodeURIComponent(ref.title)}`)
     }
   }

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Search, FolderKanban, CheckSquare, ScrollText, BookOpen, ChevronDown, ChevronRight } from 'lucide-react'
+import { Search, FolderKanban, CheckSquare, ScrollText, BookOpen, ChevronDown, ChevronRight, UserRound, CalendarDays } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { MultiSelectFilter } from '@/components/ui/MultiSelectFilter'
 import { searchEnriched } from '@/db/search'
@@ -58,6 +58,8 @@ interface GroupState {
   task: boolean
   work_log: boolean
   notebook: boolean
+  contact: boolean
+  journal: boolean
 }
 
 export default function SearchPage() {
@@ -75,7 +77,7 @@ export default function SearchPage() {
   })
   const [results, setResults] = useState<EnrichedSearchResult[]>([])
   const [loading, setLoading] = useState(false)
-  const [collapsed, setCollapsed] = useState<GroupState>({ projects: false, task: false, work_log: false, notebook: false })
+  const [collapsed, setCollapsed] = useState<GroupState>({ projects: false, task: false, work_log: false, notebook: false, contact: false, journal: false })
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -122,9 +124,52 @@ export default function SearchPage() {
     r.sourceType === 'task' && (!r.taskStatus || taskStatuses.includes(r.taskStatus)))
   const workLog   = results.filter(r => r.sourceType === 'work_log')
   const notebooks = results.filter(r => r.sourceType === 'notebook')
+  const contacts  = results.filter(r => r.sourceType === 'contact')
+  const journal   = results.filter(r => r.sourceType === 'journal')
 
   const toggleGroup = (key: keyof GroupState) =>
     setCollapsed(s => ({ ...s, [key]: !s[key] }))
+
+  /** A result group whose rows are just a title + snippet (contacts, journal). */
+  const simpleGroup = (
+    key: 'contact' | 'journal',
+    label: string,
+    Icon: typeof BookOpen,
+    items: EnrichedSearchResult[],
+    titleOf: (r: EnrichedSearchResult) => string,
+    open: (r: EnrichedSearchResult) => void,
+  ) => (scope === 'all' || scope === key) && items.length > 0 && (
+    <div>
+      <button
+        type="button"
+        onClick={() => toggleGroup(key)}
+        className="w-full flex items-center gap-2 px-6 py-2 bg-muted/40 hover:bg-muted/60 transition-colors"
+      >
+        {collapsed[key] ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+        <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{label}</span>
+        <span className="text-xs text-muted-foreground ml-1">({items.length})</span>
+      </button>
+      {!collapsed[key] && (
+        <div className="divide-y divide-border/50">
+          {items.map(r => (
+            <button
+              key={`${key}-${r.sourceId}`}
+              type="button"
+              onClick={() => open(r)}
+              className="w-full flex items-start gap-3 px-6 py-3 hover:bg-accent/50 transition-colors group text-left"
+            >
+              <Icon className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <span className="text-sm font-medium group-hover:text-primary transition-colors block">{titleOf(r)}</span>
+                <Snippet text={r.snippet} />
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 
   const scopeBtn = (label: string, value: ScopeFilter, count?: number) => (
     <button
@@ -172,6 +217,8 @@ export default function SearchPage() {
           {scopeBtn('Tasks', 'task', tasks.length)}
           {scopeBtn('Work Log', 'work_log', workLog.length)}
           {scopeBtn('Notebook', 'notebook', notebooks.length)}
+          {scopeBtn('Contacts', 'contact', contacts.length)}
+          {scopeBtn('Journal', 'journal', journal.length)}
           {(scope === 'all' || scope === 'task') && (
             <MultiSelectFilter
               options={[
@@ -368,6 +415,13 @@ export default function SearchPage() {
                 )}
               </div>
             )}
+
+            {simpleGroup('contact', 'Contacts', UserRound, contacts,
+              r => r.title, r => navigate(`/contacts?q=${encodeURIComponent(r.title)}`))}
+
+            {simpleGroup('journal', 'Journal', CalendarDays, journal,
+              r => r.title ? new Date(r.title + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : 'Journal',
+              r => navigate(`/digest?date=${r.title}`))}
           </div>
         )}
       </div>

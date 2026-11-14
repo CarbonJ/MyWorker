@@ -1,4 +1,5 @@
 import { query, run, insert } from './index'
+import { addWorkLogEntry } from './workLog'
 import { parseTags, stringifyTags } from '@/lib/tags'
 import type { Task, TaskStatus } from '@/types'
 
@@ -217,4 +218,31 @@ export async function restoreTasksByProject(projectId: number): Promise<void> {
        AND pre_archive_status IS NOT NULL`,
     [projectId],
   )
+}
+
+/**
+ * Record a task's status change in its project's work log (as a system entry).
+ * The one place these lines are written, so every way of changing a status —
+ * the status circle, the Edit Task form, the recurring-task prompt — logs the
+ * same thing:
+ *   → in progress      "▶ Started: <title>"
+ *   → done             "✓ Completed: <title>"
+ *   done → open        "↩ Reopened: <title>"
+ * `detail` is appended to the line (e.g. a recurring task's next due date).
+ * Tasks without a project have no work log; returns whether a line was written.
+ */
+export async function logTaskStatusChange(
+  task: Pick<Task, 'projectId' | 'title'>,
+  from: TaskStatus,
+  to: TaskStatus,
+  detail = '',
+): Promise<boolean> {
+  if (!task.projectId || from === to) return false
+  const label =
+    to === 'in_progress' ? '▶ Started' :
+    to === 'done' ? '✓ Completed' :
+    from === 'done' ? '↩ Reopened' : null
+  if (!label) return false
+  await addWorkLogEntry(task.projectId, `${label}: ${task.title}${detail}`, true)
+  return true
 }

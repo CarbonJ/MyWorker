@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label'
 import { MarkdownField } from '@/components/MarkdownField'
 import { Calendar } from '@/components/ui/calendar'
 import { RefreshCw } from 'lucide-react'
-import { toLocalDateString } from '@/lib/utils'
+import { toLocalDateString, nextDayShortcut } from '@/lib/utils'
 
 interface Props {
   task: Task
@@ -92,7 +92,7 @@ export function RecurringCompleteDialog({ task, open, onReschedule, onMarkDone, 
               <div className="border-t px-3 py-2 flex gap-2">
                 <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setSelectedDate(undefined)}>Clear</button>
                 <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setSelectedDate(new Date())}>Today</button>
-                <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setSelectedDate(new Date(Date.now() + 86400000))}>Tomorrow</button>
+                <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => setSelectedDate(new Date(nextDayShortcut().date + 'T12:00:00'))}>{nextDayShortcut().label}</button>
               </div>
             </div>
           </div>

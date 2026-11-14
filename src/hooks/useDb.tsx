@@ -19,6 +19,7 @@ import {
 } from 'react'
 import { initDb, setUserFolderHandle, checkFolderSync, resolveFolderConflict, type FolderConflict, type DataCounts } from '@/db'
 import { rebuildAllLinks } from '@/db/notebook'
+import { importLegacyJournal } from '@/db/journal'
 
 type DbStatus = 'loading' | 'needs-folder' | 'folder-conflict' | 'ready' | 'error' | 'unsupported'
 
@@ -85,7 +86,9 @@ export function DbProvider({ children }: { children: ReactNode }) {
   const [conflict, setConflict] = useState<FolderConflict | null>(null)
   const [resolving, setResolving] = useState(false)
 
-  const finishStartup = useCallback(() => {
+  const finishStartup = useCallback(async () => {
+    // Move journal text older versions kept in localStorage into the database
+    await importLegacyJournal().catch(err => console.warn('[db] importLegacyJournal:', err))
     // Re-index notebook backlinks on every startup — fast and idempotent,
     // ensures stale link data from earlier bugs is corrected before any page renders.
     rebuildAllLinks().catch(err => console.warn('[db] rebuildAllLinks:', err))
@@ -104,7 +107,7 @@ export function DbProvider({ children }: { children: ReactNode }) {
         setStatus('folder-conflict')
         return
       }
-      finishStartup()
+      await finishStartup()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       setStatus('error')
@@ -116,7 +119,7 @@ export function DbProvider({ children }: { children: ReactNode }) {
     try {
       await resolveFolderConflict(choice)
       setConflict(null)
-      finishStartup()
+      await finishStartup()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       setStatus('error')

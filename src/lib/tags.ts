@@ -121,3 +121,18 @@ export function replaceInTagList(tags: string[], name: string, replacement: stri
   }
   return out
 }
+
+/**
+ * Every tag on a record: its tag field plus any #tags written inline in its
+ * text fields, de-duplicated case-insensitively (first spelling wins).
+ */
+export function collectTags(fieldTags: string[], ...texts: (string | null | undefined)[]): string[] {
+  const seen = new Map<string, string>()
+  const add = (name: string) => {
+    const key = tagKey(name)
+    if (key && !seen.has(key)) seen.set(key, name.trim())
+  }
+  fieldTags.forEach(add)
+  for (const text of texts) if (text) extractHashtags(text).forEach(add)
+  return [...seen.values()]
+}

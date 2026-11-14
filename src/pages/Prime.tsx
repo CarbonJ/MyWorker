@@ -3,8 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { getAllProjects, updateProject } from '@/db/projects'
 import { getDropdownOptions } from '@/db/dropdownOptions'
-import { getAllTasks, getTaskById, updateTask } from '@/db/tasks'
-import { getLatestWorkLogPerProject, addWorkLogEntry } from '@/db/workLog'
+import { getAllTasks, getTaskById, updateTask, logTaskStatusChange } from '@/db/tasks'
+import { getLatestWorkLogPerProject } from '@/db/workLog'
 import { getSavedViewsForPage, upsertSavedView, deleteSavedView } from '@/db/savedViews'
 import type { Project, DropdownOption, RagStatus, Task, WorkLogEntry, TaskStatus } from '@/types'
 import { RagBadge } from '@/components/RagBadge'
@@ -16,7 +16,8 @@ import { Calendar } from '@/components/ui/calendar'
 import { Check, Bookmark, X as XIcon, ChevronDown } from 'lucide-react'
 import { pillClass, dotClass, dotOnPillClass, pillClassActive, RAG_ORDER, RAG_OPTIONS, PILL_DIMMED_CLASS } from '@/lib/colors'
 import { loadGuiSettings, buttonStyle, workItemStyle } from '@/lib/guiSettings'
-import { fmtDate, dueDateTextClass, localToday, toLocalDateString, getUpcomingCutoff, loadUpcomingBusinessDays, type UpcomingMode } from '@/lib/utils'
+import { collectTags, tagKey } from '@/lib/tags'
+import { fmtDate, dueDateTextClass, localToday, toLocalDateString, getUpcomingCutoff, loadUpcomingBusinessDays, type UpcomingMode, nextDayShortcut } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { useDataLoader } from '@/hooks/useDataLoader'
 import { SplitPane } from '@/components/project/SplitPane'
@@ -74,6 +75,11 @@ function TaskStatusDot({ status, size = 'sm' }: { status: TaskStatus; size?: 'sm
   )
   return <span className={`${dim} border-2 border-slate-300 dark:border-slate-600 flex shrink-0`} />
 }
+
+// A record's tags for filtering: its tag field plus #tags written in its text,
+// so the filter agrees with the Tags screen.
+const projectTags = (p: Project) => collectTags(p.tags, p.workDescription, p.latestStatus)
+const taskTags = (t: Task) => collectTags(t.tags, t.description, t.notes)
 
 export default function Prime() {
   const navigate = useNavigate()
@@ -384,7 +390,7 @@ export default function Prime() {
       }
       // Tag filter
       if (tagFilters.length > 0) {
-        list = list.filter(t => tagFilters.some(tf => t.tags.some(tag => tag.toLowerCase() === tf.toLowerCase())))
+        list = list.filter(t => tagFilters.some(tf => taskTags(t).some(tag => tagKey(tag) === tagKey(tf))))
       }
     }
 
@@ -436,8 +442,8 @@ export default function Prime() {
       if (tagFilters.length > 0)      list = list.filter(p => {
         const projectTasks = tasksByProject.get(p.id) ?? []
         return tagFilters.some(tf =>
-          p.tags.some(t => t.toLowerCase() === tf.toLowerCase()) ||
-          projectTasks.some(task => task.tags.some(t => t.toLowerCase() === tf.toLowerCase()))
+          projectTags(p).some(t => tagKey(t) === tagKey(tf)) ||
+          projectTasks.some(task => taskTags(task).some(t => tagKey(t) === tagKey(tf)))
         )
       })
     }
@@ -499,12 +505,7 @@ export default function Prime() {
       return
     }
     await updateTask({ id: t.id, status: next })
-    if (next === 'done' && t.projectId) {
-      await addWorkLogEntry(t.projectId, `✓ Completed: ${t.title}`, true)
-      // Full reload needed to refresh latestLogByProject after the work log entry is added
-      reload()
-      return
-    }
+    await logTaskStatusChange(t, t.status, next)
     patchData(prev => ({ ...prev, allTasks: prev.allTasks.map(task => task.id === t.id ? { ...task, status: next } : task) }))
   }
 
@@ -512,10 +513,8 @@ export default function Prime() {
     if (!recurringTask) return
     try {
       await updateTask({ id: recurringTask.id, status: 'open', dueDate: newDueDate })
-      if (recurringTask.projectId) {
-        const logNote = `✓ Completed: ${recurringTask.title}. Next due: ${fmtDate(newDueDate)}${note ? `. ${note}` : ''}`
-        await addWorkLogEntry(recurringTask.projectId, logNote, true)
-      }
+      await logTaskStatusChange(recurringTask, recurringTask.status, 'done',
+        `. Next due: ${fmtDate(newDueDate)}${note ? `. ${note}` : ''}`)
       reload()
     } finally {
       setRecurringTask(null)
@@ -526,6 +525,7 @@ export default function Prime() {
     if (!recurringTask) return
     try {
       await updateTask({ id: recurringTask.id, status: 'done', isRecurring: false })
+      await logTaskStatusChange(recurringTask, recurringTask.status, 'done')
       reload()
     } finally {
       setRecurringTask(null)
@@ -607,12 +607,13 @@ export default function Prime() {
     setSavedViews(prev => prev.filter(v => v.name !== name))
   }
 
-  // All unique tags from projects + tasks — for the tags filter dropdown
+  // All unique tags from projects + tasks (tag fields and inline #tags) — for the tags filter dropdown
   const allProjectTags = useMemo(() => {
-    const tagSet = new Set<string>()
-    for (const p of projects) for (const t of p.tags) tagSet.add(t)
-    for (const t of allTasks)  for (const tag of t.tags) tagSet.add(tag)
-    return [...tagSet].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+    const byKey = new Map<string, string>()
+    const add = (tag: string) => { if (!byKey.has(tagKey(tag))) byKey.set(tagKey(tag), tag) }
+    for (const p of projects) projectTags(p).forEach(add)
+    for (const t of allTasks) taskTags(t).forEach(add)
+    return [...byKey.values()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
   }, [projects, allTasks])
 
   const projectsWithTasks = filteredProjects.filter(p => (tasksByProject.get(p.id)?.length ?? 0) > 0)
@@ -1296,7 +1297,7 @@ function ProjectRows({ p, ctx }: { p: Project; ctx: ProjectRowsCtx }) {
                   <div className="border-t px-3 py-2 flex gap-2">
                     <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => { saveDueDate(t, undefined); setOpenDueDatePopover(null) }}>Clear</button>
                     <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => { saveDueDate(t, new Date()); setOpenDueDatePopover(null) }}>Today</button>
-                    <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => { saveDueDate(t, new Date(Date.now() + 86400000)); setOpenDueDatePopover(null) }}>Tomorrow</button>
+                    <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => { saveDueDate(t, new Date(nextDayShortcut().date + 'T12:00:00')); setOpenDueDatePopover(null) }}>{nextDayShortcut().label}</button>
                   </div>
                 </PopoverContent>
               </Popover>
@@ -1488,7 +1489,7 @@ function GeneralTaskRow({ t, ctx }: { t: Task; ctx: GeneralTaskRowCtx }) {
               <div className="border-t px-3 py-2 flex gap-2">
                 <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => { saveDueDate(t, undefined); setDueDateOpen(false) }}>Clear</button>
                 <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => { saveDueDate(t, new Date()); setDueDateOpen(false) }}>Today</button>
-                <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => { saveDueDate(t, new Date(Date.now() + 86400000)); setDueDateOpen(false) }}>Tomorrow</button>
+                <button className="text-xs text-muted-foreground hover:text-foreground flex-1 text-center" onClick={() => { saveDueDate(t, new Date(nextDayShortcut().date + 'T12:00:00')); setDueDateOpen(false) }}>{nextDayShortcut().label}</button>
               </div>
             </PopoverContent>
           </Popover>

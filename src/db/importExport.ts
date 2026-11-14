@@ -31,6 +31,7 @@
 
 import { exec, getDb, persistToUserFolder, snapshotUserData } from './index'
 import { rebuildAllLinks } from './notebook'
+import { importLegacyJournal } from './journal'
 import { validateBackupData } from './backupValidation'
 import { localToday } from '@/lib/utils'
 
@@ -79,6 +80,7 @@ export async function restoreFromData(raw: unknown): Promise<void> {
     if (data.contacts) await exec(sqlite, db, 'DELETE FROM contacts')
     if (data.notebookPages) await exec(sqlite, db, 'DELETE FROM notebook_pages')
     if (data.savedViews) await exec(sqlite, db, 'DELETE FROM saved_views')
+    if (data.journalEntries) await exec(sqlite, db, 'DELETE FROM journal_entries')
 
     // Restore dropdown options first (projects reference them)
     for (const opt of data.dropdownOptions ?? []) {
@@ -192,6 +194,20 @@ export async function restoreFromData(raw: unknown): Promise<void> {
       )
     }
 
+    // Restore Daily Digest journal entries
+    for (const j of data.journalEntries ?? []) {
+      await exec(sqlite, db,
+        `INSERT INTO journal_entries (id, entry_date, body, created_at, updated_at)
+         VALUES (?, ?, ?, COALESCE(?, datetime('now')), COALESCE(?, datetime('now')))`,
+        [
+          (j.id as number | null) ?? null,
+          j.entry_date as string, j.body as string,
+          (j.created_at as string | null) ?? null,
+          (j.updated_at as string | null) ?? null,
+        ],
+      )
+    }
+
     // Pre-v2 backup: clear the one-time seed flag so the next startup re-derives
     // contact names from the restored projects' stakeholder lists.
     if (!data.contacts) {
@@ -224,6 +240,16 @@ export async function restoreFromData(raw: unknown): Promise<void> {
       INSERT INTO fts_index (content, source_type, source_id, project_id)
       SELECT title || ' ' || body, 'notebook', id, 0 FROM notebook_pages
     `)
+    await exec(sqlite, db, `
+      INSERT INTO fts_index (content, source_type, source_id, project_id)
+      SELECT body, 'journal', id, 0 FROM journal_entries
+    `)
+    await exec(sqlite, db, `
+      INSERT INTO fts_index (content, source_type, source_id, project_id)
+      SELECT name || ' ' || role || ' ' || group_name || ' ' || notes || ' ' || tags || ' ' || whos_who,
+             'contact', id, 0
+      FROM contacts
+    `)
 
     await exec(sqlite, db, 'COMMIT')
   } catch (err) {
@@ -240,6 +266,9 @@ export async function restoreFromData(raw: unknown): Promise<void> {
       }
     }
   }
+
+  // Older backups carry journal text as localStorage prefs — move it into the table.
+  await importLegacyJournal()
 
   // Regenerate notebook_links from the (possibly restored) note bodies.
   await rebuildAllLinks()
