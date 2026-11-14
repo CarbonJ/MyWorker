@@ -296,24 +296,24 @@ export function ProjectHeader({
                 </span>
               )
             })()}
-          </div>
 
-          {project.stakeholders.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 items-center">
-              <span className="font-medium text-foreground text-sm">Stakeholders:</span>
-              {project.stakeholders.map((s, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => navigate(`/contacts?q=${encodeURIComponent(s.name)}`)}
-                  className="bg-white border rounded-full px-2.5 py-0.5 text-xs text-slate-900 shadow-sm hover:bg-slate-50 hover:border-slate-400 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 dark:hover:bg-slate-700 dark:hover:border-slate-500 transition-colors cursor-pointer"
-                  title={`View contact: ${s.name}`}
-                >
-                  {s.name}
-                </button>
-              ))}
-            </div>
-          )}
+            {project.stakeholders.length > 0 && (
+              <div className="contents">
+                <span className="font-medium text-foreground text-sm ml-2">Stakeholders:</span>
+                {project.stakeholders.map((s, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => navigate(`/contacts?q=${encodeURIComponent(s.name)}`)}
+                    className="bg-white border rounded-full px-2.5 py-0.5 text-xs text-slate-900 shadow-sm hover:bg-slate-50 hover:border-slate-400 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 dark:hover:bg-slate-700 dark:hover:border-slate-500 transition-colors cursor-pointer"
+                    title={`View contact: ${s.name}`}
+                  >
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           {project.tags.length > 0 && (
             <div className="flex flex-wrap gap-1">
