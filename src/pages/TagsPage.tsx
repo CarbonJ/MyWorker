@@ -9,7 +9,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Hash, Search, X, Pencil, Trash2, FolderKanban, CheckSquare, ScrollText, BookOpen, UserRound, CalendarDays } from 'lucide-react'
+import { Hash, Search, X, Pencil, Trash2, ArrowDown, ArrowUp, FolderKanban, CheckSquare, ScrollText, BookOpen, UserRound, CalendarDays } from 'lucide-react'
 import { getTagUsage, renameTag, deleteTag, type TagUsage, type TagRef, type TagSourceType } from '@/db/tags'
 import { tagKey, isHashtagName } from '@/lib/tags'
 import { recordRoute } from '@/lib/refRoutes'
@@ -26,6 +26,17 @@ const GROUPS: { type: TagSourceType; label: string; icon: typeof Hash }[] = [
   { type: 'contact', label: 'Contacts', icon: UserRound },
 ]
 
+type TagSort = { by: 'count' | 'name'; dir: 'asc' | 'desc' }
+const SORT_KEY = 'myworker:tags-sort'
+
+function loadSort(): TagSort {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SORT_KEY) ?? 'null')
+    if ((saved?.by === 'count' || saved?.by === 'name') && (saved?.dir === 'asc' || saved?.dir === 'desc')) return saved
+  } catch { /* fall through to the default */ }
+  return { by: 'count', dir: 'desc' }
+}
+
 function fmtWhen(date: string): string {
   if (!date) return ''
   // Journal entries carry a bare YYYY-MM-DD date
@@ -40,6 +51,17 @@ export default function TagsPage() {
 
   const [tags, setTags] = useState<TagUsage[] | null>(null)
   const [filter, setFilter] = useState('')
+  const [sort, setSort] = useState<TagSort>(loadSort)
+
+  // Clicking the active sort flips its direction; switching starts from the
+  // natural direction for that column (most-used first, or A→Z).
+  const sortBy = (by: TagSort['by']) => {
+    const next: TagSort = sort.by === by
+      ? { by, dir: sort.dir === 'asc' ? 'desc' : 'asc' }
+      : { by, dir: by === 'count' ? 'desc' : 'asc' }
+    setSort(next)
+    localStorage.setItem(SORT_KEY, JSON.stringify(next))
+  }
   const [renameOpen, setRenameOpen] = useState(false)
   const [renameDraft, setRenameDraft] = useState('')
   const [busy, setBusy] = useState(false)
@@ -56,8 +78,15 @@ export default function TagsPage() {
 
   const visibleTags = useMemo(() => {
     const q = tagKey(filter.replace(/^#/, ''))
-    return (tags ?? []).filter(t => !q || t.key.includes(q))
-  }, [tags, filter])
+    const byName = (a: TagUsage, b: TagUsage) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+    const flip = sort.dir === 'asc' ? 1 : -1
+    return (tags ?? [])
+      .filter(t => !q || t.key.includes(q))
+      // Count ties always fall back to A→Z so the order is stable
+      .sort((a, b) => sort.by === 'name'
+        ? flip * byName(a, b)
+        : flip * (a.refs.length - b.refs.length) || byName(a, b))
+  }, [tags, filter, sort])
 
   const selected = tags?.find(t => t.key === selectedKey) ?? null
   const usedInline = !!selected?.refs.some(r => r.snippet !== null)
@@ -145,6 +174,20 @@ export default function TagsPage() {
                 <X className="h-3.5 w-3.5" />
               </button>
             )}
+          </div>
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            {(['name', 'count'] as const).map(by => (
+              <button
+                key={by}
+                type="button"
+                onClick={() => sortBy(by)}
+                title={`Sort by ${by}`}
+                className={`flex items-center gap-0.5 hover:text-foreground transition-colors ${sort.by === by ? 'text-foreground font-medium' : ''}`}
+              >
+                {by === 'name' ? 'Name' : 'Count'}
+                {sort.by === by && (sort.dir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)}
+              </button>
+            ))}
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
