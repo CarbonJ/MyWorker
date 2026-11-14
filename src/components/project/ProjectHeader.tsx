@@ -126,7 +126,7 @@ export function ProjectHeader({
         </div>
       )}
 
-      <div className="grid grid-cols-[1fr_1fr_11rem] gap-3">
+      <div className="grid grid-cols-[minmax(0,3fr)_minmax(0,4fr)_26rem] gap-3">
 
         {/* LEFT: Work Item + Description */}
         <div className="min-w-0 space-y-1.5 border rounded-lg p-2.5">

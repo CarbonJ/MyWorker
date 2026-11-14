@@ -47,15 +47,20 @@ export function ProjectStats({ tasks, project }: Props) {
   const updated = daysAgo(project.updatedAt)
 
   return (
-    <div className="space-y-1.5 border rounded-lg p-2.5 text-xs">
+    <div className="self-start flex gap-3 border rounded-lg p-2.5 text-xs">
 
       {/* ── Task summary ─────────────────────────────────────────── */}
-      <div className="space-y-1">
-        <div className="flex items-center justify-between">
+      <div className="flex-1 min-w-0 space-y-1">
+        <div className="flex items-center justify-between gap-2">
           <span className="font-medium text-foreground">Tasks</span>
-          {total > 0 && (
-            <span className="text-xs text-muted-foreground">{completionPct}% done</span>
-          )}
+          <span className="flex items-center gap-2">
+            {overdue > 0 && (
+              <span className="text-red-600 dark:text-red-400 font-medium">⚠ {overdue} overdue</span>
+            )}
+            {total > 0 && (
+              <span className="text-muted-foreground">{completionPct}% done</span>
+            )}
+          </span>
         </div>
 
         {/* Segmented bar */}
@@ -79,26 +84,19 @@ export function ProjectStats({ tasks, project }: Props) {
         ) : (
           <p className="text-muted-foreground italic">No tasks yet</p>
         )}
-
-        {/* Overdue */}
-        {overdue > 0 && (
-          <p className="text-red-600 dark:text-red-400 font-medium">⚠ {overdue} overdue</p>
-        )}
       </div>
 
-      <div className="border-t" />
-
       {/* ── Timeline ─────────────────────────────────────────────── */}
-      <div className="space-y-0.5">
-        <div className="flex justify-between gap-2">
-          <span className="text-muted-foreground shrink-0">Created</span>
-          <span className="font-medium text-foreground text-right" title={age <= 0 ? 'Today' : `${age} days old`}>
+      <div className="shrink-0 border-l pl-3 space-y-1 whitespace-nowrap">
+        <div className="flex justify-between gap-3">
+          <span className="text-muted-foreground">Created</span>
+          <span className="font-medium text-foreground" title={age <= 0 ? 'Today' : `${age} days old`}>
             {fmtDate(project.createdAt)} <span className="text-muted-foreground font-normal">({age <= 0 ? 'today' : `${age}d`})</span>
           </span>
         </div>
-        <div className="flex justify-between gap-2">
-          <span className="text-muted-foreground shrink-0">Updated</span>
-          <span className="font-medium text-foreground text-right">{relDay(updated)}</span>
+        <div className="flex justify-between gap-3">
+          <span className="text-muted-foreground">Updated</span>
+          <span className="font-medium text-foreground">{relDay(updated)}</span>
         </div>
       </div>
 
