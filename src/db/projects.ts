@@ -1,5 +1,6 @@
 import { query, run, insert } from './index'
 import { parseTags, stringifyTags } from '@/lib/tags'
+import { getKnownTagNames } from './tags'
 import type { Project, RagStatus, Stakeholder } from '@/types'
 
 function parseStakeholders(raw: string): Stakeholder[] {
@@ -195,19 +196,7 @@ export async function getAllStakeholderNames(): Promise<string[]> {
   return [...nameSet].sort((a, b) => a.localeCompare(b))
 }
 
-/** Returns a sorted, deduplicated list of all tag names across projects, tasks, and contacts — used for autocomplete. */
-export async function getAllTagNames(): Promise<string[]> {
-  const [projectRows, taskRows, contactRows] = await Promise.all([
-    query(`SELECT tags FROM projects WHERE tags != '' AND tags IS NOT NULL`),
-    query(`SELECT tags FROM tasks WHERE tags != '' AND tags IS NOT NULL`),
-    query(`SELECT tags FROM contacts WHERE tags != '' AND tags IS NOT NULL`),
-  ])
-  const tagSet = new Set<string>()
-  for (const row of [...projectRows, ...taskRows, ...contactRows]) {
-    for (const tag of parseTags(row.tags as string)) {
-      const trimmed = tag.trim()
-      if (trimmed) tagSet.add(trimmed)
-    }
-  }
-  return [...tagSet].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+/** All tag names in use — tag fields and inline #tags — for autocomplete. */
+export function getAllTagNames(): Promise<string[]> {
+  return getKnownTagNames()
 }

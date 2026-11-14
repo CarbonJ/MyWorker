@@ -24,6 +24,8 @@ import markdownItMark from 'markdown-it-mark'
 import { toast } from 'sonner'
 import { AssetImage } from '@/tiptap/assetImage'
 import { assetsSupported, saveAssetImage, buildAssetSrc, DEFAULT_ASSET_WIDTH } from '@/db/assets'
+import { findHashtags, tagKey } from '@/lib/tags'
+import { useTagNames } from '@/hooks/useTagNames'
 
 // Extend Highlight with tiptap-markdown serializer so ==text== roundtrips correctly.
 const HighlightMarkdown = Highlight.extend({
@@ -41,8 +43,9 @@ const HighlightMarkdown = Highlight.extend({
   },
 })
 
-// ProseMirror decoration plugin: highlights [[Name]] as blue (live) or muted (dead).
-// Takes a ref so it always reads the latest entity list without needing to be recreated.
+// ProseMirror decoration plugin: highlights [[Name]] as blue (live) or muted (dead),
+// and #tags as chips. Takes a ref so it always reads the latest entity list without
+// needing to be recreated.
 function createWikiLinkDecorationExtension(entitiesRef: React.MutableRefObject<WikiEntity[]>) {
   return Extension.create({
     name: 'wikiLinkDecoration',
@@ -55,8 +58,21 @@ function createWikiLinkDecorationExtension(entitiesRef: React.MutableRefObject<W
               const decorations: Decoration[] = []
               const entities = entitiesRef.current
               const pattern = /\[\[([^\]]+)\]\]/g
-              state.doc.descendants((node, pos) => {
+              state.doc.descendants((node, pos, parent) => {
                 if (!node.isText || !node.text) return
+                // #tags — not inside inline code or code blocks
+                if (!node.marks.some(m => m.type.name === 'code') &&
+                    parent?.type.name !== 'codeBlock') {
+                  for (const tag of findHashtags(node.text, false)) {
+                    decorations.push(
+                      Decoration.inline(pos + tag.index, pos + tag.index + tag.length, {
+                        class: 'hashtag',
+                        'data-tag': tag.name,
+                        title: `Tag: ${tag.name} (⌘/Ctrl+click to open)`,
+                      })
+                    )
+                  }
+                }
                 pattern.lastIndex = 0
                 let match: RegExpExecArray | null
                 while ((match = pattern.exec(node.text)) !== null) {
@@ -203,13 +219,16 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
   const wikiLinkExtension = useMemo(() => createWikiLinkDecorationExtension(wikiEntitiesRef), [])
 
   // Wiki-link suggestion state + refs (refs keep handleKeyDown inside useEditor free of stale closures)
-  type WikiSuggestState = { active: boolean; partial: string; coords: { left: number; top: number; caretTop: number } }
-  const [wikiSuggest, setWikiSuggest] = useState<WikiSuggestState>({ active: false, partial: '', coords: { left: 0, top: 0, caretTop: 0 } })
+  // The same palette serves [[wiki links]] and #tags; `kind` says which one is open.
+  type SuggestItem = { type: WikiEntity['type'] | 'tag'; id: number | string; name: string }
+  type WikiSuggestState = { active: boolean; kind: 'wiki' | 'tag'; partial: string; coords: { left: number; top: number; caretTop: number } }
+  const [wikiSuggest, setWikiSuggest] = useState<WikiSuggestState>({ active: false, kind: 'wiki', partial: '', coords: { left: 0, top: 0, caretTop: 0 } })
+  const tagNames = useTagNames(enableWikiLinks)
   const [wikiHighlight, setWikiHighlight] = useState(-1)
   const wikiSuggestRef = useRef(wikiSuggest)
   const wikiHighlightRef = useRef(wikiHighlight)
-  const wikiSuggestionsRef = useRef<WikiEntity[]>([])
-  const selectWikiSuggestionRef = useRef<((entity: WikiEntity) => void) | null>(null)
+  const wikiSuggestionsRef = useRef<SuggestItem[]>([])
+  const selectWikiSuggestionRef = useRef<((entity: SuggestItem) => void) | null>(null)
 
   // Tracks whether the last value change came from the editor itself.
   // Prevents setContent (which clears undo history) from firing for internal edits.
@@ -233,6 +252,13 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
   const handleWikiLinkMouseDown = (e: React.MouseEvent) => {
     if (!enableWikiLinks) return
     const target = e.target as HTMLElement
+    // #tag — needs ⌘/Ctrl so a plain click can still place the caret to edit it
+    const tagEl = target.closest?.('.hashtag') as HTMLElement | null
+    if (tagEl && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault()
+      navigateRef.current(`/tags?tag=${encodeURIComponent(tagEl.dataset.tag ?? '')}`)
+      return
+    }
     const wikiEl = target.classList.contains('wiki-link')
       ? target
       : (target.closest?.('.wiki-link') as HTMLElement | null)
@@ -455,7 +481,15 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
           return
         }
         const coords = editor.view.coordsAtPos($from.pos)
-        setWikiSuggest({ active: true, partial: match[1], coords: { left: coords.left, top: coords.bottom + 4, caretTop: coords.top - 4 } })
+        setWikiSuggest({ active: true, kind: 'wiki', partial: match[1], coords: { left: coords.left, top: coords.bottom + 4, caretTop: coords.top - 4 } })
+        setWikiHighlight(-1)
+        return
+      }
+      // #tag being typed (at least one letter, so "# " headings never open the palette)
+      const tagMatch = /(?:^|[\s([{>"',;])#(\p{L}[\p{L}\p{N}_/-]*)$/u.exec(textBefore)
+      if (tagMatch && !editor.isActive('code') && !editor.isActive('codeBlock')) {
+        const coords = editor.view.coordsAtPos($from.pos)
+        setWikiSuggest({ active: true, kind: 'tag', partial: tagMatch[1], coords: { left: coords.left, top: coords.bottom + 4, caretTop: coords.top - 4 } })
         setWikiHighlight(-1)
       } else {
         setWikiSuggest(s => s.active ? { ...s, active: false } : s)
@@ -470,8 +504,19 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
   }, [editor, enableWikiLinks])
 
   // Computed wiki suggestions filtered by partial text
-  const wikiSuggestions = useMemo(() => {
-    if (!wikiSuggest.active || !wikiEntities.length) return []
+  const wikiSuggestions = useMemo((): SuggestItem[] => {
+    if (!wikiSuggest.active) return []
+    if (wikiSuggest.kind === 'tag') {
+      // Existing tags matching what's typed, prefix matches first. The tag as typed
+      // is left out so Enter on a finished tag still makes a new line.
+      const key = tagKey(wikiSuggest.partial)
+      return tagNames
+        .filter(t => tagKey(t) !== key && tagKey(t).includes(key))
+        .sort((a, b) => Number(tagKey(b).startsWith(key)) - Number(tagKey(a).startsWith(key)))
+        .slice(0, 8)
+        .map(t => ({ type: 'tag' as const, id: t, name: t }))
+    }
+    if (!wikiEntities.length) return []
     const partial = wikiSuggest.partial.toLowerCase()
     // Palette type order: Areas, then Contacts, then Projects, then everything
     // else (stable within each type).
@@ -483,16 +528,27 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
       .sort((a, b) => typeRank(a.e.type) - typeRank(b.e.type) || a.i - b.i)
       .map(({ e }) => e)
       .slice(0, 12)
-  }, [wikiSuggest.active, wikiSuggest.partial, wikiEntities])
+  }, [wikiSuggest.active, wikiSuggest.kind, wikiSuggest.partial, wikiEntities, tagNames])
   wikiSuggestionsRef.current = wikiSuggestions
 
   // Insert the chosen entity as a completed [[...]] link
-  const selectWikiSuggestion = useCallback((entity: WikiEntity) => {
+  const selectWikiSuggestion = useCallback((entity: SuggestItem) => {
     if (!editor) return
     const { $from } = editor.state.selection
     const textBefore = editor.state.doc.textBetween(
       Math.max(0, $from.pos - 200), $from.pos, '\n', '\0'
     )
+    if (entity.type === 'tag') {
+      // Replace the partial tag the user typed with the chosen tag's own spelling
+      const typed = /#(\p{L}[\p{L}\p{N}_/-]*)$/u.exec(textBefore)
+      if (!typed) return
+      editor.chain()
+        .deleteRange({ from: $from.pos - typed[1].length, to: $from.pos })
+        .insertContent(entity.name + ' ')
+        .run()
+      setWikiSuggest(s => ({ ...s, active: false }))
+      return
+    }
     const match = /\[\[([^\[\]\n]*)$/.exec(textBefore)
     if (!match) return
     const partial = match[1]
@@ -677,9 +733,9 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
           }`}
         >
           <span className="text-[10px] text-muted-foreground w-14 shrink-0 uppercase tracking-wide pt-0.5">
-            {entity.type === 'page' ? 'Note' : entity.type === 'project' ? 'Project' : entity.type === 'contact' ? 'Contact' : 'Area'}
+            {entity.type === 'page' ? 'Note' : entity.type === 'project' ? 'Project' : entity.type === 'contact' ? 'Contact' : entity.type === 'tag' ? 'Tag' : 'Area'}
           </span>
-          <span className="min-w-0 break-words line-clamp-2">{entity.name}</span>
+          <span className="min-w-0 break-words line-clamp-2">{entity.type === 'tag' ? `#${entity.name}` : entity.name}</span>
         </button>
       ))}
     </div>,

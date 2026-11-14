@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseTags, stringifyTags } from './tags'
+import { parseTags, stringifyTags, findHashtags, extractHashtags, replaceHashtag, replaceInTagList, isHashtagName } from './tags'
 
 describe('parseTags', () => {
   it('parses a JSON array', () => {
@@ -31,5 +31,55 @@ describe('stringifyTags', () => {
 
   it('stores empty as empty string, not "[]"', () => {
     expect(stringifyTags([])).toBe('')
+  })
+})
+
+describe('hashtags', () => {
+  it('finds tags at the start, after whitespace and after punctuation', () => {
+    expect(extractHashtags('#audit met with (#Q3-review) and #vendor/acme today'))
+      .toEqual(['audit', 'Q3-review', 'vendor/acme'])
+  })
+
+  it('ignores headings, numbers, url anchors and mid-word hashes', () => {
+    expect(extractHashtags('# Heading\n## Another\nissue #123 see http://x.com/a#frag and a#b C#sharp')).toEqual([])
+  })
+
+  it('ignores code, links and wiki links', () => {
+    const md = 'run `git #notatag` then\n```\n#alsonot\n```\n[see #nope](http://x) [[Page #no]] but #yes'
+    expect(extractHashtags(md)).toEqual(['yes'])
+  })
+
+  it('drops trailing punctuation and unescapes underscores', () => {
+    expect(extractHashtags('done #risk-, #follow\\_up. #end_')).toEqual(['risk', 'follow_up', 'end'])
+  })
+
+  it('treats case variants as one tag', () => {
+    expect(extractHashtags('#Audit and #audit')).toEqual(['Audit'])
+  })
+
+  it('reports offsets usable for slicing', () => {
+    const text = 'a #risk b'
+    const [h] = findHashtags(text)
+    expect(text.slice(h.index, h.index + h.length)).toBe('#risk')
+  })
+
+  it('renames every occurrence case-insensitively, leaving other tags alone', () => {
+    expect(replaceHashtag('#Audit x #audits #audit.', 'audit', 'review')).toBe('#review x #audits #review.')
+    expect(replaceHashtag('`#audit` #audit', 'audit', 'review')).toBe('`#audit` #review')
+  })
+
+  it('removes the hash when deleting', () => {
+    expect(replaceHashtag('the #audit plan', 'audit', null)).toBe('the audit plan')
+  })
+
+  it('rewrites tag lists and collapses duplicates', () => {
+    expect(replaceInTagList(['Audit', 'q3', 'review'], 'audit', 'review')).toEqual(['review', 'q3'])
+    expect(replaceInTagList(['Audit', 'q3'], 'audit', null)).toEqual(['q3'])
+  })
+
+  it('validates inline-compatible names', () => {
+    expect(isHashtagName('vendor/acme-2')).toBe(true)
+    expect(isHashtagName('two words')).toBe(false)
+    expect(isHashtagName('3q')).toBe(false)
   })
 })

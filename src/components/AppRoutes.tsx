@@ -10,6 +10,7 @@ import MonthlyReportView from '@/pages/MonthlyReportView'
 import SearchPage from '@/pages/SearchPage'
 import ContactsPage from '@/pages/ContactsPage'
 import NotebookPage from '@/pages/NotebookPage'
+import TagsPage from '@/pages/TagsPage'
 
 /**
  * The app's route table. Rendered both by the main content area (under the outer
@@ -28,6 +29,7 @@ export function AppRoutes() {
       <Route path="/archive" element={<ArchiveView />} />
       <Route path="/contacts" element={<ContactsPage />} />
       <Route path="/notebook" element={<NotebookPage />} />
+      <Route path="/tags" element={<TagsPage />} />
       <Route path="/search" element={<SearchPage />} />
       <Route path="/settings" element={<Settings />} />
     </Routes>

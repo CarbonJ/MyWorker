@@ -318,9 +318,15 @@ export function ProjectHeader({
           {project.tags.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {project.tags.map((tag, i) => (
-                <span key={i} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => navigate(`/tags?tag=${encodeURIComponent(tag)}`)}
+                  title={`See everything tagged ${tag}`}
+                  className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 hover:border-gray-400 transition-colors cursor-pointer"
+                >
                   {tag}
-                </span>
+                </button>
               ))}
             </div>
           )}

@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm'
 import { remarkHighlight } from '@/lib/remarkHighlight'
 import { useWikiEntities } from '@/hooks/useWikiEntities'
 import { parseAssetSrc } from '@/db/assets'
+import { findHashtags } from '@/lib/tags'
 import { AssetImageDisplay } from '@/components/AssetImageDisplay'
 import type { WikiEntity } from '@/types'
 
@@ -31,11 +32,19 @@ export function WikiLinkContent({ children, className, wikiEntities: propEntitie
   const processed = useMemo(() => {
     // tiptap-markdown escapes [ as \[ — normalize before scanning for wiki links
     const normalized = children.replace(/\\\[/g, '[').replace(/\\\]/g, ']')
-    return normalized.replace(/\[\[([^\]]+)\]\]/g, (_, name: string) => {
+    let out = normalized.replace(/\[\[([^\]]+)\]\]/g, (_, name: string) => {
       const entity = wikiEntities.find(e => e.name.toLowerCase() === name.trim().toLowerCase())
       if (entity) return `[${name}](${entityToRoute(entity)})`
       return `**[[${name}]]**`
     })
+    // #tags become links to the Tags screen (rendered as chips by the `a` override below).
+    // Replaced back-to-front so earlier offsets stay valid.
+    for (const tag of findHashtags(out).reverse()) {
+      out = out.slice(0, tag.index) +
+        `[#${tag.name}](/tags?tag=${encodeURIComponent(tag.name)})` +
+        out.slice(tag.index + tag.length)
+    }
+    return out
   }, [children, wikiEntities])
 
   return (
@@ -54,6 +63,13 @@ export function WikiLinkContent({ children, className, wikiEntities: propEntitie
           },
           a({ href, children, ...props }) {
             // Internal app routes start with / — use SPA navigation, never a new tab
+            if (href?.startsWith('/tags?tag=')) {
+              return (
+                <button type="button" onClick={() => navigate(href!)} className="hashtag cursor-pointer border-none font-[inherit] inline">
+                  {children}
+                </button>
+              )
+            }
             if (href?.startsWith('/')) {
               return (
                 <button

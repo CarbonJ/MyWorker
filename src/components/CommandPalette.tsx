@@ -7,7 +7,7 @@ import {
 } from '@/components/ui/command'
 import { getAllProjects } from '@/db/projects'
 import type { Project } from '@/types'
-import { LayoutDashboard, BarChart2, Archive, Settings, BookOpen, FolderOpen, Plus, ClipboardList, FileText, UserRound, NotebookPen } from 'lucide-react'
+import { LayoutDashboard, BarChart2, Archive, Settings, BookOpen, FolderOpen, Plus, ClipboardList, FileText, UserRound, NotebookPen, Hash } from 'lucide-react'
 
 interface Props {
   open: boolean
@@ -55,6 +55,9 @@ export function CommandPalette({ open, onClose, onNewTask, onNewProject }: Props
               </CommandItem>
               <CommandItem value="contacts people" onSelect={() => go('/contacts')}>
                 <UserRound className="text-muted-foreground" /> Contacts
+              </CommandItem>
+              <CommandItem value="tags hashtags labels" onSelect={() => go('/tags')}>
+                <Hash className="text-muted-foreground" /> Tags
               </CommandItem>
               <CommandItem value="notebook notes pages" onSelect={() => go('/notebook')}>
                 <BookOpen className="text-muted-foreground" /> Notebook

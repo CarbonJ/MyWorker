@@ -550,6 +550,41 @@ const migrations: Migration[] = [
       END;
     `,
   },
+  {
+    version: 23,
+    up: `
+      -- Rescope the updated_at triggers to content columns (as v22 did for
+      -- notebook pages) so updated_at itself can be written without re-firing
+      -- them. Bulk maintenance such as renaming a tag restores each row's
+      -- original updated_at, which keeps "completed on" dates (derived from
+      -- tasks.updated_at) and "last updated" ages from jumping to today.
+      DROP TRIGGER IF EXISTS projects_updated_at;
+      CREATE TRIGGER projects_updated_at
+      AFTER UPDATE OF work_item, work_desc, rag_status, priority_id, latest_status,
+        product_area_id, status_id, due_date, is_archived, stakeholders, linked_jiras, tags
+      ON projects
+      BEGIN
+        UPDATE projects SET updated_at = datetime('now') WHERE id = NEW.id;
+      END;
+
+      DROP TRIGGER IF EXISTS tasks_updated_at;
+      CREATE TRIGGER tasks_updated_at
+      AFTER UPDATE OF project_id, product_area_id, title, description, notes, status, owner,
+        start_date, due_date, priority_id, is_recurring, tags, pre_archive_status
+      ON tasks
+      BEGIN
+        UPDATE tasks SET updated_at = datetime('now') WHERE id = NEW.id;
+      END;
+
+      DROP TRIGGER IF EXISTS contacts_updated_at;
+      CREATE TRIGGER contacts_updated_at
+      AFTER UPDATE OF name, role, group_name, notes, tags, whos_who
+      ON contacts
+      BEGIN
+        UPDATE contacts SET updated_at = datetime('now') WHERE id = NEW.id;
+      END;
+    `,
+  },
 ]
 
 export async function runMigrations(handle: DbHandle): Promise<void> {
