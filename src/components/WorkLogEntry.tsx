@@ -14,6 +14,8 @@ interface Props {
 export function WorkLogEntryForm({ projectId, projectName, onSaved }: Props) {
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
+  // Expand button renders above the Add Entry button instead of in its own header line
+  const [expandSlot, setExpandSlot] = useState<HTMLDivElement | null>(null)
   const wikiEntities = useWikiEntities()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -44,6 +46,7 @@ export function WorkLogEntryForm({ projectId, projectName, onSaved }: Props) {
           placeholder="Add a work log entry…"
           rows={2}
           expandable
+          expandSlot={expandSlot}
           enableWikiLinks
           wikiEntities={wikiEntities}
           onKeyDown={e => {
@@ -51,16 +54,18 @@ export function WorkLogEntryForm({ projectId, projectName, onSaved }: Props) {
           }}
         />
       </div>
-      <Button
-        type="submit"
-        size="sm"
-        variant="muted-dark"
-        className="shrink-0"
-        disabled={saving || !note.trim()}
-        onMouseDown={e => e.preventDefault()}
-      >
-        {saving ? 'Saving…' : '+ Add Entry'}
-      </Button>
+      <div className="shrink-0 flex flex-col items-end gap-1">
+        <div ref={setExpandSlot} className="flex" />
+        <Button
+          type="submit"
+          size="sm"
+          variant="muted-dark"
+          disabled={saving || !note.trim()}
+          onMouseDown={e => e.preventDefault()}
+        >
+          {saving ? 'Saving…' : '+ Add Entry'}
+        </Button>
+      </div>
     </form>
   )
 }

@@ -170,9 +170,12 @@ interface Props {
   /** Show a static formatting toolbar in the header row instead of the floating bubble menu.
    *  Best for large editors (the Notebook) where the bubble would cover referenced content. */
   fixedToolbar?: boolean
+  /** Render the expand/collapse button into this element (via portal) instead of the
+   *  header row, so a label-less field doesn't spend a line on the header. */
+  expandSlot?: HTMLElement | null
 }
 
-export function MarkdownField({ id, label, headerLabel, value, onChange, placeholder, rows = 2, onKeyDown, initialFocused = false, expandable = false, enableWikiLinks = false, wikiEntities = [], onWikiLinkClick, autoHeight = false, headerActions, fillHeight = false, fixedToolbar = false }: Props) {
+export function MarkdownField({ id, label, headerLabel, value, onChange, placeholder, rows = 2, onKeyDown, initialFocused = false, expandable = false, enableWikiLinks = false, wikiEntities = [], onWikiLinkClick, autoHeight = false, headerActions, fillHeight = false, fixedToolbar = false, expandSlot }: Props) {
   const [focused, setFocused] = useState(initialFocused)
   const [sizeMode, setSizeMode] = useState<SizeMode>('default')
   const [rawMode, setRawMode] = useState(false)
@@ -571,7 +574,10 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
     <TableControlsRow editor={editor} inHeaderRow={tb.inHeaderRow} />
   )
 
-  const labelRow = (label || expandable || headerActions || useFixedToolbar) && (
+  const slottedExpandBtn = expandSlot && expandBtn ? createPortal(expandBtn, expandSlot) : null
+  const headerExpandBtn = expandSlot ? null : expandBtn
+
+  const labelRow = (label || headerExpandBtn || headerActions || useFixedToolbar) && (
     <div className={useFixedToolbar ? 'space-y-1' : undefined}>
       <div className="flex items-center justify-between gap-2">
         {useFixedToolbar && !rawMode
@@ -580,7 +586,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
         <div className="flex items-center gap-1 shrink-0">
           {headerActions}
           {rawMode && rawBtn}
-          {expandBtn}
+          {headerExpandBtn}
         </div>
       </div>
       {useFixedToolbar && !rawMode && tableControlsRow}
@@ -741,6 +747,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
     <div className={fillHeight ? 'flex flex-col flex-1 min-h-0 gap-1.5' : 'space-y-1.5'}>
       {toolbar}
       {labelRow}
+      {slottedExpandBtn}
       {rawMode ? rawTextarea : (
         <div
           ref={containerRef}
