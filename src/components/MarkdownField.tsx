@@ -200,8 +200,8 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
   const wikiLinkExtension = useMemo(() => createWikiLinkDecorationExtension(wikiEntitiesRef), [])
 
   // Wiki-link suggestion state + refs (refs keep handleKeyDown inside useEditor free of stale closures)
-  type WikiSuggestState = { active: boolean; partial: string; coords: { left: number; top: number } }
-  const [wikiSuggest, setWikiSuggest] = useState<WikiSuggestState>({ active: false, partial: '', coords: { left: 0, top: 0 } })
+  type WikiSuggestState = { active: boolean; partial: string; coords: { left: number; top: number; caretTop: number } }
+  const [wikiSuggest, setWikiSuggest] = useState<WikiSuggestState>({ active: false, partial: '', coords: { left: 0, top: 0, caretTop: 0 } })
   const [wikiHighlight, setWikiHighlight] = useState(-1)
   const wikiSuggestRef = useRef(wikiSuggest)
   const wikiHighlightRef = useRef(wikiHighlight)
@@ -452,7 +452,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
           return
         }
         const coords = editor.view.coordsAtPos($from.pos)
-        setWikiSuggest({ active: true, partial: match[1], coords: { left: coords.left, top: coords.bottom + 4 } })
+        setWikiSuggest({ active: true, partial: match[1], coords: { left: coords.left, top: coords.bottom + 4, caretTop: coords.top - 4 } })
         setWikiHighlight(-1)
       } else {
         setWikiSuggest(s => s.active ? { ...s, active: false } : s)
@@ -638,16 +638,26 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
   // sits inside a transformed ancestor (e.g. a Radix Dialog centered via translate),
   // a fixed child would resolve against that transform and land far off-screen.
   // Portalling to body escapes the transform so the coords stay viewport-relative.
+  // Wide enough for long (often ISO-date-prefixed) names, but never wider than the
+  // viewport less a 16px gutter each side; left is clamped so it can't run off the
+  // right edge, and it flips above the caret when there's no room below.
+  const WIKI_DROPDOWN_MAX_W = 560
+  const WIKI_DROPDOWN_MAX_H = 288 // max-h-72
+  const wikiDropdownWidth = Math.min(WIKI_DROPDOWN_MAX_W, window.innerWidth - 32)
+  const wikiDropdownFlip = wikiSuggest.coords.top + WIKI_DROPDOWN_MAX_H > window.innerHeight - 8
+    && wikiSuggest.coords.caretTop > window.innerHeight - wikiSuggest.coords.top
   const wikiDropdown = enableWikiLinks && wikiSuggest.active && wikiSuggestions.length > 0 && createPortal(
     <div
       style={{
         position: 'fixed',
-        // Clamp left so the 288px (w-72) dropdown doesn't overflow the viewport
-        left: Math.min(wikiSuggest.coords.left, Math.max(0, window.innerWidth - 288 - 16)),
-        top: wikiSuggest.coords.top,
+        left: Math.max(16, Math.min(wikiSuggest.coords.left, window.innerWidth - wikiDropdownWidth - 16)),
+        ...(wikiDropdownFlip
+          ? { bottom: window.innerHeight - wikiSuggest.coords.caretTop }
+          : { top: wikiSuggest.coords.top }),
+        width: wikiDropdownWidth,
         zIndex: 200,
       }}
-      className="bg-popover border border-border rounded-md shadow-lg w-72 max-h-72 overflow-y-auto"
+      className="bg-popover border border-border rounded-md shadow-lg max-h-72 overflow-y-auto"
     >
       {wikiSuggestions.map((entity, idx) => (
         <button
@@ -655,14 +665,15 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
           type="button"
           tabIndex={-1}
           onMouseDown={e => { e.preventDefault(); selectWikiSuggestion(entity) }}
-          className={`w-full text-left px-3 py-1.5 text-sm flex items-center gap-2 transition-colors ${
+          title={entity.name}
+          className={`w-full text-left px-3 py-1.5 text-sm flex items-start gap-2 transition-colors ${
             idx === wikiHighlight ? 'bg-accent text-accent-foreground' : 'hover:bg-accent hover:text-accent-foreground'
           }`}
         >
-          <span className="text-[10px] text-muted-foreground w-14 shrink-0 uppercase tracking-wide">
+          <span className="text-[10px] text-muted-foreground w-14 shrink-0 uppercase tracking-wide pt-0.5">
             {entity.type === 'page' ? 'Note' : entity.type === 'project' ? 'Project' : entity.type === 'contact' ? 'Contact' : 'Area'}
           </span>
-          <span className="truncate">{entity.name}</span>
+          <span className="min-w-0 break-words line-clamp-2">{entity.name}</span>
         </button>
       ))}
     </div>,

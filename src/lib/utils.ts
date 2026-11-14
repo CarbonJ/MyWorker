@@ -39,6 +39,39 @@ export function localTomorrow(): string {
   return toLocalDateString(d)
 }
 
+export type UpcomingMode = '1' | '3' | 'week'
+
+/** localStorage key for the "Tomorrow / 3 days / Week" filters' day counting. */
+export const UPCOMING_BUSINESS_DAYS_KEY = 'myworker:upcoming-business-days'
+
+/** Whether the upcoming filters count business days (default) or calendar days. */
+export function loadUpcomingBusinessDays(): boolean {
+  return localStorage.getItem(UPCOMING_BUSINESS_DAYS_KEY) !== 'false'
+}
+
+/**
+ * Last date (YYYY-MM-DD, inclusive) covered by an upcoming filter, counted from `from`.
+ * Business days: '1' = next business day, '3' = third business day ahead,
+ * 'week' = Friday of this week (next Friday on a weekend).
+ * Calendar days: '1' = tomorrow, '3' = three days ahead, 'week' = seven days ahead.
+ */
+export function getUpcomingCutoff(mode: UpcomingMode, businessDays: boolean, from: Date = new Date()): string {
+  const d = new Date(from.getFullYear(), from.getMonth(), from.getDate(), 12)
+  if (!businessDays) {
+    d.setDate(d.getDate() + (mode === '1' ? 1 : mode === '3' ? 3 : 7))
+  } else if (mode === 'week') {
+    const day = d.getDay() // 0=Sun…6=Sat
+    d.setDate(d.getDate() + (day === 0 ? 5 : day === 6 ? 6 : 5 - day))
+  } else {
+    let remaining = mode === '1' ? 1 : 3
+    while (remaining > 0) {
+      d.setDate(d.getDate() + 1)
+      if (d.getDay() !== 0 && d.getDay() !== 6) remaining--
+    }
+  }
+  return toLocalDateString(d)
+}
+
 /** Returns true if the given due date is strictly before today (overdue). */
 export function isOverdue(dueDate: string | null): boolean {
   if (!dueDate) return false

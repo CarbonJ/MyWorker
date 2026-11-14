@@ -103,8 +103,8 @@ export function ProjectHeader({
 
   // ── Full header ───────────────────────────────────────────────────────────
   return (
-    <div className="shrink-0 px-6 py-4 border-b bg-background">
-      <div className="flex items-center justify-between mb-3">
+    <div className="shrink-0 px-4 py-2 border-b bg-background">
+      <div className="flex items-center justify-between mb-1.5">
         <button onClick={() => navigate(-1)} className="text-sm text-muted-foreground hover:text-foreground">
           ← Back
         </button>
@@ -119,19 +119,19 @@ export function ProjectHeader({
       </div>
 
       {isProjectOverdue && (
-        <div className={`mb-3 px-3 py-2 rounded-md border text-sm flex items-center gap-2 ${pillClass('red')}`}>
+        <div className={`mb-2 px-3 py-1 rounded-md border text-sm flex items-center gap-2 ${pillClass('red')}`}>
           <span>🗓</span>
           <span className="font-semibold">Project overdue</span>
           <span className="text-red-600 dark:text-red-400">— due {new Date(project.dueDate! + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
         </div>
       )}
 
-      <div className="grid grid-cols-[1fr_1fr_14rem] gap-6">
+      <div className="grid grid-cols-[1fr_1fr_11rem] gap-3">
 
         {/* LEFT: Work Item + Description */}
-        <div className="min-w-0 space-y-2 border rounded-lg p-3">
+        <div className="min-w-0 space-y-1.5 border rounded-lg p-2.5">
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-semibold truncate">{project.workItem}</h1>
+            <h1 className="text-lg font-semibold truncate">{project.workItem}</h1>
             <Button variant="outline" size="sm" onClick={onEdit} className="shrink-0">
               Edit
             </Button>
@@ -163,10 +163,10 @@ export function ProjectHeader({
         </div>
 
         {/* MIDDLE: Metadata */}
-        <div className="space-y-3 text-sm border rounded-lg p-3">
+        <div className="space-y-2 text-sm border rounded-lg p-2.5">
           {/* Latest Status — click to edit inline */}
           <div
-            className="px-3 py-4 bg-muted rounded-md cursor-text"
+            className="px-2.5 py-1.5 bg-muted rounded-md cursor-text"
             onClick={() => !editingStatus && openStatusEdit()}
           >
             <span className="font-medium">Status: </span>

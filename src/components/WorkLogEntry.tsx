@@ -34,33 +34,33 @@ export function WorkLogEntryForm({ projectId, projectName, onSaved }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-2">
-      <MarkdownField
-        id="worklog-entry-note"
-        headerLabel={projectName}
-        value={note}
-        onChange={setNote}
-        placeholder="Add a work log entry…"
-        rows={3}
-        expandable
-        enableWikiLinks
-        wikiEntities={wikiEntities}
-        onKeyDown={e => {
-          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); handleSubmit(e as unknown as React.FormEvent) }
-        }}
-      />
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">⌘/Ctrl+↵ to save</span>
-        <Button
-          type="submit"
-          size="sm"
-          variant="muted-dark"
-          disabled={saving || !note.trim()}
-          onMouseDown={e => e.preventDefault()}
-        >
-          {saving ? 'Saving…' : '+ Add Entry'}
-        </Button>
+    <form onSubmit={handleSubmit} className="flex items-end gap-2">
+      <div className="flex-1 min-w-0">
+        <MarkdownField
+          id="worklog-entry-note"
+          headerLabel={projectName}
+          value={note}
+          onChange={setNote}
+          placeholder="Add a work log entry…"
+          rows={2}
+          expandable
+          enableWikiLinks
+          wikiEntities={wikiEntities}
+          onKeyDown={e => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); handleSubmit(e as unknown as React.FormEvent) }
+          }}
+        />
       </div>
+      <Button
+        type="submit"
+        size="sm"
+        variant="muted-dark"
+        className="shrink-0"
+        disabled={saving || !note.trim()}
+        onMouseDown={e => e.preventDefault()}
+      >
+        {saving ? 'Saving…' : '+ Add Entry'}
+      </Button>
     </form>
   )
 }

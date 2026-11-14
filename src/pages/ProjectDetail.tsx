@@ -216,6 +216,8 @@ export default function ProjectDetail() {
       />
 
       <SplitPane
+        initialSplitPct={35}
+        persistKey="myworker:project-split"
         left={
           <TaskPane
             tasks={tasks}
