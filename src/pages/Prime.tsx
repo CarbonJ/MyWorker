@@ -16,7 +16,7 @@ import { Calendar } from '@/components/ui/calendar'
 import { Check, Bookmark, X as XIcon, ChevronDown } from 'lucide-react'
 import { pillClass, dotClass, dotOnPillClass, pillClassActive, RAG_ORDER, RAG_OPTIONS, PILL_DIMMED_CLASS } from '@/lib/colors'
 import { loadGuiSettings, buttonStyle, workItemStyle } from '@/lib/guiSettings'
-import { fmtDate, dueDateTextClass, localToday, toLocalDateString } from '@/lib/utils'
+import { fmtDate, dueDateTextClass, localToday, toLocalDateString, getUpcomingCutoff, loadUpcomingBusinessDays, type UpcomingMode } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { useDataLoader } from '@/hooks/useDataLoader'
 import { SplitPane } from '@/components/project/SplitPane'
@@ -75,22 +75,6 @@ function TaskStatusDot({ status, size = 'sm' }: { status: TaskStatus; size?: 'sm
   return <span className={`${dim} border-2 border-slate-300 dark:border-slate-600 flex shrink-0`} />
 }
 
-/** Compute cutoff date string for the upcoming filter mode. */
-function getUpcomingCutoff(mode: '1' | '3' | 'week'): string {
-  const d = new Date()
-  if (mode === '1') {
-    d.setDate(d.getDate() + 1)
-  } else if (mode === '3') {
-    d.setDate(d.getDate() + 3)
-  } else {
-    // End of current business week (this Friday; if Sat/Sun, next Friday)
-    const day = d.getDay() // 0=Sun…6=Sat
-    const daysToFriday = day === 0 ? 5 : day === 6 ? 6 : 5 - day
-    d.setDate(d.getDate() + daysToFriday)
-  }
-  return toLocalDateString(d)
-}
-
 export default function Prime() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -123,7 +107,8 @@ export default function Prime() {
   const [generalStatusFilters, setGeneralStatusFilters] = useState<string[]>(() =>
     loadArr('myworker:prime-gen-status2', ['active'])
   )
-  const [upcomingMode, setUpcomingMode] = useState<null | '1' | '3' | 'week'>(() => {
+  const [upcomingBusinessDays] = useState(loadUpcomingBusinessDays)
+  const [upcomingMode, setUpcomingMode] = useState<null | UpcomingMode>(() => {
     const v = localStorage.getItem('myworker:upcoming-mode')
     return (v === '1' || v === '3' || v === 'week') ? v : null
   })
@@ -255,7 +240,7 @@ export default function Prime() {
   const tasksByProject = useMemo(() => {
     const map = new Map<number, Task[]>()
     const today = localToday()
-    const upcomingCutoff = upcomingMode ? getUpcomingCutoff(upcomingMode) : null
+    const upcomingCutoff = upcomingMode ? getUpcomingCutoff(upcomingMode, upcomingBusinessDays) : null
     const q = query.trim().toLowerCase()
     for (const t of allTasks) {
       if (t.projectId === null || t.status === 'done') continue
@@ -267,13 +252,7 @@ export default function Prime() {
       if (upcomingMode && upcomingCutoff) {
         const dueFits = !!t.dueDate && t.dueDate >= today && t.dueDate <= upcomingCutoff
         const startFits = !!t.startDate && t.startDate >= today && t.startDate <= upcomingCutoff
-        if (upcomingMode === 'week') {
-          const dueWeekday = dueFits && (() => { const d = new Date(t.dueDate! + 'T12:00:00').getDay(); return d !== 0 && d !== 6 })()
-          const startWeekday = startFits && (() => { const d = new Date(t.startDate! + 'T12:00:00').getDay(); return d !== 0 && d !== 6 })()
-          if (!dueWeekday && !startWeekday) continue
-        } else {
-          if (!dueFits && !startFits) continue
-        }
+        if (!dueFits && !startFits) continue
       }
       if (q && !(
         t.title.toLowerCase().includes(q) ||
@@ -285,7 +264,7 @@ export default function Prime() {
       map.set(t.projectId, arr)
     }
     return map
-  }, [allTasks, upcomingMode, dueFilter, dueFilterShowAll, query])
+  }, [allTasks, upcomingMode, upcomingBusinessDays, dueFilter, dueFilterShowAll, query])
 
   /** Set of non-archived project IDs — used to exclude archived-project tasks from due counts */
   const activeProjectIds = useMemo(() => new Set(projects.map(p => p.id)), [projects])
@@ -379,16 +358,11 @@ export default function Prime() {
         (t.dueDate && t.dueDate <= today) || (t.startDate && t.startDate <= today)
       ))
     } else if (upcomingMode) {
-      const upcomingCutoff = getUpcomingCutoff(upcomingMode)
+      const upcomingCutoff = getUpcomingCutoff(upcomingMode, upcomingBusinessDays)
       list = list.filter(t => {
         if (t.status === 'done') return false
         const dueFits = !!t.dueDate && t.dueDate >= today && t.dueDate <= upcomingCutoff
         const startFits = !!t.startDate && t.startDate >= today && t.startDate <= upcomingCutoff
-        if (upcomingMode === 'week') {
-          const dueWeekday = dueFits && (() => { const d = new Date(t.dueDate! + 'T12:00:00').getDay(); return d !== 0 && d !== 6 })()
-          const startWeekday = startFits && (() => { const d = new Date(t.startDate! + 'T12:00:00').getDay(); return d !== 0 && d !== 6 })()
-          return !!(dueWeekday || startWeekday)
-        }
         return dueFits || startFits
       })
     } else {
@@ -437,7 +411,7 @@ export default function Prime() {
     })
 
     return list
-  }, [allTasks, query, dueFilter, upcomingMode, areaFilters, generalStatusFilters, tagFilters, generalSorts, priorities])
+  }, [allTasks, query, dueFilter, upcomingMode, upcomingBusinessDays, areaFilters, generalStatusFilters, tagFilters, generalSorts, priorities])
 
   /** Filtered + sorted projects */
   const filteredProjects = useMemo(() => {
@@ -883,7 +857,9 @@ export default function Prime() {
                   ? 'bg-blue-100 border-blue-300 text-blue-800 dark:bg-blue-900/40 dark:border-blue-700 dark:text-blue-300 hover:bg-blue-200'
                   : 'border-input bg-background hover:bg-accent hover:text-accent-foreground'
               }`}
-              title={mode === '1' ? 'Due tomorrow' : mode === '3' ? 'Due in next 3 days' : 'Due this business week (Mon–Fri)'}
+              title={upcomingBusinessDays
+                ? (mode === '1' ? 'Due by the next business day' : mode === '3' ? 'Due within the next 3 business days' : 'Due this business week (through Friday)')
+                : (mode === '1' ? 'Due by tomorrow' : mode === '3' ? 'Due within the next 3 days' : 'Due within the next 7 days')}
             >
               {mode === '1' ? 'Tomorrow' : mode === '3' ? '3 days' : 'Week'}
             </button>

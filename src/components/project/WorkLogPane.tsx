@@ -111,7 +111,7 @@ export function WorkLogPane({ projectId, projectName, workLog, notebookRefs = []
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-      <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
+      <div className="flex items-center justify-between px-3 py-2 border-b shrink-0">
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-semibold">Work Log</h2>
           <button
@@ -139,6 +139,7 @@ export function WorkLogPane({ projectId, projectName, workLog, notebookRefs = []
               </button>
             )}
           </div>
+          <span className="text-xs text-muted-foreground whitespace-nowrap">⌘/Ctrl+↵ to save</span>
         </div>
         <span className="text-xs text-muted-foreground">
           {searchTerms.length > 0
@@ -149,7 +150,7 @@ export function WorkLogPane({ projectId, projectName, workLog, notebookRefs = []
         </span>
       </div>
 
-      <div className="px-4 py-3 border-b bg-muted/30 shrink-0">
+      <div className="px-3 py-2 border-b bg-muted/30 shrink-0">
         <WorkLogEntryForm projectId={projectId} projectName={projectName} onSaved={onSaved} />
       </div>
 
@@ -168,7 +169,7 @@ export function WorkLogPane({ projectId, projectName, workLog, notebookRefs = []
             const ref = item.ref
             const dateStr = new Date(ref.createdAt.replace(' ', 'T').replace(/([^Z])$/, '$1Z')).toLocaleString()
             return (
-              <div key={`note-${ref.pageId}`} className="px-4 py-3" style={altRowStyle(rowColor, rowOpacity, index)}>
+              <div key={`note-${ref.pageId}`} className="px-3 py-2" style={altRowStyle(rowColor, rowOpacity, index)}>
                 <div className="flex items-center gap-1.5 mb-1">
                   <BookOpen className="h-3 w-3 text-muted-foreground shrink-0" />
                   <p className="text-xs text-muted-foreground">{dateStr}</p>
@@ -190,8 +191,8 @@ export function WorkLogPane({ projectId, projectName, workLog, notebookRefs = []
           const entry = item.entry
           const isAutoEntry = entry.isSystem
           return (
-            <div key={`log-${entry.id}`} className="px-4 py-3" style={altRowStyle(rowColor, rowOpacity, index)}>
-              <div className="flex items-center gap-1.5 mb-1">
+            <div key={`log-${entry.id}`} className="px-3 py-2" style={altRowStyle(rowColor, rowOpacity, index)}>
+              <div className="flex items-center gap-1.5 mb-0.5">
                 <p className="text-xs text-muted-foreground">
                   {new Date(entry.createdAt.replace(' ', 'T').replace(/([^Z])$/, '$1Z')).toLocaleString()}
                 </p>

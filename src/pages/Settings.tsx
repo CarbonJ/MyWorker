@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
+import { loadUpcomingBusinessDays, UPCOMING_BUSINESS_DAYS_KEY } from '@/lib/utils'
 import { TEXT_COLOR_HEX, buttonStyle, workItemStyle } from '@/lib/guiSettings'
 import { toast } from 'sonner'
 import { exportToJson, importFromJson } from '@/db/importExport'
@@ -96,6 +97,7 @@ export default function Settings() {
   const [dueFilterShowAll, setDueFilterShowAll] = useState(
     () => localStorage.getItem('myworker:due-filter-show-all') === 'true'
   )
+  const [upcomingBusinessDays, setUpcomingBusinessDays] = useState(loadUpcomingBusinessDays)
 
   const [proseSpacing, setProseSpacing] = useState(
     () => localStorage.getItem('myworker:prose-spacing') ?? 'normal'
@@ -314,6 +316,24 @@ export default function Settings() {
                   />
                   <label htmlFor="due-filter-show-all" className="text-sm cursor-pointer select-none text-muted-foreground">
                     Show all tasks (not just due/overdue) in Due/Overdue filter mode
+                  </label>
+                </div>
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="upcoming-business-days"
+                    className="mt-0.5"
+                    checked={upcomingBusinessDays}
+                    onCheckedChange={v => {
+                      const next = v === true
+                      setUpcomingBusinessDays(next)
+                      localStorage.setItem(UPCOMING_BUSINESS_DAYS_KEY, String(next))
+                    }}
+                  />
+                  <label htmlFor="upcoming-business-days" className="text-sm cursor-pointer select-none text-muted-foreground">
+                    Count business days (Mon–Fri) for the Tomorrow / 3 days / Week filters
+                    <span className="block text-xs text-muted-foreground/70">
+                      Off: calendar days — Tomorrow, next 3 days, next 7 days
+                    </span>
                   </label>
                 </div>
               </div>

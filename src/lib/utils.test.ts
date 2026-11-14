@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { toLocalDateString, localToday, localTomorrow, isOverdue, isDueToday, fmtDate } from './utils'
+import { toLocalDateString, localToday, localTomorrow, isOverdue, isDueToday, fmtDate, getUpcomingCutoff } from './utils'
 
 function shiftDays(days: number): string {
   const d = new Date()
@@ -47,5 +47,31 @@ describe('isDueToday', () => {
 describe('fmtDate', () => {
   it('formats ISO date as MM/DD/YY', () => {
     expect(fmtDate('2026-07-02')).toBe('07/02/26')
+  })
+})
+
+describe('getUpcomingCutoff', () => {
+  const thu = new Date(2026, 10, 12) // Thu Nov 12 2026
+  const fri = new Date(2026, 10, 13)
+  const sat = new Date(2026, 10, 14)
+
+  it('business days skip weekends', () => {
+    expect(getUpcomingCutoff('1', true, thu)).toBe('2026-11-13')
+    expect(getUpcomingCutoff('1', true, fri)).toBe('2026-11-16')
+    expect(getUpcomingCutoff('1', true, sat)).toBe('2026-11-16')
+    expect(getUpcomingCutoff('3', true, thu)).toBe('2026-11-17')
+    expect(getUpcomingCutoff('3', true, fri)).toBe('2026-11-18')
+  })
+
+  it('business week ends Friday (next Friday on a weekend)', () => {
+    expect(getUpcomingCutoff('week', true, thu)).toBe('2026-11-13')
+    expect(getUpcomingCutoff('week', true, fri)).toBe('2026-11-13')
+    expect(getUpcomingCutoff('week', true, sat)).toBe('2026-11-20')
+  })
+
+  it('calendar days count every day', () => {
+    expect(getUpcomingCutoff('1', false, fri)).toBe('2026-11-14')
+    expect(getUpcomingCutoff('3', false, fri)).toBe('2026-11-16')
+    expect(getUpcomingCutoff('week', false, fri)).toBe('2026-11-20')
   })
 })

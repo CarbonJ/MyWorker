@@ -175,7 +175,7 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
       <DialogContent
-        className="max-w-lg flex flex-col max-h-[90vh]"
+        className="max-w-2xl flex flex-col max-h-[90vh]"
         // Prevent Radix from treating clicks inside Select/Popover portals (rendered
         // outside the Dialog DOM) as "interact outside" — that path triggers dialog-close
         // cleanup which can leave body pointer-events stuck and freeze the form.
@@ -191,7 +191,7 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2 overflow-y-auto overflow-x-hidden min-w-0 flex-1 min-h-0">
+        <div className="space-y-3 py-2 overflow-y-auto overflow-x-hidden min-w-0 flex-1 min-h-0">
           {/* Title */}
           <div className={fieldClass}>
             <Label htmlFor="task-title">Title <span className="text-destructive">*</span></Label>
@@ -204,86 +204,89 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
             />
           </div>
 
-          {/* Area — editable when no project selected; inherited (read-only) when project selected */}
-          <div className={fieldClass}>
-            <Label>Area</Label>
-            {selectedProjectId !== null ? (
-              <p className="text-sm text-muted-foreground h-9 flex items-center px-3 rounded-md border border-input bg-muted/40">
-                {inheritedArea ? inheritedArea.label : <span className="italic">None (inherited from project)</span>}
-              </p>
-            ) : (
-              <Select value={productAreaId || 'none'} onValueChange={v => setProductAreaId(v === 'none' ? '' : v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select area" />
-                </SelectTrigger>
-                <SelectContent position="popper">
-                  <SelectItem value="none">— Inbox (no area)</SelectItem>
-                  {productAreas.map(a => (
-                    <SelectItem key={a.id} value={a.id.toString()}>{a.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
+          {/* Area + Project on one row */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* Area — editable when no project selected; inherited (read-only) when project selected */}
+            <div className={cn(fieldClass, 'min-w-0')}>
+              <Label>Area</Label>
+              {selectedProjectId !== null ? (
+                <p className="text-sm text-muted-foreground h-9 flex items-center px-3 rounded-md border border-input bg-muted/40 truncate">
+                  {inheritedArea ? inheritedArea.label : <span className="italic">None (inherited from project)</span>}
+                </p>
+              ) : (
+                <Select value={productAreaId || 'none'} onValueChange={v => setProductAreaId(v === 'none' ? '' : v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select area" />
+                  </SelectTrigger>
+                  <SelectContent position="popper">
+                    <SelectItem value="none">— Inbox (no area)</SelectItem>
+                    {productAreas.map(a => (
+                      <SelectItem key={a.id} value={a.id.toString()}>{a.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
 
-          {/* Project picker */}
-          <div className={fieldClass}>
-            <Label>Project</Label>
-            <Popover open={projectOpen} onOpenChange={setProjectOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={projectOpen}
-                  className="w-full justify-between font-normal"
-                >
-                  <span className={cn('truncate', !selectedProject && 'text-muted-foreground')}>
-                    {selectedProject ? selectedProject.workItem : 'Inbox (no project)'}
-                  </span>
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                <Command shouldFilter={false}>
-                  <CommandInput
-                    placeholder="Search projects…"
-                    value={projectSearch}
-                    onValueChange={setProjectSearch}
-                  />
-                  <CommandList>
-                    <CommandEmpty>No projects found.</CommandEmpty>
-                    <CommandGroup>
-                      {/* Inbox option */}
-                      <CommandItem
-                        value="__inbox__"
-                        onSelect={() => {
-                          setSelectedProjectId(null)
-                          setProjectOpen(false)
-                          setProjectSearch('')
-                        }}
-                      >
-                        <Check className={cn('mr-2 h-4 w-4', selectedProjectId === null ? 'opacity-100' : 'opacity-0')} />
-                        <span className="italic text-muted-foreground">Inbox (no project)</span>
-                      </CommandItem>
-                      {filteredProjects.map(p => (
+            {/* Project picker */}
+            <div className={cn(fieldClass, 'min-w-0')}>
+              <Label>Project</Label>
+              <Popover open={projectOpen} onOpenChange={setProjectOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={projectOpen}
+                    className="w-full justify-between font-normal"
+                  >
+                    <span className={cn('truncate', !selectedProject && 'text-muted-foreground')}>
+                      {selectedProject ? selectedProject.workItem : 'Inbox (no project)'}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] min-w-80 p-0" align="start">
+                  <Command shouldFilter={false}>
+                    <CommandInput
+                      placeholder="Search projects…"
+                      value={projectSearch}
+                      onValueChange={setProjectSearch}
+                    />
+                    <CommandList>
+                      <CommandEmpty>No projects found.</CommandEmpty>
+                      <CommandGroup>
+                        {/* Inbox option */}
                         <CommandItem
-                          key={p.id}
-                          value={String(p.id)}
+                          value="__inbox__"
                           onSelect={() => {
-                            setSelectedProjectId(p.id)
+                            setSelectedProjectId(null)
                             setProjectOpen(false)
                             setProjectSearch('')
                           }}
                         >
-                          <Check className={cn('mr-2 h-4 w-4', selectedProjectId === p.id ? 'opacity-100' : 'opacity-0')} />
-                          {p.workItem}
+                          <Check className={cn('mr-2 h-4 w-4', selectedProjectId === null ? 'opacity-100' : 'opacity-0')} />
+                          <span className="italic text-muted-foreground">Inbox (no project)</span>
                         </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+                        {filteredProjects.map(p => (
+                          <CommandItem
+                            key={p.id}
+                            value={String(p.id)}
+                            onSelect={() => {
+                              setSelectedProjectId(p.id)
+                              setProjectOpen(false)
+                              setProjectSearch('')
+                            }}
+                          >
+                            <Check className={cn('mr-2 h-4 w-4', selectedProjectId === p.id ? 'opacity-100' : 'opacity-0')} />
+                            {p.workItem}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
           </div>
 
           {/* Description */}
@@ -293,7 +296,7 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
             value={description}
             onChange={setDescription}
             placeholder="What needs to be done?"
-            rows={2}
+            rows={3}
             enableWikiLinks
             wikiEntities={wikiEntities}
           />
@@ -305,13 +308,14 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
             value={notes}
             onChange={setNotes}
             placeholder="Additional notes, links, context…"
-            rows={2}
+            rows={6}
+            expandable
             enableWikiLinks
             wikiEntities={wikiEntities}
           />
 
-          {/* Status + Priority */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* Status + Priority + Recurring */}
+          <div className="grid grid-cols-3 gap-4 items-end">
             <div className={fieldClass}>
               <Label>Status</Label>
               <Select value={status} onValueChange={v => setStatus(v as TaskStatus)}>
@@ -339,6 +343,20 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div
+              className="flex items-center gap-2.5 h-9"
+              title="When completed, prompts for the next due date"
+            >
+              <Checkbox
+                id="task-recurring"
+                checked={isRecurring}
+                onCheckedChange={v => setIsRecurring(!!v)}
+              />
+              <Label htmlFor="task-recurring" className="cursor-pointer font-normal">
+                Recurring task
+              </Label>
             </div>
           </div>
 
@@ -412,19 +430,6 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
                 </PopoverContent>
               </Popover>
             </div>
-          </div>
-
-          {/* Recurring */}
-          <div className="flex items-center gap-2.5">
-            <Checkbox
-              id="task-recurring"
-              checked={isRecurring}
-              onCheckedChange={v => setIsRecurring(!!v)}
-            />
-            <Label htmlFor="task-recurring" className="cursor-pointer font-normal">
-              Recurring task
-              <span className="ml-1.5 text-xs text-muted-foreground">(when completed, prompts for next due date)</span>
-            </Label>
           </div>
 
           {/* Tags */}

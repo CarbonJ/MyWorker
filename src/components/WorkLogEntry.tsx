@@ -14,6 +14,8 @@ interface Props {
 export function WorkLogEntryForm({ projectId, projectName, onSaved }: Props) {
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
+  // Expand button renders above the Add Entry button instead of in its own header line
+  const [expandSlot, setExpandSlot] = useState<HTMLDivElement | null>(null)
   const wikiEntities = useWikiEntities()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -34,23 +36,26 @@ export function WorkLogEntryForm({ projectId, projectName, onSaved }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-2">
-      <MarkdownField
-        id="worklog-entry-note"
-        headerLabel={projectName}
-        value={note}
-        onChange={setNote}
-        placeholder="Add a work log entry…"
-        rows={3}
-        expandable
-        enableWikiLinks
-        wikiEntities={wikiEntities}
-        onKeyDown={e => {
-          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); handleSubmit(e as unknown as React.FormEvent) }
-        }}
-      />
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">⌘/Ctrl+↵ to save</span>
+    <form onSubmit={handleSubmit} className="flex items-end gap-2">
+      <div className="flex-1 min-w-0">
+        <MarkdownField
+          id="worklog-entry-note"
+          headerLabel={projectName}
+          value={note}
+          onChange={setNote}
+          placeholder="Add a work log entry…"
+          rows={2}
+          expandable
+          expandSlot={expandSlot}
+          enableWikiLinks
+          wikiEntities={wikiEntities}
+          onKeyDown={e => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); handleSubmit(e as unknown as React.FormEvent) }
+          }}
+        />
+      </div>
+      <div className="shrink-0 flex flex-col items-end gap-1">
+        <div ref={setExpandSlot} className="flex" />
         <Button
           type="submit"
           size="sm"
