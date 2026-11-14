@@ -13,6 +13,11 @@
  *   - Durable IndexedDB storage for the working copy
  *   - Automatic OneDrive backup via File System Access API on every write
  *   - Portability: pick the OneDrive folder on a new machine and import the JSON backup
+ *
+ * Each browser has its own IndexedDB copy, so the folder file may be newer than
+ * this browser's data (written from another laptop). See the folder-sync guard
+ * below: nothing is written to the folder until checkFolderSync() has confirmed
+ * the file is safe to overwrite.
  */
 
 import SQLiteAsyncESMFactory from '@/vendor/wa-sqlite/wa-sqlite-async.mjs'
@@ -123,6 +128,7 @@ async function _initDb(
   await exec(sqlite, db, 'PRAGMA foreign_keys = ON;')
 
   instance = { sqlite, db, vfs, dirHandle }
+  folderSyncState = dirHandle ? 'unchecked' : 'ok'
 
   // Run migrations (creates tables, FTS index, triggers, etc.)
   await runMigrations(instance)
@@ -302,34 +308,249 @@ function collectLocalPrefs(): Record<string, string> {
   return prefs
 }
 
+// ── Folder-sync guard ─────────────────────────────────────────────────────────
+//
+// The folder file (myworker-data.json) is shared by every browser/laptop that
+// points at the folder, but each one has its own IndexedDB working copy. Without
+// a guard, opening the app on a laptop with an older copy would overwrite newer
+// data from another laptop on its first write.
+//
+// So persisting is held off ('unchecked') until checkFolderSync() confirms the
+// file is either one this database wrote (its modified time matches the one we
+// recorded after our last write) or identical in content. Otherwise the user
+// chooses which copy wins (resolveFolderConflict) and the losing copy is saved
+// next to it as a myworker-conflict-*.json file. If another device rewrites the
+// file while this one is open, persisting stops ('conflict') and this browser's
+// snapshot goes to a conflict file instead of overwriting.
+
+const DATA_FILE = 'myworker-data.json'
+/** app_metadata key: lastModified of the folder file right after this database last wrote or adopted it. */
+const FOLDER_MTIME_KEY = 'folder_file_mtime'
+/** Window event fired when another device changed the folder file mid-session. */
+export const FOLDER_CONFLICT_EVENT = 'myworker:folder-conflict'
+
+type FolderSyncState = 'unchecked' | 'ok' | 'conflict'
+let folderSyncState: FolderSyncState = 'unchecked'
+/** Parsed folder file awaiting the user's choice in resolveFolderConflict(). */
+let conflictFileData: Record<string, unknown> | null = null
+
+export interface DataCounts {
+  projects: number
+  tasks: number
+  workLogEntries: number
+  notebookPages: number
+}
+
+export interface FolderConflict {
+  /** When the folder file was written (ISO), if recorded. */
+  fileSavedAt: string | null
+  /** Most recent change in this browser's data (ISO, approximate). */
+  localChangedAt: string | null
+  fileCounts: DataCounts
+  localCounts: DataCounts
+}
+
+async function getMeta(key: string): Promise<string | null> {
+  const { sqlite, db } = getDb()
+  const rows = await exec(sqlite, db, `SELECT value FROM app_metadata WHERE key = ?`, [key])
+  return (rows[0]?.value as string | undefined) ?? null
+}
+
+/** app_metadata is device-local and not backed up, so this never triggers a persist. */
+async function setMeta(key: string, value: string): Promise<void> {
+  const { sqlite, db } = getDb()
+  await exec(sqlite, db,
+    `INSERT INTO app_metadata (key, value) VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [key, value],
+  )
+}
+
+/** True when both snapshots hold the same rows in every backed-up table. */
+function sameUserData(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+  return BACKUP_TABLES.every(({ key }) =>
+    JSON.stringify(a[key] ?? []) === JSON.stringify(b[key] ?? []))
+}
+
+function countsOf(data: Record<string, unknown>): DataCounts {
+  const n = (key: string) => (Array.isArray(data[key]) ? (data[key] as unknown[]).length : 0)
+  return {
+    projects: n('projects'),
+    tasks: n('tasks'),
+    workLogEntries: n('workLogEntries'),
+    notebookPages: n('notebookPages'),
+  }
+}
+
+/** Latest created/updated timestamp across this browser's data, as ISO. */
+async function localChangedAt(): Promise<string | null> {
+  const rows = await query(`
+    SELECT MAX(t) AS t FROM (
+      SELECT MAX(updated_at) AS t FROM projects
+      UNION ALL SELECT MAX(updated_at) FROM tasks
+      UNION ALL SELECT MAX(created_at) FROM work_log_entries
+      UNION ALL SELECT MAX(updated_at) FROM notebook_pages
+      UNION ALL SELECT MAX(updated_at) FROM contacts
+    )`)
+  const t = rows[0]?.t as string | null | undefined
+  return t ? t.replace(' ', 'T') + 'Z' : null
+}
+
+function timestampForFilename(): string {
+  return new Date().toISOString().replace(/[:.]/g, '-')
+}
+
+async function writeJsonFile(dir: FileSystemDirectoryHandle, name: string, data: unknown): Promise<FileSystemFileHandle> {
+  const fileHandle = await dir.getFileHandle(name, { create: true })
+  const writable = await fileHandle.createWritable()
+  await writable.write(typeof data === 'string' ? data : JSON.stringify(data, null, 2))
+  await writable.close()
+  return fileHandle
+}
+
+async function getDataFileHandle(dir: FileSystemDirectoryHandle): Promise<FileSystemFileHandle | null> {
+  try {
+    return await dir.getFileHandle(DATA_FILE)
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'NotFoundError') return null
+    throw err
+  }
+}
+
+/**
+ * Compare the folder file with this browser's data before anything is written
+ * to the folder. Returns null when it's safe to persist (and enables persisting),
+ * or the details of a conflict the user must resolve via resolveFolderConflict().
+ */
+export async function checkFolderSync(): Promise<FolderConflict | null> {
+  const dir = instance?.dirHandle
+  const fileHandle = dir ? await getDataFileHandle(dir) : null
+  if (!dir || !fileHandle) {
+    folderSyncState = 'ok'
+    return null
+  }
+
+  const file = await fileHandle.getFile()
+  if (await getMeta(FOLDER_MTIME_KEY) === String(file.lastModified)) {
+    folderSyncState = 'ok'
+    return null
+  }
+
+  const text = await file.text()
+  let fileData: Record<string, unknown>
+  try {
+    fileData = JSON.parse(text)
+  } catch {
+    // Unreadable file — keep a copy of it, then let this browser's data replace it
+    await writeJsonFile(dir, `myworker-conflict-unreadable-${timestampForFilename()}.json`, text)
+    folderSyncState = 'ok'
+    return null
+  }
+
+  const local = await snapshotUserData()
+  if (sameUserData(local, fileData)) {
+    await setMeta(FOLDER_MTIME_KEY, String(file.lastModified))
+    folderSyncState = 'ok'
+    return null
+  }
+
+  folderSyncState = 'conflict'
+  conflictFileData = fileData
+  return {
+    fileSavedAt: typeof fileData.savedAt === 'string' ? fileData.savedAt : null,
+    localChangedAt: await localChangedAt(),
+    fileCounts: countsOf(fileData),
+    localCounts: countsOf(local),
+  }
+}
+
+/**
+ * Settle a conflict found by checkFolderSync(). The copy that loses is saved
+ * next to the data file as myworker-conflict-<source>-<timestamp>.json.
+ *   'folder' — load the folder file into this browser
+ *   'local'  — keep this browser's data and overwrite the folder file
+ */
+export async function resolveFolderConflict(choice: 'folder' | 'local'): Promise<void> {
+  const dir = instance?.dirHandle
+  const fileData = conflictFileData
+  if (!dir || !fileData) throw new Error('No folder conflict to resolve.')
+  const ts = timestampForFilename()
+  if (choice === 'folder') {
+    await writeJsonFile(dir, `myworker-conflict-browser-${ts}.json`,
+      { ...(await snapshotUserData()), savedAt: new Date().toISOString() })
+    folderSyncState = 'ok'
+    try {
+      // Dynamic import avoids a static circular dependency (importExport imports from this module)
+      const { restoreFromData } = await import('./importExport')
+      await restoreFromData(fileData) // persists to the folder when done
+    } catch (err) {
+      folderSyncState = 'conflict' // restore rolled back — keep the folder file untouched
+      throw err
+    }
+  } else {
+    await writeJsonFile(dir, `myworker-conflict-folder-${ts}.json`, fileData)
+    folderSyncState = 'ok'
+    await persistToUserFolder()
+  }
+  conflictFileData = null
+}
+
+// Persists run one at a time so two writes can't interleave on the same file.
+let persistChain: Promise<void> = Promise.resolve()
+
 /**
  * Persist current data to the user's OneDrive folder as a JSON export.
  * Called after every write so OneDrive always has the latest copy.
  * Uses the JSON export format (same as manual backup) for portability.
+ * Does nothing until checkFolderSync() has cleared the folder for writing.
  */
-export async function persistToUserFolder(): Promise<void> {
-  if (!instance?.dirHandle) return
+export function persistToUserFolder(): Promise<void> {
+  persistChain = persistChain.then(persistNow, persistNow)
+  return persistChain
+}
+
+async function persistNow(): Promise<void> {
+  const dir = instance?.dirHandle
+  if (!dir || folderSyncState !== 'ok') return
 
   try {
-    const data = {
-      ...(await snapshotUserData()),
-      savedAt: new Date().toISOString(),
+    const snapshot = await snapshotUserData()
+    const data = { ...snapshot, savedAt: new Date().toISOString() }
+
+    // If another device rewrote the file since our last write, don't overwrite it
+    const existing = await getDataFileHandle(dir)
+    const marker = await getMeta(FOLDER_MTIME_KEY)
+    if (existing && marker !== null) {
+      const current = await existing.getFile()
+      if (String(current.lastModified) !== marker) {
+        let theirs: Record<string, unknown> | null = null
+        try { theirs = JSON.parse(await current.text()) } catch { /* unreadable — treat as changed */ }
+        if (!theirs || !sameUserData(snapshot, theirs)) {
+          folderSyncState = 'conflict'
+          await writeJsonFile(dir, `myworker-conflict-browser-${timestampForFilename()}.json`, data)
+          window.dispatchEvent(new Event(FOLDER_CONFLICT_EVENT))
+          return
+        }
+      }
     }
 
-    const json = JSON.stringify(data, null, 2)
-    const fileHandle = await instance.dirHandle.getFileHandle('myworker-data.json', { create: true })
-    const writable = await fileHandle.createWritable()
-    await writable.write(json)
-    await writable.close()
+    const fileHandle = await writeJsonFile(dir, DATA_FILE, data)
+    await setMeta(FOLDER_MTIME_KEY, String((await fileHandle.getFile()).lastModified))
   } catch {
     // Non-fatal — data is still safe in IndexedDB
     console.warn('[db] Failed to persist to OneDrive folder')
   }
 }
 
-/** Update the user folder handle (e.g. after Settings "change folder"). */
+/**
+ * Update the user folder handle (e.g. after Settings "change folder").
+ * Persisting pauses until checkFolderSync() has looked at the new folder's file.
+ */
 export function setUserFolderHandle(dirHandle: FileSystemDirectoryHandle): void {
-  if (instance) instance.dirHandle = dirHandle
+  if (instance) {
+    instance.dirHandle = dirHandle
+    folderSyncState = 'unchecked'
+  }
 }
 
 /**

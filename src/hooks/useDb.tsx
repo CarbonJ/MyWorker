@@ -17,10 +17,10 @@ import {
   useCallback,
   type ReactNode,
 } from 'react'
-import { initDb, setUserFolderHandle } from '@/db'
+import { initDb, setUserFolderHandle, checkFolderSync, resolveFolderConflict, type FolderConflict, type DataCounts } from '@/db'
 import { rebuildAllLinks } from '@/db/notebook'
 
-type DbStatus = 'loading' | 'needs-folder' | 'ready' | 'error' | 'unsupported'
+type DbStatus = 'loading' | 'needs-folder' | 'folder-conflict' | 'ready' | 'error' | 'unsupported'
 
 interface DbContextValue {
   status: DbStatus
@@ -82,21 +82,48 @@ async function verifyPermission(handle: FileSystemDirectoryHandle): Promise<bool
 export function DbProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<DbStatus>('loading')
   const [error, setError] = useState<string | null>(null)
+  const [conflict, setConflict] = useState<FolderConflict | null>(null)
+  const [resolving, setResolving] = useState(false)
+
+  const finishStartup = useCallback(() => {
+    // Re-index notebook backlinks on every startup — fast and idempotent,
+    // ensures stale link data from earlier bugs is corrected before any page renders.
+    rebuildAllLinks().catch(err => console.warn('[db] rebuildAllLinks:', err))
+    setStatus('ready')
+  }, [])
 
   const initialise = useCallback(async (handle: FileSystemDirectoryHandle | null) => {
     try {
       setStatus('loading')
       await initDb(handle)
       if (handle) await saveHandle(handle)
-      // Re-index notebook backlinks on every startup — fast and idempotent,
-      // ensures stale link data from earlier bugs is corrected before any page renders.
-      rebuildAllLinks().catch(err => console.warn('[db] rebuildAllLinks:', err))
-      setStatus('ready')
+      // Before anything is written to the folder: is its file newer than this browser's data?
+      const found = await checkFolderSync()
+      if (found) {
+        setConflict(found)
+        setStatus('folder-conflict')
+        return
+      }
+      finishStartup()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       setStatus('error')
     }
-  }, [])
+  }, [finishStartup])
+
+  const resolveConflict = useCallback(async (choice: 'folder' | 'local') => {
+    setResolving(true)
+    try {
+      await resolveFolderConflict(choice)
+      setConflict(null)
+      finishStartup()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+      setStatus('error')
+    } finally {
+      setResolving(false)
+    }
+  }, [finishStartup])
 
   // On mount: restore saved handle or decide what state to show
   useEffect(() => {
@@ -145,6 +172,9 @@ export function DbProvider({ children }: { children: ReactNode }) {
       {status === 'loading' && (
         <LoadingScreen />
       )}
+      {status === 'folder-conflict' && conflict && (
+        <FolderConflictScreen conflict={conflict} busy={resolving} onResolve={resolveConflict} />
+      )}
       {status === 'error' && (
         <ErrorScreen error={error} onRetry={() => setStatus('needs-folder')} />
       )}
@@ -185,6 +215,67 @@ function FolderPickerScreen({ onPick }: { onPick: () => void }) {
           Folder sync requires <strong>Chrome</strong> or <strong>Edge</strong>.
           Firefox and Safari are not supported for this feature.
         </p>
+      </div>
+    </div>
+  )
+}
+
+function fmtWhen(iso: string | null): string {
+  return iso ? new Date(iso).toLocaleString() : 'unknown'
+}
+
+function fmtCounts(c: DataCounts): string {
+  return `${c.projects} projects · ${c.tasks} tasks · ${c.workLogEntries} log entries · ${c.notebookPages} notes`
+}
+
+function FolderConflictScreen({ conflict, busy, onResolve }: {
+  conflict: FolderConflict
+  busy: boolean
+  onResolve: (choice: 'folder' | 'local') => void
+}) {
+  const folderIsNewer = !conflict.localChangedAt ||
+    (!!conflict.fileSavedAt && conflict.fileSavedAt > conflict.localChangedAt)
+  const card = 'rounded-md border p-4 space-y-1 text-left'
+  const btn = 'w-full rounded-md px-4 py-2 font-medium transition-colors disabled:opacity-50'
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="max-w-xl w-full p-8 space-y-5">
+        <div className="space-y-2 text-center">
+          <h1 className="text-xl font-semibold">Your data file was changed elsewhere</h1>
+          <p className="text-sm text-muted-foreground">
+            The data file in your storage folder doesn't match this browser's copy — usually because
+            MyWorker was used on another laptop or browser. Choose which copy to keep. The other copy
+            is saved in the folder as a <span className="font-mono">myworker-conflict-…json</span> file,
+            which you can import later from Settings.
+          </p>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <div className={card}>
+            <p className="font-medium text-sm">Folder file{folderIsNewer && <span className="ml-1.5 text-xs text-green-600 dark:text-green-400">newer</span>}</p>
+            <p className="text-xs text-muted-foreground">Saved {fmtWhen(conflict.fileSavedAt)}</p>
+            <p className="text-xs text-muted-foreground">{fmtCounts(conflict.fileCounts)}</p>
+            <button
+              disabled={busy}
+              onClick={() => onResolve('folder')}
+              className={`${btn} mt-2 ${folderIsNewer ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'border hover:bg-accent'}`}
+            >
+              Load folder file
+            </button>
+          </div>
+          <div className={card}>
+            <p className="font-medium text-sm">This browser{!folderIsNewer && <span className="ml-1.5 text-xs text-green-600 dark:text-green-400">newer</span>}</p>
+            <p className="text-xs text-muted-foreground">Last change {fmtWhen(conflict.localChangedAt)}</p>
+            <p className="text-xs text-muted-foreground">{fmtCounts(conflict.localCounts)}</p>
+            <button
+              disabled={busy}
+              onClick={() => onResolve('local')}
+              className={`${btn} mt-2 ${!folderIsNewer ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'border hover:bg-accent'}`}
+            >
+              Keep this browser's data
+            </button>
+          </div>
+        </div>
+        {busy && <p className="text-sm text-muted-foreground text-center">Working…</p>}
       </div>
     </div>
   )

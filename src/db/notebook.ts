@@ -1,4 +1,4 @@
-import { query, run, insert } from './index'
+import { query, run, insert, exec, getDb } from './index'
 import type { NotebookPage, NotebookBacklink } from '@/types'
 
 function rowToPage(row: Record<string, unknown>): NotebookPage {
@@ -80,7 +80,7 @@ export async function deleteNotebookPage(id: number): Promise<void> {
 
 // Loads all entity names directly from the DB so it's never dependent on
 // component-side state that may not have loaded yet when a save fires.
-async function loadAllEntities(): Promise<Array<{ type: string; id: number; name: string }>> {
+async function loadAllEntities(): Promise<LinkEntity[]> {
   const [projects, contacts, areas, pages] = await Promise.all([
     query(`SELECT id, work_item AS name FROM projects WHERE is_archived = 0`),
     query(`SELECT id, name FROM contacts`),
@@ -95,8 +95,16 @@ async function loadAllEntities(): Promise<Array<{ type: string; id: number; name
   ]
 }
 
-export async function rebuildLinks(pageId: number, body: string): Promise<void> {
-  await run(`DELETE FROM notebook_links WHERE source_page_id = ?`, [pageId])
+type LinkEntity = { type: string; id: number; name: string }
+
+/**
+ * Re-index one page's [[wiki links]]. notebook_links is derived data (not in the
+ * backup), so this uses exec() directly and never triggers a folder persist.
+ * Pass `entities` when indexing many pages to load the name list only once.
+ */
+export async function rebuildLinks(pageId: number, body: string, entities?: LinkEntity[]): Promise<void> {
+  const { sqlite, db } = getDb()
+  await exec(sqlite, db, `DELETE FROM notebook_links WHERE source_page_id = ?`, [pageId])
   // tiptap-markdown serializes [ as \[ — normalize before parsing so wiki links
   // stored as \[\[name\]\] are still detected.
   const normalized = body.replace(/\\\[/g, '[').replace(/\\\]/g, ']')
@@ -113,21 +121,21 @@ export async function rebuildLinks(pageId: number, body: string): Promise<void> 
   }
   if (names.length === 0) return
 
-  const entities = await loadAllEntities()
+  const all = entities ?? await loadAllEntities()
   for (const name of names) {
-    const entity = entities.find(e => e.name.toLowerCase() === name.toLowerCase())
-    await run(
+    const entity = all.find(e => e.name.toLowerCase() === name.toLowerCase())
+    await exec(sqlite, db,
       `INSERT OR IGNORE INTO notebook_links (source_page_id, target_type, target_id, target_name) VALUES (?, ?, ?, ?)`,
       [pageId, entity?.type ?? 'unknown', entity?.id ?? null, name]
     )
   }
 }
 
-// Re-indexes every page — call once on mount to fix any stale link data.
+// Re-indexes every page — run once at startup to fix any stale link data.
 export async function rebuildAllLinks(): Promise<void> {
-  const pages = await getAllNotebookPages()
+  const [pages, entities] = await Promise.all([getAllNotebookPages(), loadAllEntities()])
   for (const page of pages) {
-    await rebuildLinks(page.id, page.body)
+    await rebuildLinks(page.id, page.body, entities)
   }
 }
 

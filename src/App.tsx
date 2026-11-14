@@ -3,7 +3,7 @@ import { BrowserRouter, NavLink, useNavigate, useLocation } from 'react-router-d
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 import { DbProvider } from '@/hooks/useDb'
-import { consumeRecoveryNotice } from '@/db'
+import { consumeRecoveryNotice, FOLDER_CONFLICT_EVENT } from '@/db'
 import { TaskModal } from '@/components/TaskModal'
 import { ProjectModal } from '@/components/ProjectModal'
 import { SearchProvider, useSearch } from '@/contexts/SearchContext'
@@ -178,6 +178,19 @@ function AppInner() {
     if (!notice) return
     const show = notice.level === 'warning' ? toast.warning : toast.error
     show(notice.message, { duration: Infinity, closeButton: true })
+  }, [])
+
+  // Another device rewrote the folder data file while this tab was open. Saving to
+  // the folder has stopped (changes are still kept in this browser); reloading
+  // shows the chooser for which copy to keep.
+  useEffect(() => {
+    const handler = () => toast.warning(
+      'Your data file was changed on another device, so this browser stopped saving to the folder ' +
+      '(your changes are kept here). Reload to choose which copy to keep.',
+      { duration: Infinity, closeButton: true, action: { label: 'Reload', onClick: () => window.location.reload() } },
+    )
+    window.addEventListener(FOLDER_CONFLICT_EVENT, handler)
+    return () => window.removeEventListener(FOLDER_CONFLICT_EVENT, handler)
   }, [])
 
   useEffect(() => {

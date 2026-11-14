@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { exportToJson, importFromJson } from '@/db/importExport'
 import { getAssetsFolderName, setAssetsFolderName, DEFAULT_ASSETS_FOLDER, findUnusedAssets, deleteAssetImage, type UnusedAsset } from '@/db/assets'
 import { Input } from '@/components/ui/input'
-import { setUserFolderHandle, query } from '@/db'
+import { setUserFolderHandle, query, checkFolderSync, persistToUserFolder } from '@/db'
 import { getAllNotebookPages } from '@/db/notebook'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { exportAllNotes, exportAllNotesZip, type NoteExportFormat } from '@/lib/noteExport'
@@ -224,11 +224,23 @@ export default function Settings() {
       const handle = await window.showDirectoryPicker({ mode: 'readwrite' })
       setUserFolderHandle(handle)
       // Persist to IndexedDB
-      const req = indexedDB.open('myworker-meta', 1)
-      req.onsuccess = () => {
-        const tx = req.result.transaction('handles', 'readwrite')
-        tx.objectStore('handles').put(handle, 'folderHandle')
+      await new Promise<void>((resolve, reject) => {
+        const req = indexedDB.open('myworker-meta', 1)
+        req.onsuccess = () => {
+          const tx = req.result.transaction('handles', 'readwrite')
+          tx.objectStore('handles').put(handle, 'folderHandle')
+          tx.oncomplete = () => resolve()
+          tx.onerror = () => reject(tx.error)
+        }
+        req.onerror = () => reject(req.error)
+      })
+      // The new folder may already hold a different data file — never overwrite it
+      // blindly. On a mismatch, reload so the startup chooser asks which copy to keep.
+      if (await checkFolderSync()) {
+        window.location.reload()
+        return
       }
+      await persistToUserFolder()
       toast.success('Storage folder updated')
     } catch (err) {
       if (err instanceof Error && err.name !== 'AbortError') {
