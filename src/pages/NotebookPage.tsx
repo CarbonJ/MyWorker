@@ -96,6 +96,9 @@ export default function NotebookPage() {
       return
     }
     localStorage.setItem('myworker:notebook-last-page', String(selectedId))
+    // Already showing this page (it was just created here) — reloading would
+    // reset the editor and drop anything typed while the create was saving.
+    if (selectedId === currentPageId.current) return
     getNotebookPageById(selectedId).then(p => {
       if (p) {
         setTitle(p.title)
@@ -109,23 +112,42 @@ export default function NotebookPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId])
 
-  const doSave = useCallback(async (newTitle: string, newBody: string) => {
+  // A save is always bound to the page it was typed into (captured when scheduled),
+  // never to whatever page happens to be open when the timer fires — otherwise
+  // switching pages mid-debounce would write one page's text into another.
+  type PendingSave = { pageId: number | null; title: string; body: string }
+  const pendingSave = useRef<PendingSave | null>(null)
+  // In-flight create for the current unsaved new page, so saves queued before the
+  // INSERT resolves update that page instead of creating duplicates.
+  const pendingCreate = useRef<Promise<number> | null>(null)
+
+  const doSave = useCallback(async ({ pageId, title: newTitle, body: newBody }: PendingSave) => {
     setSaveStatus('saving')
     try {
-      if (currentPageId.current === null) {
-        const id = await createNotebookPage(newTitle || 'Untitled', newBody)
-        currentPageId.current = id
-        await rebuildLinks(id, newBody)
-        const freshPages = await loadPages()
-        await loadEntities(freshPages)
-        setIsNew(false)
-        setSearchParams({ page: String(id) })
+      if (pageId === null) {
+        let create = pendingCreate.current
+        if (create) {
+          const id = await create
+          await updateNotebookPage(id, newTitle || 'Untitled', newBody)
+          await rebuildLinks(id, newBody)
+        } else {
+          create = createNotebookPage(newTitle || 'Untitled', newBody)
+          pendingCreate.current = create
+          const id = await create
+          await rebuildLinks(id, newBody)
+          // Only adopt the new page if the user is still on it
+          if (pendingCreate.current === create && currentPageId.current === null) {
+            currentPageId.current = id
+            setIsNew(false)
+            setSearchParams({ page: String(id) })
+          }
+        }
       } else {
-        await updateNotebookPage(currentPageId.current, newTitle || 'Untitled', newBody)
-        await rebuildLinks(currentPageId.current, newBody)
-        const freshPages = await loadPages()
-        await loadEntities(freshPages)
+        await updateNotebookPage(pageId, newTitle || 'Untitled', newBody)
+        await rebuildLinks(pageId, newBody)
       }
+      const freshPages = await loadPages()
+      await loadEntities(freshPages)
       setSaveStatus('saved')
     } catch (err) {
       toast.error(`Failed to save: ${err instanceof Error ? err.message : String(err)}`)
@@ -137,35 +159,29 @@ export default function NotebookPage() {
   const doSaveRef = useRef(doSave)
   doSaveRef.current = doSave
 
-  // Track the latest unsaved args so we can flush them synchronously on unmount
-  const pendingTitleRef = useRef<string | null>(null)
-  const pendingBodyRef  = useRef<string | null>(null)
+  /** Save any pending edit immediately (to the page it belongs to). */
+  const flushSave = useCallback(() => {
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = null
+    const pending = pendingSave.current
+    pendingSave.current = null
+    if (pending) doSaveRef.current(pending)
+  }, [])
 
   const scheduleSave = useCallback((newTitle: string, newBody: string) => {
     setSaveStatus('unsaved')
-    pendingTitleRef.current = newTitle
-    pendingBodyRef.current  = newBody
+    pendingSave.current = { pageId: currentPageId.current, title: newTitle, body: newBody }
     if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(() => {
-      doSaveRef.current(newTitle, newBody)
-      pendingTitleRef.current = null
-      pendingBodyRef.current  = null
-    }, 800)
-  }, [])
+    saveTimer.current = setTimeout(flushSave, 800)
+  }, [flushSave])
 
   // Flush any pending debounced save immediately when the component unmounts
   // (e.g. user presses Escape or navigates away before the 800ms timer fires).
-  useEffect(() => {
-    return () => {
-      if (saveTimer.current && pendingBodyRef.current !== null) {
-        clearTimeout(saveTimer.current)
-        doSaveRef.current(pendingTitleRef.current ?? '', pendingBodyRef.current)
-      }
-    }
-  }, [])
+  useEffect(() => flushSave, [flushSave])
 
   const handleNewPage = useCallback(() => {
-    if (saveTimer.current) clearTimeout(saveTimer.current)
+    flushSave()
+    pendingCreate.current = null
     setIsNew(true)
     setTitle('')
     setBody('')
@@ -173,7 +189,7 @@ export default function NotebookPage() {
     setSaveStatus('unsaved')
     currentPageId.current = null
     setSearchParams({})
-  }, [setSearchParams])
+  }, [flushSave, setSearchParams])
 
   const toggleStar = async () => {
     const id = currentPageId.current
@@ -194,6 +210,14 @@ export default function NotebookPage() {
   const handleDelete = async (page: NotebookPage, e: React.MouseEvent) => {
     e.stopPropagation()
     if (!confirm(`Delete "${page.title || 'Untitled'}"? This cannot be undone.`)) return
+    // Drop an unsaved edit to the page being deleted; flush any other page's edit first
+    if (pendingSave.current?.pageId === page.id) {
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+      saveTimer.current = null
+      pendingSave.current = null
+    } else {
+      flushSave()
+    }
     try {
       await deleteNotebookPage(page.id)
       toast.success('Page deleted')
@@ -279,7 +303,8 @@ export default function NotebookPage() {
             <div
               key={page.id}
               onClick={() => {
-                if (saveTimer.current) clearTimeout(saveTimer.current)
+                flushSave()
+                pendingCreate.current = null
                 setIsNew(false)
                 setSearchParams({ page: String(page.id) })
               }}

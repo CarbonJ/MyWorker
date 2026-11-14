@@ -1,4 +1,4 @@
-import { query, run, lastInsertId } from './index'
+import { query, run, insert } from './index'
 import { parseTags, stringifyTags } from '@/lib/tags'
 import type { Contact } from '@/types'
 
@@ -36,7 +36,7 @@ export interface CreateContactInput {
 }
 
 export async function createContact(input: CreateContactInput): Promise<number> {
-  await run(
+  return await insert(
     `INSERT INTO contacts (name, role, group_name, notes, tags, whos_who)
      VALUES (?, ?, ?, ?, ?, ?)`,
     [
@@ -48,7 +48,6 @@ export async function createContact(input: CreateContactInput): Promise<number> 
       input.whosWho?.trim() ?? '',
     ],
   )
-  return await lastInsertId()
 }
 
 export interface UpdateContactInput extends Partial<CreateContactInput> {

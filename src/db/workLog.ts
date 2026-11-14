@@ -1,5 +1,4 @@
-import { query, run, lastInsertId } from './index'
-import { deleteNoteAssets } from './assets'
+import { query, run, insert } from './index'
 import type { WorkLogEntry } from '@/types'
 
 function rowToEntry(row: Record<string, unknown>): WorkLogEntry {
@@ -45,11 +44,10 @@ export async function getWorkLogByProject(projectId: number): Promise<WorkLogEnt
 /** Add a work log entry. Pass isSystem = true for app-generated entries
  *  (task-completion lines) so they can be filtered without matching note text. */
 export async function addWorkLogEntry(projectId: number, note: string, isSystem = false): Promise<number> {
-  await run(
+  return await insert(
     `INSERT INTO work_log_entries (project_id, note, is_system) VALUES (?, ?, ?)`,
     [projectId, note, isSystem ? 1 : 0],
   )
-  return await lastInsertId()
 }
 
 /** Update the note text of an existing entry. created_at is intentionally unchanged to preserve sort order. */
@@ -57,12 +55,9 @@ export async function updateWorkLogEntry(id: number, note: string): Promise<void
   await run(`UPDATE work_log_entries SET note = ? WHERE id = ?`, [note, id])
 }
 
+/** Pasted image files are left in place — see the unused-image cleanup in assets.ts. */
 export async function deleteWorkLogEntry(id: number): Promise<void> {
-  // Read the note first so any pasted image files can be removed from the assets folder.
-  const rows = await query(`SELECT note FROM work_log_entries WHERE id = ?`, [id])
-  const note = rows[0]?.note as string | undefined
   await run(`DELETE FROM work_log_entries WHERE id = ?`, [id])
-  if (note) await deleteNoteAssets(note)
 }
 
 export interface WorkLogEntryWithProject extends WorkLogEntry {

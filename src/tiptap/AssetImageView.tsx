@@ -1,13 +1,13 @@
 import { NodeViewWrapper, type NodeViewProps } from '@tiptap/react'
 import { ImageIcon, Link2, Trash2 } from 'lucide-react'
 import { AssetImageDisplay } from '@/components/AssetImageDisplay'
-import { parseAssetSrc, buildAssetSrc, deleteAssetImage } from '@/db/assets'
+import { parseAssetSrc, buildAssetSrc } from '@/db/assets'
 
 /**
  * Editor node view for a pasted image. Renders the shared display component and
  * overlays a small toolbar (link/image toggle, width slider, delete) when the
  * node is selected. Display state is encoded in the node `src` so it round-trips
- * through markdown serialization; delete removes both the node and the file.
+ * through markdown serialization; delete removes the node (the file is kept until an unused-image cleanup).
  */
 export function AssetImageView({ node, updateAttributes, deleteNode, selected, editor }: NodeViewProps) {
   const src: string = node.attrs.src ?? ''
@@ -28,10 +28,9 @@ export function AssetImageView({ node, updateAttributes, deleteNode, selected, e
   const setWidth = (w: number) => updateAttributes({ src: buildAssetSrc(filename, w, 'image') })
   const toggleDisplay = () =>
     updateAttributes({ src: buildAssetSrc(filename, width, display === 'link' ? 'image' : 'link') })
-  const remove = () => {
-    deleteAssetImage(filename).catch(() => {})
-    deleteNode()
-  }
+  // Removes the image from the note only. The file stays on disk so Cancel/undo
+  // still work; unreferenced files are cleaned up from Settings → Data.
+  const remove = () => deleteNode()
 
   return (
     <NodeViewWrapper as="span" className="relative inline-block align-top" data-drag-handle>

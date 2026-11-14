@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { TEXT_COLOR_HEX, buttonStyle, workItemStyle } from '@/lib/guiSettings'
 import { toast } from 'sonner'
 import { exportToJson, importFromJson } from '@/db/importExport'
-import { getAssetsFolderName, setAssetsFolderName, DEFAULT_ASSETS_FOLDER } from '@/db/assets'
+import { getAssetsFolderName, setAssetsFolderName, DEFAULT_ASSETS_FOLDER, findUnusedAssets, deleteAssetImage, type UnusedAsset } from '@/db/assets'
 import { Input } from '@/components/ui/input'
 import { setUserFolderHandle, query } from '@/db'
 import { getAllNotebookPages } from '@/db/notebook'
@@ -34,6 +34,37 @@ export default function Settings() {
   const [importing, setImporting] = useState(false)
   const [assetsFolder, setAssetsFolder] = useState(() => getAssetsFolderName())
   const [dataStats, setDataStats] = useState<DataStats | null>(null)
+  // null = not scanned yet
+  const [unusedAssets, setUnusedAssets] = useState<UnusedAsset[] | null>(null)
+  const [scanningAssets, setScanningAssets] = useState(false)
+
+  const scanUnusedAssets = async () => {
+    setScanningAssets(true)
+    try {
+      setUnusedAssets(await findUnusedAssets())
+    } catch (err) {
+      toast.error(`Failed to scan images: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setScanningAssets(false)
+    }
+  }
+
+  const deleteUnusedAssets = async () => {
+    if (!unusedAssets?.length) return
+    if (!confirm(`Delete ${unusedAssets.length} unused image file(s) from the ${getAssetsFolderName()} folder? OneDrive's recycle bin keeps deleted files for a while.`)) return
+    setScanningAssets(true)
+    try {
+      // Re-scan right before deleting so a reference added since the last scan is respected
+      const fresh = await findUnusedAssets()
+      for (const a of fresh) await deleteAssetImage(a.filename)
+      toast.success(`Deleted ${fresh.length} unused image file(s)`)
+      setUnusedAssets([])
+    } catch (err) {
+      toast.error(`Failed to delete images: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setScanningAssets(false)
+    }
+  }
   const [areaFilterButtons, setAreaFilterButtons] = useState(
     () => localStorage.getItem(AREA_BTN_KEY) === 'true'
   )
@@ -533,6 +564,32 @@ export default function Settings() {
                   <p className="text-xs text-muted-foreground">
                     Subfolder (next to your database) where pasted images are stored. Changing this only affects newly pasted images; existing files are not moved.
                   </p>
+                </div>
+                <div className="pt-2 space-y-1.5">
+                  <p className="text-sm font-medium">Unused images</p>
+                  <p className="text-xs text-muted-foreground max-w-xl">
+                    Removing an image or deleting a note keeps the image file, so Cancel and undo always work.
+                    Find files no note references anymore (older than a day) and delete them here.
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <Button variant="outline" size="sm" onClick={scanUnusedAssets} disabled={scanningAssets}>
+                      {scanningAssets ? 'Scanning…' : 'Find unused images'}
+                    </Button>
+                    {unusedAssets !== null && (
+                      unusedAssets.length === 0 ? (
+                        <span className="text-sm text-muted-foreground">No unused images found.</span>
+                      ) : (
+                        <>
+                          <span className="text-sm text-muted-foreground">
+                            {unusedAssets.length} file(s), {(unusedAssets.reduce((n, a) => n + a.size, 0) / 1024 / 1024).toFixed(1)} MB
+                          </span>
+                          <Button variant="destructive" size="sm" onClick={deleteUnusedAssets} disabled={scanningAssets}>
+                            Delete unused
+                          </Button>
+                        </>
+                      )
+                    )}
+                  </div>
                 </div>
               </>
             ) : (

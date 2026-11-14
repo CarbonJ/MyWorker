@@ -1,4 +1,4 @@
-import { query, run, lastInsertId, exec, getDb, persistToUserFolder } from './index'
+import { query, run, insert, exec, getDb, persistToUserFolder } from './index'
 import type { DropdownOption, DropdownType } from '@/types'
 
 function rowToOption(row: Record<string, unknown>): DropdownOption {
@@ -41,11 +41,10 @@ export async function createDropdownOption(
     order = ((rows[0]?.max_order as number | null) ?? -1) + 1
   }
 
-  await run(
+  return await insert(
     `INSERT INTO dropdown_options (type, label, sort_order) VALUES (?, ?, ?)`,
     [type, label, order],
   )
-  return await lastInsertId()
 }
 
 export async function updateDropdownOption(

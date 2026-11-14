@@ -183,9 +183,38 @@ export function parseAssetRefs(markdown: string): string[] {
   return [...found]
 }
 
-/** Delete every asset file referenced by a note's markdown body (best-effort). */
-export async function deleteNoteAssets(markdown: string): Promise<void> {
-  for (const filename of parseAssetRefs(markdown)) {
-    await deleteAssetImage(filename)
+// ── Unused-image cleanup ──────────────────────────────────────────────────────
+// Image files are never deleted when a note, entry or image is removed: the
+// edit might be cancelled or undone, the same image may be referenced from
+// another note, and an older backup restored later may still point at it.
+// Instead, unreferenced files are found and removed on request (Settings → Data).
+
+/** Files modified more recently than this are skipped — they may belong to an editor that hasn't saved yet. */
+const UNUSED_ASSET_MIN_AGE_MS = 24 * 60 * 60 * 1000
+
+export interface UnusedAsset {
+  filename: string
+  size: number
+}
+
+/**
+ * List files in the assets folder that no saved record references.
+ * References are found by scanning the full backup snapshot, so every table
+ * that can hold markdown is covered without listing them here.
+ */
+export async function findUnusedAssets(): Promise<UnusedAsset[]> {
+  const dir = await getAssetsDir(false)
+  if (!dir) return []
+  // Dynamic import avoids a circular dependency (index.ts → … → assets.ts)
+  const { snapshotUserData } = await import('./index')
+  const referenced = new Set(parseAssetRefs(JSON.stringify(await snapshotUserData())))
+  const cutoff = Date.now() - UNUSED_ASSET_MIN_AGE_MS
+  const unused: UnusedAsset[] = []
+  for await (const handle of dir.values()) {
+    if (handle.kind !== 'file' || referenced.has(handle.name)) continue
+    const file = await (handle as FileSystemFileHandle).getFile()
+    if (file.lastModified > cutoff) continue
+    unused.push({ filename: handle.name, size: file.size })
   }
+  return unused.sort((a, b) => a.filename.localeCompare(b.filename))
 }

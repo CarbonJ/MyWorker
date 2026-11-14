@@ -1,4 +1,4 @@
-import { query, run, lastInsertId } from './index'
+import { query, run, insert } from './index'
 import { parseTags, stringifyTags } from '@/lib/tags'
 import type { Task, TaskStatus } from '@/types'
 
@@ -89,7 +89,7 @@ export async function getAllTasks(): Promise<Task[]> {
 }
 
 export async function createTask(input: CreateTaskInput): Promise<number> {
-  await run(
+  return await insert(
     `INSERT INTO tasks
       (project_id, product_area_id, title, description, notes, status, priority_id, tags, start_date, due_date, is_recurring)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -108,7 +108,6 @@ export async function createTask(input: CreateTaskInput): Promise<number> {
       input.isRecurring ? 1 : 0,
     ],
   )
-  return await lastInsertId()
 }
 
 export interface UpdateTaskInput extends Partial<CreateTaskInput> {

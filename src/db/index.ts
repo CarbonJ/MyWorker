@@ -440,9 +440,20 @@ export async function run(
   schedulePersist()
 }
 
-/** Get the last inserted row ID via SQL (last_insert_rowid not in vendored API). */
-export async function lastInsertId(): Promise<number> {
-  const rows = await query('SELECT last_insert_rowid() AS id')
+/**
+ * Run a single INSERT statement, persist, and return the new row's id.
+ *
+ * The id comes from `RETURNING id` on the same statement. A separate
+ * `SELECT last_insert_rowid()` would be a second exec() call, and another
+ * queued insert could run in between and hand back the wrong id.
+ */
+export async function insert(
+  sql: string,
+  params: SQLiteCompatibleType[] = [],
+): Promise<number> {
+  const { sqlite, db } = getDb()
+  const rows = await exec(sqlite, db, `${sql} RETURNING id`, params)
+  schedulePersist()
   return rows[0]?.id as number
 }
 

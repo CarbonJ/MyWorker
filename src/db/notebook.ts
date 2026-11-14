@@ -1,5 +1,4 @@
-import { query, run, lastInsertId } from './index'
-import { deleteNoteAssets } from './assets'
+import { query, run, insert } from './index'
 import type { NotebookPage, NotebookBacklink } from '@/types'
 
 function rowToPage(row: Record<string, unknown>): NotebookPage {
@@ -62,8 +61,7 @@ export async function getLinkedNotebookEntriesByDateRange(
 }
 
 export async function createNotebookPage(title: string, body: string): Promise<number> {
-  await run(`INSERT INTO notebook_pages (title, body) VALUES (?, ?)`, [title, body])
-  return await lastInsertId()
+  return await insert(`INSERT INTO notebook_pages (title, body) VALUES (?, ?)`, [title, body])
 }
 
 export async function updateNotebookPage(id: number, title: string, body: string): Promise<void> {
@@ -75,12 +73,9 @@ export async function setNotebookPageStarred(id: number, starred: boolean): Prom
   await run(`UPDATE notebook_pages SET starred = ? WHERE id = ?`, [starred ? 1 : 0, id])
 }
 
+/** Pasted image files are left in place — see the unused-image cleanup in assets.ts. */
 export async function deleteNotebookPage(id: number): Promise<void> {
-  // Read the body first so any pasted image files can be removed from the assets folder.
-  const rows = await query(`SELECT body FROM notebook_pages WHERE id = ?`, [id])
-  const body = rows[0]?.body as string | undefined
   await run(`DELETE FROM notebook_pages WHERE id = ?`, [id])
-  if (body) await deleteNoteAssets(body)
 }
 
 // Loads all entity names directly from the DB so it's never dependent on

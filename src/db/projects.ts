@@ -1,4 +1,4 @@
-import { query, run, lastInsertId } from './index'
+import { query, run, insert } from './index'
 import { parseTags, stringifyTags } from '@/lib/tags'
 import type { Project, RagStatus, Stakeholder } from '@/types'
 
@@ -84,7 +84,7 @@ export interface CreateProjectInput {
 }
 
 export async function createProject(input: CreateProjectInput): Promise<number> {
-  await run(
+  return await insert(
     `INSERT INTO projects
       (work_item, work_desc, rag_status, priority_id, latest_status, product_area_id, status_id, stakeholders, tags, due_date)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -101,7 +101,6 @@ export async function createProject(input: CreateProjectInput): Promise<number> 
       input.dueDate ?? null,
     ],
   )
-  return await lastInsertId()
 }
 
 export interface UpdateProjectInput extends Partial<CreateProjectInput> {
