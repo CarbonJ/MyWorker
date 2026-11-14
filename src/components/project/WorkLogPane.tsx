@@ -152,7 +152,8 @@ export function WorkLogPane({ projectId, projectName, workLog, notebookRefs = []
       </div>
 
       <div className="px-3 py-2 border-b bg-muted/30 shrink-0">
-        <WorkLogEntryForm projectId={projectId} projectName={projectName} onSaved={onSaved} />
+        {/* keyed so each project gets its own draft when moving between projects */}
+        <WorkLogEntryForm key={projectId} projectId={projectId} projectName={projectName} onSaved={onSaved} />
       </div>
 
       <div className="flex-1 overflow-y-auto divide-y divide-border min-h-0">

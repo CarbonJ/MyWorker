@@ -6,6 +6,7 @@ import { remarkHighlight } from '@/lib/remarkHighlight'
 import { useWikiEntities } from '@/hooks/useWikiEntities'
 import { parseAssetSrc } from '@/db/assets'
 import { findHashtags } from '@/lib/tags'
+import { entityRoute } from '@/lib/wikiRoutes'
 import { AssetImageDisplay } from '@/components/AssetImageDisplay'
 import type { WikiEntity } from '@/types'
 
@@ -13,15 +14,6 @@ interface Props {
   children: string
   className?: string
   wikiEntities?: WikiEntity[]
-}
-
-function entityToRoute(entity: WikiEntity): string {
-  switch (entity.type) {
-    case 'page': return `/notebook?page=${entity.id}`
-    case 'project': return `/projects/${entity.id}`
-    case 'contact': return `/contacts`
-    case 'area': return `/`
-  }
 }
 
 export function WikiLinkContent({ children, className, wikiEntities: propEntities }: Props) {
@@ -34,7 +26,7 @@ export function WikiLinkContent({ children, className, wikiEntities: propEntitie
     const normalized = children.replace(/\\\[/g, '[').replace(/\\\]/g, ']')
     let out = normalized.replace(/\[\[([^\]]+)\]\]/g, (_, name: string) => {
       const entity = wikiEntities.find(e => e.name.toLowerCase() === name.trim().toLowerCase())
-      if (entity) return `[${name}](${entityToRoute(entity)})`
+      if (entity) return `[${name}](${entityRoute(entity)})`
       return `**[[${name}]]**`
     })
     // #tags become links to the Tags screen (rendered as chips by the `a` override below).

@@ -89,6 +89,7 @@ export default function Prime() {
   // Due filter from URL (?filter=due)
   const dueFilter = searchParams.get('filter') === 'due'
   const toggleDueFilter = () => dueFilter ? setSearchParams({}) : setSearchParams({ filter: 'due' })
+  const areaParam = searchParams.get('area')
 
   // ── Project filter state (multi-select, empty = All) ──────────────────────
   const [ragFilters,      setRagFilters]      = useState<RagStatus[]>(() => loadArr('myworker:prime-rag2', []) as RagStatus[])
@@ -98,6 +99,14 @@ export default function Prime() {
   const [tagFilters,      setTagFilters]      = useState<string[]>(()   => loadArr('myworker:prime-tags2', []))
   const [areaFilterButtons]                   = useState(() => localStorage.getItem('myworker:area-filter-buttons-projects') !== 'false')
   const [savedViews,      setSavedViews]      = useState<SavedView[]>([])
+
+  // ?area=<id> (an [[Area]] wiki link) → show just that area, then drop the param
+  // so the filter behaves like any other from here on.
+  useEffect(() => {
+    if (!areaParam) return
+    setAreaFilters([areaParam])
+    setSearchParams(prev => { prev.delete('area'); return prev }, { replace: true })
+  }, [areaParam, setSearchParams])
   const [saveViewName,    setSaveViewName]    = useState('')
   const [viewsOpen,       setViewsOpen]       = useState(false)
 

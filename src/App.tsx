@@ -209,11 +209,17 @@ function AppInner() {
         setQuickTaskOpen(true)
         return
       }
-      // Esc → navigate home, but not when a dialog is open or a rich-text editor is focused
+      // Esc → navigate home, but never while a dialog is open, and never straight out
+      // of a field being typed in: the first Esc only leaves the field (so text isn't
+      // lost by a stray keypress), a second Esc with nothing focused goes home.
       if (e.key === 'Escape') {
-        const hasOpenDialog = !!document.querySelector('[role="dialog"]')
-        const isEditingInEditor = !!document.activeElement?.closest('.ProseMirror')
-        if (!hasOpenDialog && !isEditingInEditor) navigate('/')
+        if (document.querySelector('[role="dialog"]')) return
+        const el = document.activeElement as HTMLElement | null
+        if (el && (el.matches('input, textarea, select') || el.isContentEditable)) {
+          el.blur()
+          return
+        }
+        navigate('/')
       }
     }
     window.addEventListener('keydown', handleKey)

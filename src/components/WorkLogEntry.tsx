@@ -11,8 +11,27 @@ interface Props {
   onSaved: () => void
 }
 
+// Unsent entry text is kept per project so leaving the screen (or a reload) never
+// loses it. Not under the myworker: prefix — drafts stay out of backups.
+const draftKey = (projectId: number) => `myworker-draft:worklog:${projectId}`
+
+function loadDraft(projectId: number): string {
+  try { return localStorage.getItem(draftKey(projectId)) ?? '' } catch { return '' }
+}
+
+function saveDraft(projectId: number, text: string): void {
+  try {
+    if (text.trim()) localStorage.setItem(draftKey(projectId), text)
+    else localStorage.removeItem(draftKey(projectId))
+  } catch { /* storage unavailable — the draft just isn't kept */ }
+}
+
 export function WorkLogEntryForm({ projectId, projectName, onSaved }: Props) {
-  const [note, setNote] = useState('')
+  const [note, setNoteState] = useState(() => loadDraft(projectId))
+  const setNote = (text: string) => {
+    setNoteState(text)
+    saveDraft(projectId, text)
+  }
   const [saving, setSaving] = useState(false)
   // Expand button renders above the Add Entry button instead of in its own header line
   const [expandSlot, setExpandSlot] = useState<HTMLDivElement | null>(null)

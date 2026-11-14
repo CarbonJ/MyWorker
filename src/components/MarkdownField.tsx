@@ -25,6 +25,7 @@ import { toast } from 'sonner'
 import { AssetImage } from '@/tiptap/assetImage'
 import { assetsSupported, saveAssetImage, buildAssetSrc, DEFAULT_ASSET_WIDTH } from '@/db/assets'
 import { findHashtags, tagKey } from '@/lib/tags'
+import { entityRoute } from '@/lib/wikiRoutes'
 import { useTagNames } from '@/hooks/useTagNames'
 
 // Extend Highlight with tiptap-markdown serializer so ==text== roundtrips correctly.
@@ -273,11 +274,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
     }
     const entity = wikiEntitiesRef.current.find(en => en.name.toLowerCase() === name.toLowerCase())
     if (!entity) return
-    navigateRef.current(
-      entity.type === 'page' ? `/notebook?page=${entity.id}` :
-      entity.type === 'project' ? `/projects/${entity.id}` :
-      entity.type === 'contact' ? `/contacts?q=${encodeURIComponent(entity.name)}` : `/`
-    )
+    navigateRef.current(entityRoute(entity))
   }
 
   const editor = useEditor({
@@ -354,6 +351,9 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
             setSizeMode('default')
             return true
           }
+          // Outside a dialog, the first Esc just leaves the field (nothing is lost);
+          // a second Esc, with nothing focused, is the global "back to Projects".
+          if (!view.dom.closest('[role="dialog"]')) view.dom.blur()
           return false
         }
         // Block Enter / Shift+Enter inside a table cell: a second block or a
