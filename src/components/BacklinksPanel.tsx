@@ -9,7 +9,7 @@ import { getProjectsByStakeholder } from '@/db/projects'
 import type { NotebookBacklink, Project } from '@/types'
 
 interface Props {
-  targetType: 'project' | 'contact'
+  targetType: 'project' | 'contact' | 'page'
   targetId: number
   entityName: string
 }
@@ -37,7 +37,8 @@ export function BacklinksPanel({ targetType, targetId, entityName }: Props) {
       targetType === 'contact' ? getProjectsByStakeholder(entityName) : Promise.resolve([]),
       getMentions(entityName).catch(() => [] as TagRef[]),
     ]).then(([n, p, m]) => {
-      setNotes(n)
+      // A page linking to itself isn't a backlink
+      setNotes(targetType === 'page' ? n.filter(l => l.pageId !== targetId) : n)
       setProjects(p as Project[])
       // An entity's own record linking to itself isn't a mention worth listing
       setMentions(m.filter(r => !(r.sourceType === targetType && r.id === targetId)))

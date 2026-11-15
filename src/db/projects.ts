@@ -2,6 +2,7 @@ import { query, run, insert, exec, getDb, persistToUserFolder } from './index'
 import { parseTags, stringifyTags } from '@/lib/tags'
 import { getKnownTagNames } from './tags'
 import { renameWikiLinks } from './links'
+import { moveToTrash } from './trash'
 import type { Project, RagStatus, Stakeholder } from '@/types'
 
 function parseStakeholders(raw: string): Stakeholder[] {
@@ -184,8 +185,9 @@ export async function updateProject(input: UpdateProjectInput): Promise<void> {
   if (input.workItem !== undefined) await renameWikiLinks(current.workItem, input.workItem)
 }
 
+/** Moves the project — with its tasks and work log entries — to the Trash. */
 export async function deleteProject(id: number): Promise<void> {
-  await run(`DELETE FROM projects WHERE id = ?`, [id])
+  await moveToTrash('project', id)
 }
 
 /** Renames a stakeholder across all projects. */

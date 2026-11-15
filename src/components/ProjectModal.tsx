@@ -160,7 +160,7 @@ export function ProjectModal({ project, open, onClose, onSaved }: Props) {
   }
 
   const handleDelete = async () => {
-    if (!project || !confirm(`Delete "${project.workItem}"? This cannot be undone.`)) return
+    if (!project || !confirm(`Delete "${project.workItem}" and its tasks and work log? It moves to the Trash, where you can restore it for 30 days.`)) return
     try {
       await deleteProject(project.id)
       toast.success('Project deleted')

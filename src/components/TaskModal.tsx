@@ -189,7 +189,7 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
   }
 
   const handleDelete = async () => {
-    if (!task || !confirm(`Delete "${task.title}"?`)) return
+    if (!task || !confirm(`Delete "${task.title}"? It moves to the Trash, where you can restore it for 30 days.`)) return
     try {
       await deleteTask(task.id)
       toast.success('Task deleted')

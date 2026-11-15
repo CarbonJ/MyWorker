@@ -9,7 +9,7 @@ import { getAllProjects } from '@/db/projects'
 import { getAllNotebookPages } from '@/db/notebook'
 import { getAllContacts } from '@/db/contacts'
 import type { Project, NotebookPage, Contact } from '@/types'
-import { LayoutDashboard, BarChart2, Archive, Settings, BookOpen, FolderOpen, Plus, ClipboardList, FileText, UserRound, NotebookPen, Hash } from 'lucide-react'
+import { LayoutDashboard, BarChart2, Archive, Settings, BookOpen, FolderOpen, Plus, ClipboardList, FileText, UserRound, NotebookPen, Hash, Trash2, CalendarDays } from 'lucide-react'
 
 interface Props {
   open: boolean
@@ -62,6 +62,12 @@ export function CommandPalette({ open, onClose, onNewTask, onNewProject }: Props
               </CommandItem>
               <CommandItem value="contacts people" onSelect={() => go('/contacts')}>
                 <UserRound className="text-muted-foreground" /> Contacts
+              </CommandItem>
+              <CommandItem value="calendar due dates schedule week month" onSelect={() => go('/calendar')}>
+                <CalendarDays className="text-muted-foreground" /> Calendar
+              </CommandItem>
+              <CommandItem value="trash deleted restore recycle bin" onSelect={() => go('/trash')}>
+                <Trash2 className="text-muted-foreground" /> Trash
               </CommandItem>
               <CommandItem value="tags hashtags labels" onSelect={() => go('/tags')}>
                 <Hash className="text-muted-foreground" /> Tags

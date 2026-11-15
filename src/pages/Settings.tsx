@@ -5,7 +5,9 @@ import { toast } from 'sonner'
 import { exportToJson, importFromJson } from '@/db/importExport'
 import { getAssetsFolderName, setAssetsFolderName, DEFAULT_ASSETS_FOLDER, findUnusedAssets, deleteAssetImage, type UnusedAsset } from '@/db/assets'
 import { Input } from '@/components/ui/input'
-import { setUserFolderHandle, query, checkFolderSync, persistToUserFolder, getFolderSaveStatus, FOLDER_SAVE_EVENT } from '@/db'
+import { setUserFolderHandle, query, checkFolderSync, persistToUserFolder, getFolderSaveStatus, FOLDER_SAVE_EVENT, listSnapshots, SNAPSHOT_FOLDER, SNAPSHOT_DAYS } from '@/db'
+import { useNavigate } from 'react-router-dom'
+import { TRASH_DAYS } from '@/db/trash'
 import { getAllNotebookPages } from '@/db/notebook'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { exportAllNotes, exportAllNotesZip, type NoteExportFormat } from '@/lib/noteExport'
@@ -35,6 +37,9 @@ export default function Settings() {
   const [assetsFolder, setAssetsFolder] = useState(() => getAssetsFolderName())
   const [dataStats, setDataStats] = useState<DataStats | null>(null)
   const [folderSave, setFolderSave] = useState(getFolderSaveStatus)
+  const [snapshots, setSnapshots] = useState<string[] | null>(null)
+  const navigate = useNavigate()
+  useEffect(() => { listSnapshots().then(setSnapshots).catch(() => setSnapshots([])) }, [folderSave.lastSavedAt])
   useEffect(() => {
     const handler = () => setFolderSave(getFolderSaveStatus())
     window.addEventListener(FOLDER_SAVE_EVENT, handler)
@@ -726,6 +731,23 @@ export default function Settings() {
           {/* Import / Export */}
           <section className={section}>
             <h2 className={sectionTitle}>Backup &amp; Restore</h2>
+            <div className="text-sm text-muted-foreground space-y-1 max-w-2xl">
+              <p>
+                <span className="font-medium text-foreground">Daily snapshots:</span> once a day a dated copy is saved in
+                the <span className="font-mono">{SNAPSHOT_FOLDER}</span> folder next to your data file; copies older than {SNAPSHOT_DAYS} days
+                are removed. {snapshots === null ? '' : snapshots.length === 0
+                  ? 'No snapshots yet.'
+                  : `${snapshots.length} snapshot${snapshots.length === 1 ? '' : 's'}, newest ${new Date(snapshots[0] + 'T12:00:00').toLocaleDateString()}.`}
+                {' '}To roll back to one, use Import below and pick that file.
+              </p>
+              <p>
+                <span className="font-medium text-foreground">Trash:</span> deleted projects, tasks, log entries, notes and
+                contacts can be restored for {TRASH_DAYS} days.{' '}
+                <button type="button" onClick={() => navigate('/trash')} className="text-blue-600 dark:text-blue-400 hover:underline">
+                  Open Trash
+                </button>
+              </p>
+            </div>
             <div className="flex gap-3">
               <Button variant="outline" onClick={handleExport}>
                 Export backup (JSON)

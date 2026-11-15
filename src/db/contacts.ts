@@ -1,6 +1,7 @@
 import { query, run, insert } from './index'
 import { renameStakeholder } from './projects'
 import { renameWikiLinks } from './links'
+import { moveToTrash } from './trash'
 import { parseTags, stringifyTags } from '@/lib/tags'
 import type { Contact } from '@/types'
 
@@ -83,8 +84,9 @@ export async function updateContact(input: UpdateContactInput): Promise<void> {
   }
 }
 
+/** Moves the contact to the Trash. */
 export async function deleteContact(id: number): Promise<void> {
-  await run(`DELETE FROM contacts WHERE id = ?`, [id])
+  await moveToTrash('contact', id)
 }
 
 /** All contact names sorted alphabetically — merged into stakeholder autocomplete. */

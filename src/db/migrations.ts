@@ -678,6 +678,23 @@ const migrations: Migration[] = [
       END;
     `,
   },
+  {
+    version: 26,
+    up: `
+      -- Deleted records, kept for 30 days so they can be restored (see trash.ts).
+      -- payload holds the full row as JSON — plus, for a project, its tasks and
+      -- work log entries, which the delete cascades to.
+      CREATE TABLE trash (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        item_type  TEXT NOT NULL,
+        item_id    INTEGER NOT NULL,
+        title      TEXT NOT NULL DEFAULT '',
+        payload    TEXT NOT NULL,
+        deleted_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX idx_trash_deleted_at ON trash(deleted_at);
+    `,
+  },
 ]
 
 export async function runMigrations(handle: DbHandle): Promise<void> {

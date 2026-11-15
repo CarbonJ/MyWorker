@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseTags, stringifyTags, findHashtags, extractHashtags, replaceHashtag, replaceInTagList, isHashtagName } from './tags'
+import { parseTags, stringifyTags, findHashtags, extractHashtags, replaceHashtag, replaceInTagList, isHashtagName, isHexColour } from './tags'
 
 describe('parseTags', () => {
   it('parses a JSON array', () => {
@@ -81,5 +81,22 @@ describe('hashtags', () => {
     expect(isHashtagName('vendor/acme-2')).toBe(true)
     expect(isHashtagName('two words')).toBe(false)
     expect(isHashtagName('3q')).toBe(false)
+  })
+})
+
+describe('hex colours', () => {
+  it('are not tags', () => {
+    expect(extractHashtags('colour #fff, #FAFAFA and #deadbeef but #audit')).toEqual(['audit'])
+  })
+
+  it('keeps real words that look like hex', () => {
+    expect(extractHashtags('#bad #add #cafe #facade')).toEqual(['bad', 'add', 'cafe'])
+  })
+
+  it('classifies names', () => {
+    expect(isHexColour('fff')).toBe(true)
+    expect(isHexColour('a1b2c3')).toBe(true)
+    expect(isHexColour('bad')).toBe(false)
+    expect(isHexColour('risk')).toBe(false)
   })
 })

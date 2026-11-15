@@ -20,6 +20,7 @@ import {
 import { initDb, setUserFolderHandle, checkFolderSync, resolveFolderConflict, type FolderConflict, type DataCounts } from '@/db'
 import { rebuildAllLinks } from '@/db/notebook'
 import { importLegacyJournal } from '@/db/journal'
+import { purgeExpiredTrash } from '@/db/trash'
 
 type DbStatus = 'loading' | 'needs-folder' | 'folder-conflict' | 'ready' | 'error' | 'unsupported'
 
@@ -89,6 +90,8 @@ export function DbProvider({ children }: { children: ReactNode }) {
   const finishStartup = useCallback(async () => {
     // Move journal text older versions kept in localStorage into the database
     await importLegacyJournal().catch(err => console.warn('[db] importLegacyJournal:', err))
+    // Drop trash items past their restore window
+    await purgeExpiredTrash().catch(err => console.warn('[db] purgeExpiredTrash:', err))
     // Re-index notebook backlinks on every startup — fast and idempotent,
     // ensures stale link data from earlier bugs is corrected before any page renders.
     rebuildAllLinks().catch(err => console.warn('[db] rebuildAllLinks:', err))

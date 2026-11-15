@@ -81,6 +81,7 @@ export async function restoreFromData(raw: unknown): Promise<void> {
     if (data.notebookPages) await exec(sqlite, db, 'DELETE FROM notebook_pages')
     if (data.savedViews) await exec(sqlite, db, 'DELETE FROM saved_views')
     if (data.journalEntries) await exec(sqlite, db, 'DELETE FROM journal_entries')
+    if (data.trash) await exec(sqlite, db, 'DELETE FROM trash')
 
     // Restore dropdown options first (projects reference them)
     for (const opt of data.dropdownOptions ?? []) {
@@ -206,6 +207,20 @@ export async function restoreFromData(raw: unknown): Promise<void> {
           j.entry_date as string, j.body as string,
           (j.created_at as string | null) ?? null,
           (j.updated_at as string | null) ?? null,
+        ],
+      )
+    }
+
+    // Restore the trash (deleted records still within their restore window)
+    for (const t of data.trash ?? []) {
+      await exec(sqlite, db,
+        `INSERT INTO trash (id, item_type, item_id, title, payload, deleted_at)
+         VALUES (?, ?, ?, ?, ?, COALESCE(?, datetime('now')))`,
+        [
+          (t.id as number | null) ?? null,
+          t.item_type as string, t.item_id as number,
+          (t.title as string) ?? '', t.payload as string,
+          (t.deleted_at as string | null) ?? null,
         ],
       )
     }

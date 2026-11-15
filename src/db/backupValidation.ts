@@ -23,6 +23,8 @@ export interface ExportData {
   savedViews?: Record<string, unknown>[]
   /** Daily Digest journal (added after v2 shipped; absent from older v2 files). */
   journalEntries?: Record<string, unknown>[]
+  /** Deleted records awaiting restore or purge (absent from older files). */
+  trash?: Record<string, unknown>[]
   /** myworker:* localStorage keys (UI prefs, filters, digest meeting notes). */
   localPrefs?: Record<string, string>
 }
@@ -55,7 +57,7 @@ export function validateBackupData(raw: unknown): ExportData {
   }
   const optionalArrayKeys = [
     'dropdownOptions', 'workLogEntries', 'tasks',
-    'contacts', 'notebookPages', 'savedViews', 'journalEntries',
+    'contacts', 'notebookPages', 'savedViews', 'journalEntries', 'trash',
   ] as const
   for (const key of optionalArrayKeys) {
     if (data[key] !== undefined && !Array.isArray(data[key])) {
@@ -149,6 +151,12 @@ export function validateBackupData(raw: unknown): ExportData {
       throw new Error(`journalEntries[${i}]: entry_date must be a YYYY-MM-DD date string`)
     if (typeof j.body !== 'string')
       throw new Error(`journalEntries[${i}]: body must be a string`)
+  }
+  for (const [i, t] of (data.trash ?? []).entries()) {
+    if (typeof t.item_type !== 'string' || typeof t.item_id !== 'number')
+      throw new Error(`trash[${i}]: invalid item_type or item_id`)
+    if (typeof t.payload !== 'string')
+      throw new Error(`trash[${i}]: payload must be a string`)
   }
   return data
 }

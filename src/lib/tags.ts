@@ -58,6 +58,19 @@ const HASHTAG_RE = /(^|[\s([{>"',;])#(\p{L}(?:[\p{L}\p{N}/-]|\\?_)*)/gu
 // Markdown regions where a "#word" is not a tag: code, links/images, wiki links, bare URLs.
 const SKIP_RE = /```[\s\S]*?```|`[^`\n]*`|!?\[[^\]\n]*\]\([^)\n]*\)|\\?\[\\?\[[^\]\n]*\]\\?\]|https?:\/\/\S+/g
 
+// Common English words that happen to be valid 3-digit hex colours; these stay tags.
+const HEX_WORDS = new Set(['ace', 'add', 'bad', 'bed', 'bee', 'cab', 'dab', 'dad', 'ebb', 'fab', 'fad', 'fed', 'fee'])
+
+/**
+ * True for CSS hex colours written with a "#": #fff, #a1b2c3, #a1b2c3ff.
+ * Hex digits only, 3, 6 or 8 long — except a few real words like #bad or #add.
+ */
+export function isHexColour(name: string): boolean {
+  if (!/^[0-9a-f]+$/i.test(name)) return false
+  if (name.length === 3) return !HEX_WORDS.has(name.toLowerCase())
+  return name.length === 6 || name.length === 8
+}
+
 /**
  * Find every #hashtag in `text`. With `markdown` (default) the text is treated
  * as markdown source and code/link regions are skipped; pass false for plain
@@ -75,7 +88,9 @@ export function findHashtags(text: string, markdown = true): HashtagMatch[] {
     const raw = m[2].replace(/(?:[-/]|\\?_)+$/, '')
     const index = m.index + m[1].length
     if (skip.some(([a, b]) => index >= a && index < b)) continue
-    found.push({ index, length: raw.length + 1, name: raw.replace(/\\/g, '') })
+    const name = raw.replace(/\\/g, '')
+    if (isHexColour(name)) continue
+    found.push({ index, length: raw.length + 1, name })
   }
   return found
 }

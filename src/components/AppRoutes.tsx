@@ -11,6 +11,8 @@ import SearchPage from '@/pages/SearchPage'
 import ContactsPage from '@/pages/ContactsPage'
 import NotebookPage from '@/pages/NotebookPage'
 import TagsPage from '@/pages/TagsPage'
+import TrashPage from '@/pages/TrashPage'
+import CalendarPage from '@/pages/CalendarPage'
 
 /**
  * The app's route table. Rendered both by the main content area (under the outer
@@ -30,6 +32,8 @@ export function AppRoutes() {
       <Route path="/contacts" element={<ContactsPage />} />
       <Route path="/notebook" element={<NotebookPage />} />
       <Route path="/tags" element={<TagsPage />} />
+      <Route path="/calendar" element={<CalendarPage />} />
+      <Route path="/trash" element={<TrashPage />} />
       <Route path="/search" element={<SearchPage />} />
       <Route path="/settings" element={<Settings />} />
     </Routes>

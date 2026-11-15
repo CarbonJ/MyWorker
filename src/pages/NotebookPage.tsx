@@ -8,6 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { exportNote, exportNoteZip, type NoteExportFormat } from '@/lib/noteExport'
 import { toast } from 'sonner'
 import { MarkdownField } from '@/components/MarkdownField'
+import { BacklinksPanel } from '@/components/BacklinksPanel'
 import {
   getAllNotebookPages, getNotebookPageById, createNotebookPage,
   updateNotebookPage, deleteNotebookPage, rebuildLinks,
@@ -213,7 +214,7 @@ export default function NotebookPage() {
 
   const handleDelete = async (page: NotebookPage, e: React.MouseEvent) => {
     e.stopPropagation()
-    if (!confirm(`Delete "${page.title || 'Untitled'}"? This cannot be undone.`)) return
+    if (!confirm(`Delete "${page.title || 'Untitled'}"? It moves to the Trash, where you can restore it for 30 days.`)) return
     // Drop an unsaved edit to the page being deleted; flush any other page's edit first
     if (pendingSave.current?.pageId === page.id) {
       if (saveTimer.current) clearTimeout(saveTimer.current)
@@ -238,6 +239,9 @@ export default function NotebookPage() {
       toast.error(`Failed to delete: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
+
+  // The open page as last saved (title included) — drives the backlinks panel
+  const savedPage = !isNew && selectedId !== null ? pages.find(p => p.id === selectedId) ?? null : null
 
   const filteredPages = useMemo(() => {
     let list = starredOnly ? pages.filter(p => p.starred) : pages
@@ -425,6 +429,14 @@ export default function NotebookPage() {
                   </>
                 ) : undefined}
               />
+              {/* What links here — other notes, plus work log entries, tasks, journal and
+                  contacts. Keyed on the saved title so it refreshes after a rename is saved,
+                  not on every keystroke. */}
+              {savedPage && (
+                <div className="shrink-0">
+                  <BacklinksPanel key={`${savedPage.id}-${savedPage.title}`} targetType="page" targetId={savedPage.id} entityName={savedPage.title || 'Untitled'} />
+                </div>
+              )}
             </div>
           </>
         ) : (

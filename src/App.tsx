@@ -70,6 +70,7 @@ function NavBar({ isDark, onToggleDark }: { isDark: boolean; onToggleDark: () =>
       </NavLink>
       <NavLink to="/contacts" className={linkClass} style={navStyle}>Contacts</NavLink>
       <NavLink to="/tags" className={linkClass} style={navStyle}>Tags</NavLink>
+      <NavLink to="/calendar" className={linkClass} style={navStyle}>Calendar</NavLink>
       <NavLink to="/reporting" className={linkClass} style={navStyle}>Dashboard</NavLink>
       <NavLink to="/search" className={linkClass} style={navStyle}>
         <span className="flex items-center gap-1.5"><SearchIcon className="h-3.5 w-3.5" />Search</span>

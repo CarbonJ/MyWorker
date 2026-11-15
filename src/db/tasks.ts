@@ -1,5 +1,6 @@
 import { query, run, insert } from './index'
 import { addWorkLogEntry } from './workLog'
+import { moveToTrash } from './trash'
 import { parseTags, stringifyTags } from '@/lib/tags'
 import type { Task, TaskStatus } from '@/types'
 
@@ -157,8 +158,9 @@ export async function updateTask(input: UpdateTaskInput): Promise<void> {
   )
 }
 
+/** Moves the task to the Trash. */
 export async function deleteTask(id: number): Promise<void> {
-  await run(`DELETE FROM tasks WHERE id = ?`, [id])
+  await moveToTrash('task', id)
 }
 
 export interface CompletedAreaTask {

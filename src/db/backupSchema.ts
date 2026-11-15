@@ -37,6 +37,7 @@ export const BACKUP_TABLES: BackupTable[] = [
   { table: 'notebook_pages', key: 'notebookPages' },
   { table: 'saved_views', key: 'savedViews' },
   { table: 'journal_entries', key: 'journalEntries' },
+  { table: 'trash', key: 'trash' },
 ]
 
 /** Derived or device-local tables, deliberately excluded from backups. */

@@ -267,7 +267,7 @@ export default function ContactsPage() {
   }
 
   const handleDelete = async (c: Contact) => {
-    if (!confirm(`Delete contact "${c.name}"? This cannot be undone.`)) return
+    if (!confirm(`Delete contact "${c.name}"? It moves to the Trash, where you can restore it for 30 days.`)) return
     try {
       await deleteContact(c.id)
       toast.success('Contact deleted')

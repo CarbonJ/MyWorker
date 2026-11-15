@@ -519,6 +519,61 @@ function setFolderSave(next: FolderSaveStatus): void {
   if (changed || next.error === null) window.dispatchEvent(new Event(FOLDER_SAVE_EVENT))
 }
 
+// ── Daily snapshots ───────────────────────────────────────────────────────────
+// Once per day the first successful folder save also writes a dated copy to a
+// subfolder, and copies older than SNAPSHOT_DAYS are removed. A second safety
+// net that doesn't depend on OneDrive's version history.
+
+export const SNAPSHOT_FOLDER = 'MyWorkerSnapshots'
+export const SNAPSHOT_DAYS = 30
+/** app_metadata key: local date (YYYY-MM-DD) of the last snapshot written. */
+const SNAPSHOT_DATE_KEY = 'last_snapshot_date'
+const SNAPSHOT_NAME_RE = /^myworker-(\d{4}-\d{2}-\d{2})\.json$/
+
+function localDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+async function writeDailySnapshot(dir: FileSystemDirectoryHandle, data: unknown): Promise<void> {
+  const today = localDate(new Date())
+  if (await getMeta(SNAPSHOT_DATE_KEY) === today) return
+  try {
+    const snapDir = await dir.getDirectoryHandle(SNAPSHOT_FOLDER, { create: true })
+    await writeJsonFile(snapDir, `myworker-${today}.json`, data)
+    await setMeta(SNAPSHOT_DATE_KEY, today)
+
+    const cutoff = new Date()
+    cutoff.setDate(cutoff.getDate() - SNAPSHOT_DAYS)
+    const oldest = localDate(cutoff)
+    const expired: string[] = []
+    for await (const entry of snapDir.values()) {
+      const m = entry.kind === 'file' ? SNAPSHOT_NAME_RE.exec(entry.name) : null
+      if (m && m[1] < oldest) expired.push(entry.name)
+    }
+    for (const name of expired) await snapDir.removeEntry(name)
+  } catch (err) {
+    // A missed snapshot is not worth interrupting the user for — the main save succeeded.
+    console.warn('[db] Daily snapshot failed', err)
+  }
+}
+
+/** Dated snapshot files in the folder, newest first (for display in Settings). */
+export async function listSnapshots(): Promise<string[]> {
+  const dir = instance?.dirHandle
+  if (!dir) return []
+  try {
+    const snapDir = await dir.getDirectoryHandle(SNAPSHOT_FOLDER)
+    const dates: string[] = []
+    for await (const entry of snapDir.values()) {
+      const m = entry.kind === 'file' ? SNAPSHOT_NAME_RE.exec(entry.name) : null
+      if (m) dates.push(m[1])
+    }
+    return dates.sort().reverse()
+  } catch {
+    return []
+  }
+}
+
 // Persists run one at a time so two writes can't interleave on the same file.
 let persistChain: Promise<void> = Promise.resolve()
 
@@ -561,6 +616,7 @@ async function persistNow(): Promise<void> {
     const fileHandle = await writeJsonFile(dir, DATA_FILE, data)
     await setMeta(FOLDER_MTIME_KEY, String((await fileHandle.getFile()).lastModified))
     setFolderSave({ lastSavedAt: Date.now(), error: null })
+    await writeDailySnapshot(dir, data)
   } catch (err) {
     // Non-fatal — data is still safe in IndexedDB — but the user must know the
     // folder copy (their backup, and what other devices read) has stopped updating.

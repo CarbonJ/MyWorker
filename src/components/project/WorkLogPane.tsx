@@ -127,7 +127,7 @@ export function WorkLogPane({ projectId, projectName, workLog, notebookRefs = []
   }
 
   const handleDelete = async (entry: WorkLogEntry) => {
-    if (!confirm('Delete this work log entry? This cannot be undone.')) return
+    if (!confirm('Delete this work log entry? It moves to the Trash, where you can restore it for 30 days.')) return
     try {
       await deleteWorkLogEntry(entry.id)
       onSaved()

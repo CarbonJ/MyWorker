@@ -1,5 +1,6 @@
 import { query, run, insert, exec, getDb } from './index'
 import { renameWikiLinks } from './links'
+import { moveToTrash } from './trash'
 import type { NotebookPage, NotebookBacklink } from '@/types'
 
 function rowToPage(row: Record<string, unknown>): NotebookPage {
@@ -78,9 +79,9 @@ export async function setNotebookPageStarred(id: number, starred: boolean): Prom
   await run(`UPDATE notebook_pages SET starred = ? WHERE id = ?`, [starred ? 1 : 0, id])
 }
 
-/** Pasted image files are left in place — see the unused-image cleanup in assets.ts. */
+/** Moves the page to the Trash. Pasted image files are left in place — see the unused-image cleanup in assets.ts. */
 export async function deleteNotebookPage(id: number): Promise<void> {
-  await run(`DELETE FROM notebook_pages WHERE id = ?`, [id])
+  await moveToTrash('note', id)
 }
 
 // Loads all entity names directly from the DB so it's never dependent on

@@ -1,4 +1,5 @@
 import { query, run, insert } from './index'
+import { moveToTrash } from './trash'
 import type { WorkLogEntry } from '@/types'
 
 function rowToEntry(row: Record<string, unknown>): WorkLogEntry {
@@ -55,9 +56,9 @@ export async function updateWorkLogEntry(id: number, note: string): Promise<void
   await run(`UPDATE work_log_entries SET note = ? WHERE id = ?`, [note, id])
 }
 
-/** Pasted image files are left in place — see the unused-image cleanup in assets.ts. */
+/** Moves the entry to the Trash. Pasted image files are left in place — see the unused-image cleanup in assets.ts. */
 export async function deleteWorkLogEntry(id: number): Promise<void> {
-  await run(`DELETE FROM work_log_entries WHERE id = ?`, [id])
+  await moveToTrash('worklog', id)
 }
 
 export interface WorkLogEntryWithProject extends WorkLogEntry {
