@@ -1,14 +1,16 @@
 /**
  * CalendarPage — what's due when, by week or month, with each working day
- * marked hot (overloaded) or cold (light) against the average load.
+ * shaded by load (free / light / normal / busy / overloaded) against a normal
+ * daily load — see lib/calendarLoad.ts.
  *
  * Shows open / in-progress tasks and active projects that have a due date.
- * Working days follow the business-days setting (see lib/calendarLoad.ts).
+ * With the business-days setting on, only Mon–Fri are shown and weekend due
+ * dates appear on the Friday before.
  */
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CalendarDays, ChevronLeft, ChevronRight, FolderKanban, Flame, Snowflake } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, FolderKanban } from 'lucide-react'
 import { toast } from 'sonner'
 import { getAllTasks } from '@/db/tasks'
 import { getAllProjects } from '@/db/projects'
@@ -17,8 +19,8 @@ import { Button } from '@/components/ui/button'
 import { TaskModal } from '@/components/TaskModal'
 import { localToday, loadUpcomingBusinessDays } from '@/lib/utils'
 import {
-  addDays, weekStart, monthGridDays, parseLocalDate, isWorkingDay,
-  computeBaseline, rateDay, type DayLoad, HOT_RATIO, COLD_RATIO,
+  addDays, weekDays, monthGridDays, parseLocalDate, displayDate,
+  computeBaseline, rateDay, levelRanges, loadNormalLoadSetting, type LoadLevel,
 } from '@/lib/calendarLoad'
 
 type View = 'week' | 'month'
@@ -28,33 +30,34 @@ type DueItem =
   | { kind: 'task'; date: string; task: Task; projectName: string | null }
   | { kind: 'project'; date: string; project: Project }
 
-const LOAD_STYLE: Record<DayLoad, string> = {
-  hot: 'bg-red-50 dark:bg-red-950/40',
-  cold: 'bg-sky-50 dark:bg-sky-950/40',
-  normal: '',
-  unrated: '',
+// Cell shading and badge colour per load level — blue (room to spare) to deep red
+const LEVEL_STYLE: Record<LoadLevel, { cell: string; badge: string; swatch: string; label: string }> = {
+  free:       { cell: 'bg-sky-100/70 dark:bg-sky-950/60', badge: 'bg-sky-200 text-sky-900 dark:bg-sky-900 dark:text-sky-100', swatch: 'bg-sky-200 dark:bg-sky-900', label: 'Free' },
+  light:      { cell: 'bg-sky-50 dark:bg-sky-950/30', badge: 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200', swatch: 'bg-sky-100 dark:bg-sky-950', label: 'Light' },
+  normal:     { cell: '', badge: 'bg-muted text-muted-foreground', swatch: 'bg-muted', label: 'Normal' },
+  busy:       { cell: 'bg-orange-50 dark:bg-orange-950/30', badge: 'bg-orange-200 text-orange-900 dark:bg-orange-900 dark:text-orange-100', swatch: 'bg-orange-200 dark:bg-orange-900', label: 'Busy' },
+  overloaded: { cell: 'bg-red-100/70 dark:bg-red-950/60', badge: 'bg-red-600 text-white dark:bg-red-700', swatch: 'bg-red-600 dark:bg-red-700', label: 'Overloaded' },
+  unrated:    { cell: '', badge: 'bg-muted text-muted-foreground', swatch: '', label: '' },
 }
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
-function LoadBadge({ load, count }: { load: DayLoad; count: number }) {
-  if (load === 'hot') return (
-    <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-red-700 dark:text-red-400" title="Heavier than usual">
-      <Flame className="h-3 w-3" />{count}
+function LoadBadge({ level, count }: { level: LoadLevel; count: number }) {
+  if (level === 'unrated' && count === 0) return null
+  const style = LEVEL_STYLE[level]
+  return (
+    <span className={`text-[10px] font-semibold rounded px-1.5 tabular-nums ${style.badge}`}
+      title={level === 'unrated' ? `${count} due` : `${style.label} — ${count} due`}>
+      {count}
     </span>
   )
-  if (load === 'cold') return (
-    <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-sky-700 dark:text-sky-400" title="Lighter than usual">
-      <Snowflake className="h-3 w-3" />{count}
-    </span>
-  )
-  return count > 0 ? <span className="text-[10px] text-muted-foreground">{count}</span> : null
 }
 
 export default function CalendarPage() {
   const navigate = useNavigate()
   const today = localToday()
   const businessDays = loadUpcomingBusinessDays()
+  const setNormal = loadNormalLoadSetting()
 
   const [view, setView] = useState<View>(() => (localStorage.getItem(VIEW_KEY) === 'month' ? 'month' : 'week'))
   const [anchor, setAnchor] = useState(today)
@@ -79,11 +82,14 @@ export default function CalendarPage() {
     localStorage.setItem(VIEW_KEY, v)
   }
 
-  // Everything due, grouped by date
+  // Everything due, grouped by the day it's shown on (weekend dates → Friday in business mode)
   const itemsByDate = useMemo(() => {
     const names = new Map(projects.map(p => [p.id, p.workItem]))
     const map = new Map<string, DueItem[]>()
-    const add = (item: DueItem) => map.set(item.date, [...(map.get(item.date) ?? []), item])
+    const add = (item: DueItem) => {
+      const day = displayDate(item.date, businessDays)
+      map.set(day, [...(map.get(day) ?? []), item])
+    }
     for (const t of tasks) {
       if (t.status === 'done' || !t.dueDate) continue
       // Tasks of archived projects aren't shown anywhere else either
@@ -92,23 +98,25 @@ export default function CalendarPage() {
     }
     for (const p of projects) if (p.dueDate) add({ kind: 'project', date: p.dueDate, project: p })
     return map
-  }, [tasks, projects])
+  }, [tasks, projects, businessDays])
 
   const baseline = useMemo(() => {
     const counts = new Map([...itemsByDate].map(([d, items]) => [d, items.length]))
-    return computeBaseline(counts, today, businessDays)
-  }, [itemsByDate, today, businessDays])
+    return computeBaseline(counts, today, businessDays, setNormal)
+  }, [itemsByDate, today, businessDays, setNormal])
+  const ranges = useMemo(() => levelRanges(baseline), [baseline])
 
   const overdueCount = useMemo(
-    () => [...itemsByDate].filter(([d]) => d < today).reduce((n, [, items]) => n + items.length, 0),
+    () => [...itemsByDate.values()].flat().filter(item => item.date < today).length,
     [itemsByDate, today],
   )
 
   // Visible dates
   const anchorDate = parseLocalDate(anchor)
   const days = view === 'week'
-    ? Array.from({ length: 7 }, (_, i) => addDays(weekStart(anchor), i))
-    : monthGridDays(anchorDate.getFullYear(), anchorDate.getMonth())
+    ? weekDays(anchor, businessDays)
+    : monthGridDays(anchorDate.getFullYear(), anchorDate.getMonth(), businessDays)
+  const columns = businessDays ? 5 : 7
 
   const shift = (dir: 1 | -1) => {
     if (view === 'week') { setAnchor(a => addDays(a, 7 * dir)); return }
@@ -117,7 +125,7 @@ export default function CalendarPage() {
   }
 
   const rangeLabel = view === 'week'
-    ? `${parseLocalDate(days[0]).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${parseLocalDate(days[6]).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
+    ? `${parseLocalDate(days[0]).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${parseLocalDate(days[days.length - 1]).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
     : anchorDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
 
   const openItem = (item: DueItem) => {
@@ -125,8 +133,12 @@ export default function CalendarPage() {
     else setEditingTask(item.task)
   }
 
-  const itemChip = (item: DueItem, compact: boolean) => {
+  const itemChip = (item: DueItem, compact: boolean, shownOn: string) => {
     const overdue = item.date < today
+    // Due on a weekend but shown on Friday — say so
+    const weekendTag = item.date !== shownOn
+      ? <span className="shrink-0 text-[10px] font-medium text-muted-foreground mr-1">{parseLocalDate(item.date).toLocaleDateString(undefined, { weekday: 'short' })}</span>
+      : null
     const base = 'w-full text-left rounded px-1.5 py-0.5 text-xs truncate transition-colors'
     if (item.kind === 'project') {
       return (
@@ -134,6 +146,7 @@ export default function CalendarPage() {
           title={`Project due: ${item.project.workItem}`}
           className={`${base} flex items-center gap-1 border border-primary/30 font-medium hover:bg-accent ${overdue ? 'text-red-700 dark:text-red-400' : ''}`}>
           <FolderKanban className="h-3 w-3 shrink-0" />
+          {weekendTag}
           <span className="truncate">{item.project.workItem}</span>
         </button>
       )
@@ -143,7 +156,7 @@ export default function CalendarPage() {
       <button key={`t-${t.id}`} type="button" onClick={() => openItem(item)}
         title={`${t.title}${item.projectName ? ` — ${item.projectName}` : ''}`}
         className={`${base} block bg-muted/60 hover:bg-accent ${overdue ? 'text-red-700 dark:text-red-400' : ''} ${t.status === 'in_progress' ? 'border-l-2 border-blue-500' : ''}`}>
-        <span className="truncate block">{t.title}</span>
+        <span className="truncate block">{weekendTag}{t.title}</span>
         {!compact && item.projectName && (
           <span className="truncate block text-[10px] text-muted-foreground">{item.projectName}</span>
         )}
@@ -181,48 +194,49 @@ export default function CalendarPage() {
         {overdueCount > 0 && (
           <span className="text-xs text-red-700 dark:text-red-400">{overdueCount} overdue</span>
         )}
-        <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground"
-          title={`Compared with the average over the next 8 weeks of ${businessDays ? 'business days (Mon–Fri)' : 'days'}. Change in Settings → Customization.`}>
-          <span>Avg {baseline.average.toFixed(1)} due per {businessDays ? 'business day' : 'day'}</span>
-          <span className="inline-flex items-center gap-1">
-            <span className="h-3 w-3 rounded-sm bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-900" />
-            <Flame className="h-3 w-3 text-red-700 dark:text-red-400" /> hot: {baseline.hotAt}+ (≥{HOT_RATIO}× avg)
+        <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground flex-wrap"
+          title={baseline.source === 'set'
+            ? 'Normal daily load is set in Settings → Customization.'
+            : `Normal = average due per ${businessDays ? 'business day' : 'day'} over the next 8 weeks, with pile-up days capped so one heavy day doesn't skew it. Set a fixed value in Settings → Customization.`}>
+          <span>
+            Normal {baseline.normal.toFixed(1)} per {businessDays ? 'business day' : 'day'}
+            {baseline.source === 'auto' ? ' (auto)' : ' (set)'}
           </span>
-          <span className="inline-flex items-center gap-1">
-            <span className="h-3 w-3 rounded-sm bg-sky-50 dark:bg-sky-950/60 border border-sky-200 dark:border-sky-900" />
-            <Snowflake className="h-3 w-3 text-sky-700 dark:text-sky-400" />
-            {baseline.coldAt === null ? 'cold: n/a (light schedule)' : `cold: ${baseline.coldAt} or fewer (≤${COLD_RATIO}× avg)`}
-          </span>
+          {ranges.map(r => (
+            <span key={r.level} className="inline-flex items-center gap-1">
+              <span className={`h-3 w-3 rounded-sm border ${LEVEL_STYLE[r.level].swatch}`} />
+              {LEVEL_STYLE[r.level].label} {r.label}
+            </span>
+          ))}
         </div>
       </div>
 
       {/* Weekday header */}
-      <div className="shrink-0 grid grid-cols-7 border-b text-xs text-muted-foreground"
-        style={businessDays ? { gridTemplateColumns: 'repeat(5, minmax(0, 1fr)) repeat(2, minmax(0, 0.6fr))' } : undefined}>
-        {WEEKDAYS.map((d, i) => (
-          <div key={d} className={`px-2 py-1 ${businessDays && i >= 5 ? 'opacity-60' : ''}`}>{d}</div>
+      <div className="shrink-0 grid border-b text-xs text-muted-foreground"
+        style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
+        {WEEKDAYS.slice(0, columns).map(d => (
+          <div key={d} className="px-2 py-1">{d}{businessDays && d === 'Fri' ? ' (+ weekend)' : ''}</div>
         ))}
       </div>
 
       {/* Grid */}
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="grid grid-cols-7 h-full"
+        <div className="grid h-full"
           style={{
-            ...(businessDays ? { gridTemplateColumns: 'repeat(5, minmax(0, 1fr)) repeat(2, minmax(0, 0.6fr))' } : {}),
+            gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
             gridAutoRows: view === 'week' ? 'minmax(100%, auto)' : 'minmax(7rem, 1fr)',
           }}>
           {days.map(day => {
             const items = (itemsByDate.get(day) ?? [])
               .slice()
               .sort((a, b) => (a.kind === 'project' ? 0 : 1) - (b.kind === 'project' ? 0 : 1))
-            const loadState = rateDay(day, items.length, today, businessDays, baseline)
+            const level = rateDay(day, items.length, today, businessDays, baseline)
             const d = parseLocalDate(day)
             const outside = view === 'month' && d.getMonth() !== anchorMonth
-            const nonWorking = !isWorkingDay(day, businessDays)
             const shown = view === 'month' ? items.slice(0, MONTH_LIMIT) : items
             return (
               <div key={day}
-                className={`border-r border-b p-1.5 flex flex-col gap-1 min-w-0 ${LOAD_STYLE[loadState]} ${nonWorking ? 'bg-muted/30' : ''} ${outside ? 'opacity-50' : ''}`}>
+                className={`border-r border-b p-1.5 flex flex-col gap-1 min-w-0 ${LEVEL_STYLE[level].cell} ${outside ? 'opacity-50' : ''}`}>
                 <div className="flex items-center justify-between gap-1">
                   <button type="button"
                     onClick={() => { setAnchor(day); switchView('week') }}
@@ -230,9 +244,9 @@ export default function CalendarPage() {
                     className={`text-xs rounded px-1 ${day === today ? 'bg-primary text-primary-foreground font-semibold' : 'text-muted-foreground hover:text-foreground'}`}>
                     {view === 'month' ? d.getDate() : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                   </button>
-                  <LoadBadge load={loadState} count={items.length} />
+                  <LoadBadge level={level} count={items.length} />
                 </div>
-                {shown.map(item => itemChip(item, view === 'month'))}
+                {shown.map(item => itemChip(item, view === 'month', day))}
                 {view === 'month' && items.length > MONTH_LIMIT && (
                   <button type="button" onClick={() => { setAnchor(day); switchView('week') }}
                     className="text-[10px] text-muted-foreground hover:text-foreground text-left px-1.5">

@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { loadUpcomingBusinessDays, UPCOMING_BUSINESS_DAYS_KEY } from '@/lib/utils'
+import { loadNormalLoadSetting, NORMAL_LOAD_KEY } from '@/lib/calendarLoad'
 import { TEXT_COLOR_HEX, buttonStyle, workItemStyle } from '@/lib/guiSettings'
 import { toast } from 'sonner'
 import { exportToJson, importFromJson } from '@/db/importExport'
@@ -100,6 +101,18 @@ export default function Settings() {
     () => localStorage.getItem('myworker:due-filter-show-all') === 'true'
   )
   const [upcomingBusinessDays, setUpcomingBusinessDays] = useState(loadUpcomingBusinessDays)
+  // Calendar "normal" daily load: '' = Auto
+  const [normalLoad, setNormalLoad] = useState(() => {
+    const n = loadNormalLoadSetting()
+    return n === null ? '' : String(n)
+  })
+  const saveNormalLoad = (raw: string) => {
+    const n = Number(raw)
+    const clean = raw.trim() !== '' && Number.isFinite(n) && n > 0 ? String(Math.round(n * 10) / 10) : ''
+    setNormalLoad(clean)
+    if (clean) localStorage.setItem(NORMAL_LOAD_KEY, clean)
+    else localStorage.removeItem(NORMAL_LOAD_KEY)
+  }
 
   const [proseSpacing, setProseSpacing] = useState(
     () => localStorage.getItem('myworker:prose-spacing') ?? 'normal'
@@ -322,9 +335,38 @@ export default function Settings() {
                     }}
                   />
                   <label htmlFor="upcoming-business-days" className="text-sm cursor-pointer select-none text-muted-foreground">
-                    Count business days (Mon–Fri) for the Tomorrow / 3 days / Week filters
+                    Business days only (Mon–Fri)
                     <span className="block text-xs text-muted-foreground/70">
-                      Off: calendar days — Tomorrow, next 3 days, next 7 days
+                      Used by the Tomorrow / 3 days / Week filters, date-picker shortcuts and the Calendar,
+                      which then shows Mon–Fri only (weekend due dates appear on the Friday before).
+                      Off: every day counts and the Calendar shows weekends.
+                    </span>
+                  </label>
+                </div>
+                <div className="flex items-start gap-2">
+                  <label htmlFor="calendar-normal-load" className="text-sm text-muted-foreground space-y-1">
+                    <span className="block">Calendar — normal items due per day</span>
+                    <span className="flex items-center gap-2">
+                      <Input
+                        id="calendar-normal-load"
+                        type="number"
+                        min={0.5}
+                        step={0.5}
+                        value={normalLoad}
+                        placeholder="Auto"
+                        onChange={e => setNormalLoad(e.target.value)}
+                        onBlur={e => saveNormalLoad(e.target.value)}
+                        className="h-8 w-24"
+                      />
+                      {normalLoad && (
+                        <button type="button" onClick={() => saveNormalLoad('')} className="text-xs text-blue-600 dark:text-blue-400 hover:underline">
+                          Use Auto
+                        </button>
+                      )}
+                    </span>
+                    <span className="block text-xs text-muted-foreground/70">
+                      Days are shaded Free / Light / Normal / Busy / Overloaded against this. Auto uses your
+                      average over the next 8 weeks.
                     </span>
                   </label>
                 </div>
