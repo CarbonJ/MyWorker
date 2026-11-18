@@ -12,6 +12,7 @@ import { ChevronLeft, ChevronRight, CalendarDays, BookOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ReportRangeTabs } from '@/components/ReportRangeTabs'
 import { toLocalDateString } from '@/lib/utils'
+import { combineStartedCompleted, type CombinedLogLine } from '@/lib/taskActivity'
 
 function formatDisplayDate(dateStr: string): string {
   const [y, m, d] = dateStr.split('-').map(Number)
@@ -27,12 +28,12 @@ function formatTime(ts: string): string {
 interface ProjectGroup {
   projectId: number
   projectName: string
-  entries: WorkLogEntryWithProject[]
+  entries: CombinedLogLine<WorkLogEntryWithProject>[]
   notebooks: LinkedNotebookEntry[]
 }
 
 function mergeGroups(
-  workLog: WorkLogEntryWithProject[],
+  workLog: CombinedLogLine<WorkLogEntryWithProject>[],
   notebooks: LinkedNotebookEntry[],
 ): ProjectGroup[] {
   const map = new Map<number, ProjectGroup>()
@@ -156,7 +157,7 @@ export default function DailyDigestView() {
   }
 
   const isToday = date === today
-  const groups = mergeGroups(entries, notebooks)
+  const groups = mergeGroups(combineStartedCompleted(entries), notebooks)
   const taskGroups = groupByArea(completedTasks)
   const hasActivity = entries.length > 0 || notebooks.length > 0 || completedTasks.length > 0
   const summary = [
@@ -235,7 +236,7 @@ export default function DailyDigestView() {
               {group.entries.map(entry => (
                 <div key={`wl-${entry.id}`} className="px-4 py-3">
                   <p className="text-xs text-muted-foreground mb-1">
-                    {formatTime(entry.createdAt)}
+                    {entry.startedAt && `${formatTime(entry.startedAt)} – `}{formatTime(entry.createdAt)}
                   </p>
                   <WikiLinkContent>{entry.note}</WikiLinkContent>
                 </div>
