@@ -8,6 +8,7 @@ import {
 import { getAllProjects } from '@/db/projects'
 import { getAllNotebookPages } from '@/db/notebook'
 import { getAllContacts } from '@/db/contacts'
+import { defaultFilter } from 'cmdk'
 import type { Project, NotebookPage, Contact } from '@/types'
 import { LayoutDashboard, BarChart2, Archive, Settings, BookOpen, FolderOpen, Plus, ClipboardList, FileText, UserRound, NotebookPen, Hash, Trash2, CalendarDays } from 'lucide-react'
 
@@ -16,6 +17,16 @@ interface Props {
   onClose: () => void
   onNewTask: () => void
   onNewProject: () => void
+}
+
+// cmdk never reorders groups (its group sort can't find them), so the
+// Navigate group always lists first. Drop matches whose letters are only
+// scattered across words (e.g. "task" in "calendar due dates schedule week")
+// so a weak match there can't sit above a real one in a later group.
+const MIN_SCORE = 0.1
+const paletteFilter = (value: string, search: string, keywords?: string[]) => {
+  const score = defaultFilter(value, search, keywords)
+  return score >= MIN_SCORE ? score : 0
 }
 
 export function CommandPalette({ open, onClose, onNewTask, onNewProject }: Props) {
@@ -36,7 +47,7 @@ export function CommandPalette({ open, onClose, onNewTask, onNewProject }: Props
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
       <DialogContent showCloseButton={false} className="p-0 gap-0 max-w-lg overflow-hidden">
-        <Command>
+        <Command filter={paletteFilter}>
           <CommandInput placeholder="Search projects, notes, contacts or jump to…" autoFocus />
           <CommandList className="max-h-[420px]">
             <CommandEmpty>No results found.</CommandEmpty>
