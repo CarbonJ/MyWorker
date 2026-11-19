@@ -195,6 +195,7 @@ export function ProjectModal({ project, open, onClose, onSaved }: Props) {
             <Label htmlFor="workItem">Work Item <span className="text-destructive">*</span></Label>
             <Input
               id="workItem"
+              spellCheck
               value={workItem}
               onChange={e => setWorkItem(e.target.value)}
               placeholder="Enter effort name"
@@ -287,6 +288,7 @@ export function ProjectModal({ project, open, onClose, onSaved }: Props) {
             <Label htmlFor="latestStatus">Status Comment</Label>
             <Input
               id="latestStatus"
+              spellCheck
               value={latestStatus}
               onChange={e => setLatestStatus(e.target.value)}
               placeholder="Short summary for at-a-glance reporting"

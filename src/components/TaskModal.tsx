@@ -252,6 +252,7 @@ export function TaskModal({ projectId: initialProjectId, initialProductAreaId, t
             <Label htmlFor="task-title">Title <span className="text-destructive">*</span></Label>
             <Input
               id="task-title"
+              spellCheck
               value={title}
               onChange={e => setTitle(e.target.value)}
               placeholder="Task title"

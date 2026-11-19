@@ -173,6 +173,7 @@ export function ProjectHeader({
             {editingStatus ? (
               <Input
                 ref={statusInputRef}
+                spellCheck
                 value={statusDraft}
                 onChange={e => setStatusDraft(e.target.value)}
                 onBlur={commitStatus}

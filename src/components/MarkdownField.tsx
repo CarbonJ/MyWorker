@@ -69,6 +69,7 @@ function createWikiLinkDecorationExtension(entitiesRef: React.MutableRefObject<W
                       Decoration.inline(pos + tag.index, pos + tag.index + tag.length, {
                         class: 'hashtag',
                         'data-tag': tag.name,
+                        spellcheck: 'false',
                         title: `Tag: ${tag.name} (⌘/Ctrl+click to open)`,
                       })
                     )
@@ -83,7 +84,7 @@ function createWikiLinkDecorationExtension(entitiesRef: React.MutableRefObject<W
                     Decoration.inline(
                       pos + match.index,
                       pos + match.index + match[0].length,
-                      { class: `wiki-link ${isLive ? 'wiki-link-live' : 'wiki-link-dead'}`, title: `Go to: ${name}` }
+                      { class: `wiki-link ${isLive ? 'wiki-link-live' : 'wiki-link-dead'}`, title: `Go to: ${name}`, spellcheck: 'false' }
                     )
                   )
                 }
@@ -96,6 +97,32 @@ function createWikiLinkDecorationExtension(entitiesRef: React.MutableRefObject<W
     },
   })
 }
+
+// Bare URLs are not words — keep the browser's spellchecker off them so the
+// squiggles that remain point at real misspellings.
+const URL_PATTERN = /\b(?:https?:\/\/|www\.)[^\s<>()]+/g
+const NoSpellcheckUrlsExtension = Extension.create({
+  name: 'noSpellcheckUrls',
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey('noSpellcheckUrls'),
+        props: {
+          decorations(state) {
+            const decorations: Decoration[] = []
+            state.doc.descendants((node, pos) => {
+              if (!node.isText || !node.text) return
+              for (const match of node.text.matchAll(URL_PATTERN)) {
+                decorations.push(Decoration.inline(pos + match.index, pos + match.index + match[0].length, { spellcheck: 'false' }))
+              }
+            })
+            return DecorationSet.create(state.doc, decorations)
+          },
+        },
+      }),
+    ]
+  },
+})
 
 // Paste plain text as block-level markdown so bullets, headings, etc. parse correctly
 // instead of landing as a plain paragraph and getting characters escaped on serialization.
@@ -279,7 +306,11 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
 
   const editor = useEditor({
     extensions: [
-      StarterKit,
+      // Code is not prose: no spellcheck squiggles inside it
+      StarterKit.configure({
+        code: { HTMLAttributes: { spellcheck: 'false' } },
+        codeBlock: { HTMLAttributes: { spellcheck: 'false' } },
+      }),
       Markdown.configure({ html: false, tightLists: true }),
       Placeholder.configure({ placeholder: placeholder ?? '' }),
       Link.configure({ openOnClick: false, autolink: false }),
@@ -293,6 +324,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
       TaskItem.configure({ nested: true }),
       AssetImage,
       MarkdownBlockPasteExtension,
+      NoSpellcheckUrlsExtension,
       ...(enableWikiLinks ? [wikiLinkExtension] : []),
     ],
     content: value,

@@ -133,6 +133,7 @@ function ContactForm({
           <Label htmlFor="contact-role">Title | Role</Label>
           <Input
             id="contact-role"
+            spellCheck
             value={form.role}
             onChange={e => set('role')(e.target.value)}
             placeholder="e.g. Product Manager"

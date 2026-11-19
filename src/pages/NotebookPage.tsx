@@ -385,6 +385,7 @@ export default function NotebookPage() {
             <div className="shrink-0 px-8 pt-6 pb-2 flex items-center gap-3 border-b">
               <Input
                 value={title}
+                spellCheck
                 onChange={e => { setTitle(e.target.value); scheduleSave(e.target.value, body) }}
                 placeholder="Untitled"
                 className="border-0 border-b border-border/50 rounded-none text-xl font-semibold px-0 h-auto pb-1 focus-visible:ring-0 shadow-none flex-1"
