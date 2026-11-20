@@ -326,6 +326,9 @@ function collectLocalPrefs(): Record<string, string> {
 const DATA_FILE = 'myworker-data.json'
 /** app_metadata key: lastModified of the folder file right after this database last wrote or adopted it. */
 const FOLDER_MTIME_KEY = 'folder_file_mtime'
+/** app_metadata keys: savedAt stamp of the last folder file this browser wrote, and of the last write it started. */
+const FOLDER_SAVED_AT_KEY = 'folder_file_saved_at'
+const FOLDER_ATTEMPT_KEY = 'folder_file_attempt_saved_at'
 /** Window event fired when another device changed the folder file mid-session. */
 export const FOLDER_CONFLICT_EVENT = 'myworker:folder-conflict'
 
@@ -400,12 +403,56 @@ function timestampForFilename(): string {
   return new Date().toISOString().replace(/[:.]/g, '-')
 }
 
+// OneDrive briefly holds or touches the file while it uploads the previous save,
+// and the browser then fails the read or write with one of these. They clear up
+// within seconds, so retry before telling the user the folder copy is stale.
+const TRANSIENT_FILE_ERRORS = new Set(['InvalidStateError', 'NoModificationAllowedError', 'NotReadableError', 'InvalidModificationError'])
+const RETRY_DELAYS_MS = [500, 2000, 5000]
+
+async function withFileRetry<T>(fn: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn()
+    } catch (err) {
+      const transient = err instanceof DOMException && TRANSIENT_FILE_ERRORS.has(err.name)
+      if (!transient || attempt >= RETRY_DELAYS_MS.length) throw err
+      console.warn(`[db] Folder file busy (${err.name}), retrying`, err)
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS_MS[attempt]))
+    }
+  }
+}
+
 async function writeJsonFile(dir: FileSystemDirectoryHandle, name: string, data: unknown): Promise<FileSystemFileHandle> {
   const fileHandle = await dir.getFileHandle(name, { create: true })
   const writable = await fileHandle.createWritable()
-  await writable.write(typeof data === 'string' ? data : JSON.stringify(data, null, 2))
-  await writable.close()
+  try {
+    await writable.write(typeof data === 'string' ? data : JSON.stringify(data, null, 2))
+    await writable.close()
+  } catch (err) {
+    // Discard the temporary .crswap file so it isn't left behind in the folder
+    await writable.abort().catch(() => {})
+    throw err
+  }
   return fileHandle
+}
+
+/** Fresh read of a folder file: its text and lastModified, retried while OneDrive has it busy. */
+async function readFolderFile(fileHandle: FileSystemFileHandle): Promise<{ text: string; lastModified: number }> {
+  return withFileRetry(async () => {
+    const file = await fileHandle.getFile()
+    return { text: await file.text(), lastModified: file.lastModified }
+  })
+}
+
+/**
+ * True when the folder file is one this browser wrote, judged by its savedAt
+ * stamp. Covers OneDrive changing the file's timestamp without changing its
+ * content, and a write that reached the disk although the browser reported an error.
+ */
+async function isOwnFolderFile(fileData: Record<string, unknown>): Promise<boolean> {
+  const savedAt = fileData.savedAt
+  if (typeof savedAt !== 'string') return false
+  return savedAt === await getMeta(FOLDER_SAVED_AT_KEY) || savedAt === await getMeta(FOLDER_ATTEMPT_KEY)
 }
 
 async function getDataFileHandle(dir: FileSystemDirectoryHandle): Promise<FileSystemFileHandle | null> {
@@ -430,13 +477,13 @@ export async function checkFolderSync(): Promise<FolderConflict | null> {
     return null
   }
 
-  const file = await fileHandle.getFile()
+  const file = await withFileRetry(() => fileHandle.getFile())
   if (await getMeta(FOLDER_MTIME_KEY) === String(file.lastModified)) {
     folderSyncState = 'ok'
     return null
   }
 
-  const text = await file.text()
+  const { text, lastModified } = await readFolderFile(fileHandle)
   let fileData: Record<string, unknown>
   try {
     fileData = JSON.parse(text)
@@ -448,8 +495,8 @@ export async function checkFolderSync(): Promise<FolderConflict | null> {
   }
 
   const local = await snapshotUserData()
-  if (sameUserData(local, fileData)) {
-    await setMeta(FOLDER_MTIME_KEY, String(file.lastModified))
+  if (await isOwnFolderFile(fileData) || sameUserData(local, fileData)) {
+    await setMeta(FOLDER_MTIME_KEY, String(lastModified))
     folderSyncState = 'ok'
     return null
   }
@@ -600,11 +647,14 @@ async function persistNow(): Promise<void> {
     const existing = await getDataFileHandle(dir)
     const marker = await getMeta(FOLDER_MTIME_KEY)
     if (existing && marker !== null) {
-      const current = await existing.getFile()
+      const current = await withFileRetry(() => existing.getFile())
       if (String(current.lastModified) !== marker) {
         let theirs: Record<string, unknown> | null = null
-        try { theirs = JSON.parse(await current.text()) } catch { /* unreadable — treat as changed */ }
-        if (!theirs || !sameUserData(snapshot, theirs)) {
+        // Read failures that outlast the retries propagate as a save error rather
+        // than being mistaken for another device's change
+        const { text } = await readFolderFile(existing)
+        try { theirs = JSON.parse(text) } catch { /* unparseable — treat as changed */ }
+        if (!theirs || !(await isOwnFolderFile(theirs) || sameUserData(snapshot, theirs))) {
           folderSyncState = 'conflict'
           await writeJsonFile(dir, `myworker-conflict-browser-${timestampForFilename()}.json`, data)
           window.dispatchEvent(new Event(FOLDER_CONFLICT_EVENT))
@@ -613,8 +663,13 @@ async function persistNow(): Promise<void> {
       }
     }
 
-    const fileHandle = await writeJsonFile(dir, DATA_FILE, data)
-    await setMeta(FOLDER_MTIME_KEY, String((await fileHandle.getFile()).lastModified))
+    await setMeta(FOLDER_ATTEMPT_KEY, data.savedAt)
+    const lastModified = await withFileRetry(async () => {
+      const fileHandle = await writeJsonFile(dir, DATA_FILE, data)
+      return (await fileHandle.getFile()).lastModified
+    })
+    await setMeta(FOLDER_MTIME_KEY, String(lastModified))
+    await setMeta(FOLDER_SAVED_AT_KEY, data.savedAt)
     setFolderSave({ lastSavedAt: Date.now(), error: null })
     await writeDailySnapshot(dir, data)
   } catch (err) {
