@@ -207,7 +207,7 @@ export function WorkLogPane({ projectId, projectName, workLog, notebookRefs = []
                   onClick={() => navigate(`/notebook?page=${ref.pageId}`)}
                   className="text-left group"
                 >
-                  <p className="text-sm font-medium text-primary group-hover:underline">{ref.pageTitle || 'Untitled'}</p>
+                  <p className="text-sm font-medium text-blue-600 dark:text-blue-400 group-hover:underline">{ref.pageTitle || 'Untitled'}</p>
                   {ref.snippet && (
                     <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{ref.snippet}</p>
                   )}
@@ -228,7 +228,7 @@ export function WorkLogPane({ projectId, projectName, workLog, notebookRefs = []
                   <p className="text-xs text-muted-foreground">{when} · mentioned in {MENTION_LABEL[ref.sourceType].toLowerCase()}</p>
                 </div>
                 <button type="button" onClick={() => navigate(recordRoute(ref))} className="text-left group">
-                  <p className="text-sm font-medium text-primary group-hover:underline">
+                  <p className="text-sm font-medium text-blue-600 dark:text-blue-400 group-hover:underline">
                     {ref.sourceType === 'journal' ? `Journal ${ref.title}` : ref.title}
                   </p>
                   {ref.snippet && (
