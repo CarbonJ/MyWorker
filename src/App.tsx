@@ -61,8 +61,7 @@ function NavBar({ isDark, onToggleDark }: { isDark: boolean; onToggleDark: () =>
 
   return (
     <nav className="border-b bg-background px-6 py-3 flex items-center gap-2">
-      <img src="/myworker.png" alt="MyWorker" className="w-7 h-7 rounded-md" />
-      <span className="font-bold text-lg mr-4">MyWorker</span>
+      <img src="/myworker.png" alt="MyWorker" className="w-7 h-7 rounded-md mr-4" />
       <NavLink to="/" end className={linkClass} style={navStyle}>Projects</NavLink>
       <NavLink to="/digest" className={linkClass} style={navStyle}>Digest</NavLink>
       <NavLink to="/notebook" className={linkClass} style={navStyle}>

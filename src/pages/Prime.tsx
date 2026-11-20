@@ -1249,7 +1249,8 @@ function ProjectRows({ p, ctx }: { p: Project; ctx: ProjectRowsCtx }) {
             onClick={() => openTaskModal(t)}
           >
             <td className="w-10" />
-            <td className="px-3 py-1.5 pl-7" colSpan={4}>
+            {/* max-w-0 stops a long title or note line widening the table (truncate instead) */}
+            <td className="px-3 py-1.5 pl-7 max-w-0 overflow-hidden" colSpan={4}>
               <div className="flex flex-col gap-0.5 min-w-0">
                 <div className="flex items-center gap-2 min-w-0">
                   <button
@@ -1509,7 +1510,7 @@ function GeneralTaskRow({ t, ctx }: { t: Task; ctx: GeneralTaskRowCtx }) {
       {(t.notes || t.isRecurring) && (
         <div className="flex items-center gap-1 pl-7 mt-0.5">
           {t.notes && (
-            <span className="text-xs text-muted-foreground truncate flex-1">{t.notes}</span>
+            <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">{t.notes.split('\n')[0]}</span>
           )}
           {t.isRecurring && (
             <span title="Recurring task"><RotateCcw className="w-3 h-3 text-muted-foreground shrink-0" /></span>
