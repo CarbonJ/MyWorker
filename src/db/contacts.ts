@@ -1,6 +1,6 @@
 import { query, run, insert } from './index'
 import { renameStakeholder } from './projects'
-import { renameWikiLinks } from './links'
+import { notifyLinksChanged, renameWikiLinks } from './links'
 import { moveToTrash } from './trash'
 import { parseTags, stringifyTags } from '@/lib/tags'
 import type { Contact } from '@/types'
@@ -39,7 +39,7 @@ export interface CreateContactInput {
 }
 
 export async function createContact(input: CreateContactInput): Promise<number> {
-  return await insert(
+  const id = await insert(
     `INSERT INTO contacts (name, role, group_name, notes, tags, whos_who)
      VALUES (?, ?, ?, ?, ?, ?)`,
     [
@@ -51,6 +51,8 @@ export async function createContact(input: CreateContactInput): Promise<number> 
       input.whosWho?.trim() ?? '',
     ],
   )
+  notifyLinksChanged()
+  return id
 }
 
 export interface UpdateContactInput extends Partial<CreateContactInput> {
@@ -81,6 +83,7 @@ export async function updateContact(input: UpdateContactInput): Promise<void> {
   if (newName !== current.name) {
     await renameStakeholder(current.name, newName)
     await renameWikiLinks(current.name, newName)
+    notifyLinksChanged()
   }
 }
 

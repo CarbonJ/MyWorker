@@ -1,5 +1,5 @@
 import { query, run, insert, exec, getDb, persistToUserFolder } from './index'
-import { renameWikiLinks } from './links'
+import { notifyLinksChanged, renameWikiLinks } from './links'
 import type { DropdownOption, DropdownType } from '@/types'
 
 function rowToOption(row: Record<string, unknown>): DropdownOption {
@@ -42,10 +42,13 @@ export async function createDropdownOption(
     order = ((rows[0]?.max_order as number | null) ?? -1) + 1
   }
 
-  return await insert(
+  const id = await insert(
     `INSERT INTO dropdown_options (type, label, sort_order) VALUES (?, ?, ?)`,
     [type, label, order],
   )
+  // Areas can be [[linked]]
+  if (type === 'product_area') notifyLinksChanged()
+  return id
 }
 
 export async function updateDropdownOption(
@@ -62,11 +65,13 @@ export async function updateDropdownOption(
   // Areas can be [[linked]] — keep those links working after a rename
   if (before[0]?.type === 'product_area' && before[0].label !== label) {
     await renameWikiLinks(before[0].label as string, label)
+    notifyLinksChanged()
   }
 }
 
 export async function deleteDropdownOption(id: number): Promise<void> {
   await run(`DELETE FROM dropdown_options WHERE id = ?`, [id])
+  notifyLinksChanged()
 }
 
 /** Count how many projects (archived ones included — deleting clears it on them too) and tasks reference a dropdown option. */

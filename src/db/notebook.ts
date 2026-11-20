@@ -1,5 +1,5 @@
 import { query, run, insert, exec, getDb } from './index'
-import { renameWikiLinks } from './links'
+import { notifyLinksChanged, renameWikiLinks } from './links'
 import { moveToTrash } from './trash'
 import type { NotebookPage, NotebookBacklink } from '@/types'
 
@@ -63,7 +63,9 @@ export async function getLinkedNotebookEntriesByDateRange(
 }
 
 export async function createNotebookPage(title: string, body: string): Promise<number> {
-  return await insert(`INSERT INTO notebook_pages (title, body) VALUES (?, ?)`, [title, body])
+  const id = await insert(`INSERT INTO notebook_pages (title, body) VALUES (?, ?)`, [title, body])
+  notifyLinksChanged()
+  return id
 }
 
 export async function updateNotebookPage(id: number, title: string, body: string): Promise<void> {
@@ -71,7 +73,10 @@ export async function updateNotebookPage(id: number, title: string, body: string
   await run(`UPDATE notebook_pages SET title = ?, body = ? WHERE id = ?`, [title, body, id])
   // Keep [[links]] to this page working after its title changes
   const oldTitle = before[0]?.title as string | undefined
-  if (oldTitle !== undefined && oldTitle !== title) await renameWikiLinks(oldTitle, title)
+  if (oldTitle !== undefined && oldTitle !== title) {
+    await renameWikiLinks(oldTitle, title)
+    notifyLinksChanged()
+  }
 }
 
 /** Toggle/set a page's starred (favourite) flag. Does not touch updated_at (see migration 22). */

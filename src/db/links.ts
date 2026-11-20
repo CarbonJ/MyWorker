@@ -12,8 +12,16 @@ import { rebuildAllLinks } from './notebook'
 import { SOURCES, rewriteRecords, snippetAround, type TagRef } from './tags'
 import { indexOfWikiLink, replaceWikiLink } from '@/lib/wikiLinks'
 
-/** Window event fired after links were rewritten, so cached entity lists refresh. */
+/**
+ * Window event fired after links were rewritten, or a linkable entity was
+ * created, renamed, archived or restored, so cached entity lists refresh.
+ */
 export const LINKS_CHANGED_EVENT = 'myworker:links-changed'
+
+/** Tells open editors their [[link]] suggestions may be out of date. */
+export function notifyLinksChanged(): void {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(LINKS_CHANGED_EVENT))
+}
 
 /** How many linkable entities (of any type) currently carry this name. */
 async function countEntitiesNamed(name: string): Promise<number> {
@@ -43,7 +51,7 @@ export async function renameWikiLinks(oldName: string, newName: string): Promise
   const changed = await rewriteRecords(text => replaceWikiLink(text, from, to))
   if (changed > 0) {
     await rebuildAllLinks()
-    window.dispatchEvent(new Event(LINKS_CHANGED_EVENT))
+    notifyLinksChanged()
   }
   return changed
 }

@@ -1,7 +1,7 @@
 import { query, run, insert, exec, getDb, persistToUserFolder } from './index'
 import { parseTags, stringifyTags } from '@/lib/tags'
 import { getKnownTagNames } from './tags'
-import { renameWikiLinks } from './links'
+import { notifyLinksChanged, renameWikiLinks } from './links'
 import { moveToTrash } from './trash'
 import type { Project, RagStatus, Stakeholder } from '@/types'
 
@@ -79,6 +79,7 @@ export async function closeProject(id: number, closingNote: string, doneStatusId
     throw err
   }
   await persistToUserFolder()
+  notifyLinksChanged()
 }
 
 /** Reopen an archived project in one transaction, restoring the tasks that closing it auto-completed. */
@@ -96,16 +97,19 @@ export async function reopenProject(id: number): Promise<void> {
     throw err
   }
   await persistToUserFolder()
+  notifyLinksChanged()
 }
 
 /** Marks a project as archived (independent of its status label). */
 export async function archiveProject(id: number): Promise<void> {
   await run(`UPDATE projects SET is_archived = 1 WHERE id = ?`, [id])
+  notifyLinksChanged()
 }
 
 /** Restores an archived project back to active. */
 export async function restoreProject(id: number): Promise<void> {
   await run(`UPDATE projects SET is_archived = 0 WHERE id = ?`, [id])
+  notifyLinksChanged()
 }
 
 export async function getProjectById(id: number): Promise<Project | null> {
@@ -127,7 +131,7 @@ export interface CreateProjectInput {
 }
 
 export async function createProject(input: CreateProjectInput): Promise<number> {
-  return await insert(
+  const id = await insert(
     `INSERT INTO projects
       (work_item, work_desc, rag_status, priority_id, latest_status, product_area_id, status_id, stakeholders, tags, due_date)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -144,6 +148,8 @@ export async function createProject(input: CreateProjectInput): Promise<number> 
       input.dueDate ?? null,
     ],
   )
+  notifyLinksChanged()
+  return id
 }
 
 export interface UpdateProjectInput extends Partial<CreateProjectInput> {
@@ -182,7 +188,10 @@ export async function updateProject(input: UpdateProjectInput): Promise<void> {
     ],
   )
   // Keep [[links]] to this project working after a rename
-  if (input.workItem !== undefined) await renameWikiLinks(current.workItem, input.workItem)
+  if (input.workItem !== undefined && input.workItem !== current.workItem) {
+    await renameWikiLinks(current.workItem, input.workItem)
+    notifyLinksChanged()
+  }
 }
 
 /** Moves the project — with its tasks and work log entries — to the Trash. */
