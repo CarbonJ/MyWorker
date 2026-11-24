@@ -211,6 +211,9 @@ interface Props {
   /** Stretch the editor to fill the parent's available height instead of sizing to content.
    *  The parent must be a flex column with a defined height. */
   fillHeight?: boolean
+  /** Grow the editor box to the parent's height (e.g. to match a neighbouring grid column) while
+   *  still sizing to content. Only applies at the default size; large/fullscreen are unchanged. */
+  stretch?: boolean
   /** Show a static formatting toolbar in the header row instead of the floating bubble menu.
    *  Best for large editors (the Notebook) where the bubble would cover referenced content. */
   fixedToolbar?: boolean
@@ -219,7 +222,7 @@ interface Props {
   expandSlot?: HTMLElement | null
 }
 
-export function MarkdownField({ id, label, headerLabel, value, onChange, placeholder, rows = 2, onKeyDown, initialFocused = false, expandable = false, enableWikiLinks = false, wikiEntities = [], onWikiLinkClick, autoHeight = false, headerActions, fillHeight = false, fixedToolbar = false, expandSlot }: Props) {
+export function MarkdownField({ id, label, headerLabel, value, onChange, placeholder, rows = 2, onKeyDown, initialFocused = false, expandable = false, enableWikiLinks = false, wikiEntities = [], onWikiLinkClick, autoHeight = false, headerActions, fillHeight = false, stretch = false, fixedToolbar = false, expandSlot }: Props) {
   const [focused, setFocused] = useState(initialFocused)
   const [sizeMode, setSizeMode] = useState<SizeMode>('default')
   const [rawMode, setRawMode] = useState(false)
@@ -682,6 +685,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
   )
 
   const minHeight = (autoHeight || fillHeight) ? undefined : `${rows * 1.5 + 1}rem`
+  const stretchToParent = stretch && !fillHeight && sizeMode === 'default'
 
   const containerClass = [
     'rounded-md border px-3 py-2 text-sm cursor-text transition-colors overflow-y-auto overflow-x-hidden',
@@ -689,6 +693,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
       ? 'border-ring ring-1 ring-ring bg-background'
       : 'border-input bg-background hover:border-ring/50',
     fillHeight ? 'flex-1 min-h-0' : (sizeMode === 'large' ? 'h-64 overflow-y-auto' : ''),
+    stretchToParent ? 'flex-1' : '',
   ].filter(Boolean).join(' ')
 
   const rawTextarea = (
@@ -832,7 +837,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
   }
 
   return (
-    <div className={fillHeight ? 'flex flex-col flex-1 min-h-0 gap-1.5' : 'space-y-1.5'}>
+    <div className={fillHeight ? 'flex flex-col flex-1 min-h-0 gap-1.5' : stretchToParent ? 'flex flex-col h-full gap-1.5' : 'space-y-1.5'}>
       {toolbar}
       {labelRow}
       {slottedExpandBtn}

@@ -7,6 +7,7 @@ import { getNotebookPageByTitle, createNotebookPage, getLinkedNotebookEntriesByD
 import { getCompletedGeneralTasksByDate, type CompletedAreaTask } from '@/db/tasks'
 import { WikiLinkContent } from '@/components/WikiLinkContent'
 import { MarkdownField } from '@/components/MarkdownField'
+import { DigestHomeNote } from '@/components/DigestHomeNote'
 import { useWikiEntities } from '@/hooks/useWikiEntities'
 import { ChevronLeft, ChevronRight, CalendarDays, BookOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -196,20 +197,24 @@ export default function DailyDigestView() {
       {/* Body */}
       <div className="flex-1 overflow-y-auto px-6 py-4">
 
-        {/* Journal */}
-        <div className="mb-6">
-          <MarkdownField
-            id={`digest-meetings-${date}`}
-            label="Journal"
-            value={meetings}
-            onChange={handleMeetingsChange}
-            placeholder="Today's meetings… use [[ to link to a note"
-            autoHeight
-            expandable
-            enableWikiLinks
-            wikiEntities={wikiEntities}
-            onWikiLinkClick={handleWikiLinkClick}
-          />
+        {/* Journal | Home (pinned note) */}
+        <div className="mb-6 grid grid-cols-2 gap-4">
+          <div className="min-w-0">
+            <MarkdownField
+              id={`digest-meetings-${date}`}
+              label="Journal"
+              value={meetings}
+              onChange={handleMeetingsChange}
+              placeholder="Today's meetings… use [[ to link to a note"
+              autoHeight
+              stretch
+              expandable
+              enableWikiLinks
+              wikiEntities={wikiEntities}
+              onWikiLinkClick={handleWikiLinkClick}
+            />
+          </div>
+          <DigestHomeNote />
         </div>
 
         {loading && <p className="text-sm text-muted-foreground">Loading…</p>}

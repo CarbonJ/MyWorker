@@ -84,6 +84,17 @@ export async function setNotebookPageStarred(id: number, starred: boolean): Prom
   await run(`UPDATE notebook_pages SET starred = ? WHERE id = ?`, [starred ? 1 : 0, id])
 }
 
+/** The page shown in the Daily Digest's Home panel, or null if none is chosen (or it was deleted). */
+export async function getHomeNotebookPage(): Promise<NotebookPage | null> {
+  const rows = await query(`SELECT * FROM notebook_pages WHERE is_home = 1 LIMIT 1`)
+  return rows.length > 0 ? rowToPage(rows[0]) : null
+}
+
+/** Makes this page the Home page and clears the flag on every other page. Does not touch updated_at. */
+export async function setHomeNotebookPage(id: number): Promise<void> {
+  await run(`UPDATE notebook_pages SET is_home = (id = ?) WHERE is_home = 1 OR id = ?`, [id, id])
+}
+
 /** Moves the page to the Trash. Pasted image files are left in place — see the unused-image cleanup in assets.ts. */
 export async function deleteNotebookPage(id: number): Promise<void> {
   await moveToTrash('note', id)

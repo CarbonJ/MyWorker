@@ -695,6 +695,14 @@ const migrations: Migration[] = [
       CREATE INDEX idx_trash_deleted_at ON trash(deleted_at);
     `,
   },
+  {
+    version: 27,
+    up: `
+      -- The notebook page shown in the Daily Digest's Home panel (at most one is set).
+      -- Not in the updated_at trigger's column list, so choosing it doesn't mark the page edited.
+      ALTER TABLE notebook_pages ADD COLUMN is_home INTEGER NOT NULL DEFAULT 0;
+    `,
+  },
 ]
 
 export async function runMigrations(handle: DbHandle): Promise<void> {
