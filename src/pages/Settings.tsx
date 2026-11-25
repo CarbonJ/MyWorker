@@ -14,6 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { exportAllNotes, exportAllNotesZip, type NoteExportFormat } from '@/lib/noteExport'
 import { MarkdownContent } from '@/components/MarkdownContent'
 import { Button } from '@/components/ui/button'
+import { SCREEN_ICONS } from '@/lib/icons'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -41,7 +42,7 @@ export default function Settings() {
   const [snapshots, setSnapshots] = useState<string[] | null>(null)
   const [storagePersisted, setStoragePersisted] = useState<boolean | null>(isStoragePersisted)
   const navigate = useNavigate()
-  // ?tab=data opens a tab directly (e.g. from Data health)
+  // ?tab=data opens a tab directly (e.g. from Data Health)
   const [searchParams] = useSearchParams()
   useEffect(() => { listSnapshots().then(setSnapshots).catch(() => setSnapshots([])) }, [folderSave.lastSavedAt])
   useEffect(() => {
@@ -606,6 +607,19 @@ export default function Settings() {
         {/* ── Data tab ────────────────────────────────────────────────── */}
         <TabsContent value="data" className="space-y-8">
 
+          {/* Maintenance: Data Health and Trash, up top so they're easy to find */}
+          <section className="flex items-center gap-3 flex-wrap rounded-lg border bg-muted/30 px-4 py-3">
+            <Button variant="outline" onClick={() => navigate('/health')}>
+              <SCREEN_ICONS.health className="h-4 w-4" /> Data Health
+            </Button>
+            <Button variant="outline" onClick={() => navigate('/trash')}>
+              <SCREEN_ICONS.trash className="h-4 w-4" /> Trash
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Find broken links, similar tags, empty notes and other clutter, or restore deleted items.
+            </p>
+          </section>
+
           {/* Storage */}
           <section className={section}>
             <h2 className={sectionTitle}>Storage</h2>
@@ -807,13 +821,6 @@ export default function Settings() {
                     </button>
                   </>
                 )}
-              </p>
-              <p>
-                <span className="font-medium text-foreground">Data health:</span> find broken links, leftover items and
-                other clutter.{' '}
-                <button type="button" onClick={() => navigate('/health')} className="text-blue-600 dark:text-blue-400 hover:underline">
-                  Open Data health
-                </button>
               </p>
               <p>
                 <span className="font-medium text-foreground">Trash:</span> deleted projects, tasks, log entries, notes and

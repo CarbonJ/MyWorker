@@ -707,7 +707,7 @@ async function keepCopyBeforeDrop(dir: FileSystemDirectoryHandle, existing: File
 
 // ── Leftover files ────────────────────────────────────────────────────────────
 // Conflict and salvage copies are written next to the data file and never
-// removed automatically. Data health lists them and can tidy them into a
+// removed automatically. Data Health lists them and can tidy them into a
 // subfolder of the snapshots folder (moved, never deleted).
 
 const LEFTOVER_RE = /^myworker-(conflict|salvage)-.+\.json$/

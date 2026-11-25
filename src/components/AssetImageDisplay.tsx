@@ -10,6 +10,8 @@ interface Props {
   display: AssetDisplay
   /** Extra classes for the rendered image (e.g. selection ring in the editor). */
   imgClassName?: string
+  /** Asked on each click whether to open the full-size view (the editor's first click selects instead). */
+  canZoom?: () => boolean
 }
 
 /**
@@ -19,7 +21,7 @@ interface Props {
  * a full-size lightbox overlay. Editing controls live in the editor node view,
  * not here.
  */
-export function AssetImageDisplay({ filename, width, unit = '%', display, imgClassName }: Props) {
+export function AssetImageDisplay({ filename, width, unit = '%', display, imgClassName, canZoom }: Props) {
   const [url, setUrl] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
   const [lightbox, setLightbox] = useState(false)
@@ -49,7 +51,7 @@ export function AssetImageDisplay({ filename, width, unit = '%', display, imgCla
       <>
         <button
           type="button"
-          onClick={() => url && setLightbox(true)}
+          onClick={() => url && (canZoom?.() ?? true) && setLightbox(true)}
           className="inline-flex items-center gap-1 rounded bg-accent px-2 py-1 text-xs text-foreground hover:opacity-80 align-middle max-w-full"
         >
           <Paperclip className="h-3.5 w-3.5 shrink-0" />
@@ -66,7 +68,7 @@ export function AssetImageDisplay({ filename, width, unit = '%', display, imgCla
         <img
           src={url}
           alt={filename}
-          onClick={() => setLightbox(true)}
+          onClick={() => { if (canZoom?.() ?? true) setLightbox(true) }}
           style={{ width: `${width}${unit}` }}
           className={`inline-block max-w-full cursor-zoom-in rounded border border-border align-top ${imgClassName ?? ''}`}
         />

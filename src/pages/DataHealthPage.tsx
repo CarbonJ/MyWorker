@@ -11,14 +11,15 @@ import { CheckCircle2, RefreshCw, Link2Off, FileWarning, ImageOff, ChevronDown, 
 import {
   findBrokenLinks, repointLinks, unlinkLinks, createNoteForLink,
   findOpenTasksInArchivedProjects, closeTasksOfArchivedProjects,
-  findEmptyNotes, trashNotes, findDuplicateContacts, findUnusedOptions, findSingleUseTags,
-  type BrokenLink, type ArchivedOpenTask, type EmptyNote, type DuplicateContacts, type UnusedOption, type SingleUseTag,
+  findEmptyNotes, trashNotes, findDuplicateContacts, findUnusedOptions, findSimilarTags, mergeTags,
+  type BrokenLink, type ArchivedOpenTask, type EmptyNote, type DuplicateContacts, type UnusedOption, type SimilarTags,
 } from '@/db/health'
 import { deleteDropdownOption } from '@/db/dropdownOptions'
 import { listFolderLeftovers, tidyFolderLeftovers, SNAPSHOT_FOLDER, LEFTOVER_FOLDER, type FolderLeftover } from '@/db'
 import { useWikiEntities } from '@/hooks/useWikiEntities'
 import { recordRoute } from '@/lib/refRoutes'
 import { findWikiEntity } from '@/lib/wikiLinks'
+import { isHashtagName } from '@/lib/tags'
 import { ENTITY_ICONS, SCREEN_ICONS } from '@/lib/icons'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,7 +30,7 @@ interface Report {
   emptyNotes: EmptyNote[]
   duplicates: DuplicateContacts[]
   unusedOptions: UnusedOption[]
-  singleTags: SingleUseTag[]
+  similarTags: SimilarTags[]
   leftovers: FolderLeftover[]
 }
 
@@ -40,12 +41,14 @@ function fmtDate(utc: string): string {
 }
 
 /** One check: title, count (or a green tick when clear), what it means, and its rows. */
-function Section({ icon: Icon, title, count, hint, actions, children }: {
+function Section({ icon: Icon, title, count, hint, actions, footer, children }: {
   icon: typeof SCREEN_ICONS.health
   title: string
   count: number
   hint: string
   actions?: ReactNode
+  /** Shown below the rows even when there is nothing to fix. */
+  footer?: ReactNode
   children?: ReactNode
 }) {
   return (
@@ -60,6 +63,7 @@ function Section({ icon: Icon, title, count, hint, actions, children }: {
       </div>
       <p className="px-4 pt-2 text-xs text-muted-foreground">{hint}</p>
       <div className="px-4 pb-3 pt-2">{count === 0 ? <p className="text-sm text-muted-foreground">Nothing to fix.</p> : children}</div>
+      {footer && <div className="px-4 pb-3 -mt-1">{footer}</div>}
     </section>
   )
 }
@@ -71,16 +75,20 @@ export default function DataHealthPage() {
   const [busy, setBusy] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [pointDraft, setPointDraft] = useState<Record<string, string>>({})
+  // Journal-only links (planned notes never written) are hidden unless asked for
+  const [showJournalLinks, setShowJournalLinks] = useState(false)
+  // Similar tags: the name chosen to keep, per group (keyed by the group's first name)
+  const [keepTag, setKeepTag] = useState<Record<string, string>>({})
 
   const load = useCallback(async () => {
     try {
-      const [brokenLinks, archivedTasks, emptyNotes, duplicates, unusedOptions, singleTags, leftovers] = await Promise.all([
+      const [brokenLinks, archivedTasks, emptyNotes, duplicates, unusedOptions, similarTags, leftovers] = await Promise.all([
         findBrokenLinks(), findOpenTasksInArchivedProjects(), findEmptyNotes(), findDuplicateContacts(),
-        findUnusedOptions(), findSingleUseTags(), listFolderLeftovers().catch(() => []),
+        findUnusedOptions(), findSimilarTags(), listFolderLeftovers().catch(() => []),
       ])
-      setReport({ brokenLinks, archivedTasks, emptyNotes, duplicates, unusedOptions, singleTags, leftovers })
+      setReport({ brokenLinks, archivedTasks, emptyNotes, duplicates, unusedOptions, similarTags, leftovers })
     } catch (err) {
-      toast.error(`Data health check failed: ${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`Data Health check failed: ${err instanceof Error ? err.message : String(err)}`)
     }
   }, [])
 
@@ -106,8 +114,13 @@ export default function DataHealthPage() {
     return <div className="p-6 text-sm text-muted-foreground">Checking your data…</div>
   }
 
-  const issues = report.brokenLinks.length + report.archivedTasks.length + report.emptyNotes.length +
-    report.duplicates.length + report.unusedOptions.length + report.singleTags.length + report.leftovers.length
+  // A link only the Journal uses, with no close match, is a note planned for a day — not a mistake
+  const isPlannedNote = (link: BrokenLink) => link.onlyInJournal && !link.suggestion
+  const plannedCount = report.brokenLinks.filter(isPlannedNote).length
+  const brokenLinks = showJournalLinks ? report.brokenLinks : report.brokenLinks.filter(l => !isPlannedNote(l))
+
+  const issues = brokenLinks.length + report.archivedTasks.length + report.emptyNotes.length +
+    report.duplicates.length + report.unusedOptions.length + report.similarTags.length + report.leftovers.length
 
   const rowBtn = 'text-left text-sm hover:underline truncate'
 
@@ -116,7 +129,7 @@ export default function DataHealthPage() {
       <div className="max-w-4xl px-6 py-4 space-y-4">
         <div className="flex items-center gap-3">
           <SCREEN_ICONS.health className="h-5 w-5 text-muted-foreground" />
-          <h1 className="text-lg font-semibold">Data health</h1>
+          <h1 className="text-lg font-semibold">Data Health</h1>
           <span className="text-sm text-muted-foreground">
             {issues === 0 ? 'Everything looks clean.' : `${plural(issues, 'thing')} to look at.`}
           </span>
@@ -126,10 +139,18 @@ export default function DataHealthPage() {
         </div>
 
         {/* ── Broken links ── */}
-        <Section icon={Link2Off} title="Broken links" count={report.brokenLinks.length}
-          hint="[[Links]] whose name matches no note, project, contact or area — usually a typo, or something deleted or renamed outside the app. Point them at the right thing, make them plain text, or create a note with that name.">
+        <Section icon={Link2Off} title="Broken links" count={brokenLinks.length}
+          hint="[[Links]] whose name matches no note, project, contact or area — usually a typo, or something deleted or renamed outside the app. Point them at the right thing, make them plain text, or create a note with that name."
+          footer={plannedCount > 0 && (
+            <button type="button" onClick={() => setShowJournalLinks(v => !v)}
+              className="text-xs text-muted-foreground hover:text-foreground hover:underline">
+              {showJournalLinks
+                ? `Hide the ${plural(plannedCount, 'Journal link')} to notes never written`
+                : `${plural(plannedCount, 'link')} only in the Journal (notes planned for a day but never written) ${plannedCount === 1 ? 'isn’t' : 'aren’t'} listed — show`}
+            </button>
+          )}>
           <div className="divide-y">
-            {report.brokenLinks.map(link => {
+            {brokenLinks.map(link => {
               const open = expanded === link.name
               const draft = pointDraft[link.name] ?? ''
               const target = findWikiEntity(entities, draft)
@@ -287,17 +308,40 @@ export default function DataHealthPage() {
           </ul>
         </Section>
 
-        {/* ── Tags used once ── */}
-        <Section icon={ENTITY_ICONS.tag} title="Tags used only once" count={report.singleTags.length}
-          hint="Often a typo of another tag. Open one on the Tags screen to rename or merge it.">
-          <div className="flex flex-wrap gap-1.5">
-            {report.singleTags.map(t => (
-              <button key={t.name} type="button" onClick={() => navigate(`/tags?tag=${encodeURIComponent(t.name)}`)}
-                title={`Used in: ${t.ref.title}`} className="hashtag cursor-pointer">
-                #{t.name}
-              </button>
-            ))}
-          </div>
+        {/* ── Similar tags ── */}
+        <Section icon={ENTITY_ICONS.tag} title="Similar tags" count={report.similarTags.length}
+          hint="Tags that look like one tag written differently — apart from spaces, punctuation, a plural or one letter. Pick the spelling to keep and merge the others into it. A name with spaces can't replace a tag written inline as #tag.">
+          <ul className="divide-y">
+            {report.similarTags.map(group => {
+              const id = group.tags[0].name
+              const inline = group.tags.some(t => t.inline)
+              const canKeep = (name: string) => !inline || isHashtagName(name)
+              const keep = keepTag[id] ?? group.tags.find(t => canKeep(t.name))?.name ?? null
+              const others = group.tags.filter(t => t.name !== keep).map(t => t.name)
+              return (
+                <li key={id} className="py-1.5 flex items-center gap-1.5 flex-wrap">
+                  {group.tags.map(t => (
+                    <button key={t.name} type="button" disabled={!canKeep(t.name)}
+                      onClick={() => setKeepTag(k => ({ ...k, [id]: t.name }))}
+                      title={canKeep(t.name) ? `Keep “${t.name}”` : 'Used inline as #tag elsewhere, so a name with spaces can’t replace it'}
+                      className={`text-xs rounded-full border px-2 py-0.5 tabular-nums disabled:opacity-50 disabled:cursor-not-allowed ${t.name === keep ? 'border-primary bg-primary text-primary-foreground' : 'hover:bg-accent'}`}>
+                      #{t.name} <span className="opacity-70">· {t.count}</span>
+                    </button>
+                  ))}
+                  <div className="ml-auto flex items-center gap-1.5 shrink-0">
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => navigate(`/tags?tag=${encodeURIComponent(id)}`)}>
+                      Open in Tags
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy || !keep}
+                      title={keep ? `Rename ${others.map(n => `#${n}`).join(', ')} to #${keep}` : undefined}
+                      onClick={() => fix(() => mergeTags(others, keep!), `Merged into #${keep}`)}>
+                      Merge into #{keep}
+                    </Button>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
         </Section>
 
         {/* ── Leftover files ── */}

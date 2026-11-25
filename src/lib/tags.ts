@@ -151,3 +151,46 @@ export function collectTags(fieldTags: string[], ...texts: (string | null | unde
   for (const text of texts) if (text) extractHashtags(text).forEach(add)
   return [...seen.values()]
 }
+
+/**
+ * How a tag reads once spacing, punctuation and a plural "s" are ignored:
+ * "risk review", "Risk-Review", "riskreview" and "riskreviews" are all "riskreview".
+ */
+export function looseTagKey(name: string): string {
+  const key = tagKey(name).replace(/[^\p{L}\p{N}]/gu, '')
+  return key.length > 3 && key.endsWith('s') && !key.endsWith('ss') ? key.slice(0, -1) : key
+}
+
+/** True when two loose keys differ by one letter (not a digit — "fy25" vs "fy26" are different tags). */
+function oneLetterApart(a: string, b: string): boolean {
+  if (Math.min(a.length, b.length) < 6 || Math.abs(a.length - b.length) > 1) return false
+  let i = 0
+  while (i < a.length && a[i] === b[i]) i++
+  const [x, y] = [a.slice(i), b.slice(i)]
+  const changed = a.length === b.length ? `${x[0] ?? ''}${y[0] ?? ''}` : a.length > b.length ? x[0] : y[0]
+  if (/\p{N}/u.test(changed ?? '')) return false
+  // Substitution, or one extra letter in either
+  return x.slice(1) === y.slice(1) || x.slice(1) === y || x === y.slice(1)
+}
+
+/**
+ * Groups of tags that are probably the same tag written differently — apart
+ * from spacing, punctuation or a plural, or one letter out in a longer name.
+ * Each group lists its names most-used first. Tags in one group are joined
+ * through any chain of matches.
+ */
+export function groupSimilarTags<T extends { name: string; count: number }>(tags: T[]): T[][] {
+  const keys = tags.map(t => looseTagKey(t.name))
+  const parent = tags.map((_, i) => i)
+  const root = (i: number): number => (parent[i] === i ? i : (parent[i] = root(parent[i])))
+  for (let i = 0; i < tags.length; i++) {
+    for (let j = i + 1; j < tags.length; j++) {
+      if (keys[i] && (keys[i] === keys[j] || oneLetterApart(keys[i], keys[j]))) parent[root(j)] = root(i)
+    }
+  }
+  const groups = new Map<number, T[]>()
+  tags.forEach((t, i) => groups.set(root(i), [...(groups.get(root(i)) ?? []), t]))
+  return [...groups.values()]
+    .filter(g => g.length > 1)
+    .map(g => g.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)))
+}

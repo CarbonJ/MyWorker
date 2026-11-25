@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseTags, stringifyTags, findHashtags, extractHashtags, replaceHashtag, replaceInTagList, isHashtagName, isHexColour } from './tags'
+import { parseTags, stringifyTags, findHashtags, extractHashtags, replaceHashtag, replaceInTagList, isHashtagName, isHexColour, looseTagKey, groupSimilarTags } from './tags'
 
 describe('parseTags', () => {
   it('parses a JSON array', () => {
@@ -98,5 +98,33 @@ describe('hex colours', () => {
     expect(isHexColour('a1b2c3')).toBe(true)
     expect(isHexColour('bad')).toBe(false)
     expect(isHexColour('risk')).toBe(false)
+  })
+})
+
+describe('similar tags', () => {
+  const t = (name: string, count = 1) => ({ name, count })
+
+  it('ignores spacing, punctuation, case and plurals', () => {
+    expect(looseTagKey('Risk Review')).toBe('riskreview')
+    expect(looseTagKey('risk-reviews')).toBe('riskreview')
+    expect(looseTagKey('process')).toBe('process')
+  })
+
+  it('groups near-identical tags, most used first', () => {
+    const groups = groupSimilarTags([t('riskreview', 1), t('risk review', 4), t('audit', 2), t('Risk-Reviews', 1)])
+    expect(groups).toHaveLength(1)
+    expect(groups[0].map(g => g.name)).toEqual(['risk review', 'Risk-Reviews', 'riskreview'])
+  })
+
+  it('catches a one-letter typo in a longer tag', () => {
+    expect(groupSimilarTags([t('vendor'), t('vendr')])).toHaveLength(0)
+    expect(groupSimilarTags([t('compliance'), t('complaince')])).toHaveLength(0)
+    expect(groupSimilarTags([t('compliance'), t('complance')])).toHaveLength(1)
+    expect(groupSimilarTags([t('incident'), t('incidant')])).toHaveLength(1)
+  })
+
+  it('keeps tags that differ by a number apart', () => {
+    expect(groupSimilarTags([t('audit2025'), t('audit2026')])).toHaveLength(0)
+    expect(groupSimilarTags([t('fy25'), t('fy26')])).toHaveLength(0)
   })
 })

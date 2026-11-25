@@ -1,5 +1,5 @@
 /**
- * Data health — finds clutter and broken references, and fixes them.
+ * Data Health — finds clutter and broken references, and fixes them.
  *
  * Every check is read-only. Fixes go through the normal write paths: text is
  * rewritten with rewriteRecords() (one transaction, updated_at preserved),
@@ -7,7 +7,8 @@
  */
 
 import { exec, getDb, persistToUserFolder, query } from './index'
-import { SOURCES, getTagUsage, rewriteRecords, type TagRef } from './tags'
+import { SOURCES, getTagUsage, renameTag, rewriteRecords, type TagRef } from './tags'
+import { groupSimilarTags, tagKey } from '@/lib/tags'
 import { loadAllEntities, rebuildAllLinks, createNotebookPage } from './notebook'
 import { notifyLinksChanged } from './links'
 import { getOptionUsageCount } from './dropdownOptions'
@@ -38,6 +39,11 @@ export interface BrokenLink {
   refs: TagRef[]
   /** The closest existing name, when there is a likely match (a typo, or a renamed entity). */
   suggestion: { type: string; id: number; name: string } | null
+  /**
+   * Only Journal entries link to it. Those are usually notes planned for a day
+   * (a meeting that was cancelled or needed none) rather than mistakes.
+   */
+  onlyInJournal: boolean
 }
 
 /** Edit distance between two short strings. */
@@ -106,7 +112,12 @@ export async function findBrokenLinks(): Promise<BrokenLink[]> {
   return [...byKey.values()]
     .map(e => {
       const name = [...e.spellings.entries()].sort((a, b) => b[1] - a[1])[0][0]
-      return { name, refs: e.refs.sort((a, b) => b.date.localeCompare(a.date)), suggestion: closest(entities, name) }
+      return {
+        name,
+        refs: e.refs.sort((a, b) => b.date.localeCompare(a.date)),
+        suggestion: closest(entities, name),
+        onlyInJournal: e.refs.every(r => r.sourceType === 'journal'),
+      }
     })
     .sort((a, b) => b.refs.length - a.refs.length || a.name.localeCompare(b.name))
 }
@@ -262,17 +273,24 @@ export async function findUnusedOptions(): Promise<UnusedOption[]> {
   return out
 }
 
-// ── Tags used only once ──────────────────────────────────────────────────────
+// ── Similar tags ─────────────────────────────────────────────────────────────
 
-export interface SingleUseTag {
-  name: string
-  ref: TagRef
+export interface SimilarTags {
+  /** Most-used first. `inline` = written as #tag in some text, so a name with spaces can't replace it. */
+  tags: { name: string; count: number; inline: boolean }[]
 }
 
-/** Tags used in just one place — often a typo of another tag. */
-export async function findSingleUseTags(): Promise<SingleUseTag[]> {
-  return (await getTagUsage())
-    .filter(t => t.refs.length === 1)
-    .map(t => ({ name: t.name, ref: t.refs[0] }))
-    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+/** Tags that look like one tag written differently ("risk review" / "riskreview" / "risk-reviews"). */
+export async function findSimilarTags(): Promise<SimilarTags[]> {
+  const usage = (await getTagUsage()).map(t => ({ name: t.name, count: t.refs.length, inline: t.refs.some(r => r.snippet !== null || !r.inField) }))
+  return groupSimilarTags(usage)
+    .map(tags => ({ tags }))
+    .sort((a, b) => a.tags[0].name.localeCompare(b.tags[0].name, undefined, { sensitivity: 'base' }))
+}
+
+/** Rename every other tag in the group onto `into`. Returns the number of records changed. */
+export async function mergeTags(names: string[], into: string): Promise<number> {
+  let changed = 0
+  for (const name of names) if (tagKey(name) !== tagKey(into)) changed += await renameTag(name, into)
+  return changed
 }

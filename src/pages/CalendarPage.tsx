@@ -5,16 +5,17 @@
  *
  * Shows open / in-progress tasks and active projects that have a due date.
  * With the business-days setting on, only Mon–Fri are shown and weekend due
- * dates appear on the Friday before.
+ * dates appear on the Friday before. Dragging a task or project onto another
+ * day changes its due date (with Undo).
  */
 
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
 import { ENTITY_ICONS, SCREEN_ICONS } from '@/lib/icons'
 import { toast } from 'sonner'
-import { getAllTasks } from '@/db/tasks'
-import { getAllProjects } from '@/db/projects'
+import { getAllTasks, updateTask } from '@/db/tasks'
+import { getAllProjects, updateProject } from '@/db/projects'
 import type { Task, Project } from '@/types'
 import { Button } from '@/components/ui/button'
 import { TaskModal } from '@/components/TaskModal'
@@ -52,6 +53,13 @@ const EXTEND_MONTHS = 6
 const EDGE_PX = 400
 const MIN_ROW_PX = 112
 
+// Month cell layout, for working out how many items fit: a chip is 20px plus a
+// 2px gap; the cell's padding, border, date row and gap take CELL_CHROME_PX; the
+// "+N more" line takes MORE_PX.
+const CHIP_PX = 22
+const CELL_CHROME_PX = 35
+const MORE_PX = 16
+
 function monthLabel(ym: string): string {
   return parseLocalDate(`${ym}-01`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
 }
@@ -88,6 +96,9 @@ export default function CalendarPage() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [projects, setProjects] = useState<Project[]>([])
   const [editingTask, setEditingTask] = useState<Task | null>(null)
+  // Drag and drop: the item being dragged, and the day it is over
+  const dragItem = useRef<DueItem | null>(null)
+  const [dropDay, setDropDay] = useState<string | null>(null)
 
   const load = useCallback(() => {
     Promise.all([getAllTasks(), getAllProjects()])
@@ -234,17 +245,71 @@ export default function CalendarPage() {
     else setEditingTask(item.task)
   }
 
+  // Give an item a new due date; Undo puts the old one back
+  const setDueDate = async (item: DueItem, dueDate: string, undoable = true) => {
+    const label = item.kind === 'task' ? item.task.title : item.project.workItem
+    try {
+      if (item.kind === 'task') {
+        setTasks(ts => ts.map(t => (t.id === item.task.id ? { ...t, dueDate } : t)))
+        await updateTask({ id: item.task.id, dueDate })
+        window.dispatchEvent(new Event('myworker:task-saved'))
+      } else {
+        setProjects(ps => ps.map(p => (p.id === item.project.id ? { ...p, dueDate } : p)))
+        await updateProject({ id: item.project.id, dueDate })
+      }
+      if (undoable) {
+        toast.success(`“${label}” now due ${parseLocalDate(dueDate).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}`, {
+          action: { label: 'Undo', onClick: () => { setDueDate(item, item.date, false) } },
+        })
+      }
+    } catch (err) {
+      toast.error(`Couldn't move “${label}”: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      load()
+    }
+  }
+
+  // A day cell accepts a dragged item; dropping it on the day it's already shown on does nothing
+  const dropTarget = (day: string) => ({
+    onDragOver: (e: React.DragEvent) => {
+      if (!dragItem.current) return
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'move'
+      if (dropDay !== day) setDropDay(day)
+    },
+    onDragLeave: (e: React.DragEvent) => {
+      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropDay(d => (d === day ? null : d))
+    },
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault()
+      const item = dragItem.current
+      dragItem.current = null
+      setDropDay(null)
+      if (item && displayDate(item.date, businessDays) !== day) setDueDate(item, day)
+    },
+  })
+
+  const dragSource = (item: DueItem) => ({
+    draggable: true,
+    onDragStart: (e: React.DragEvent) => {
+      dragItem.current = item
+      e.dataTransfer.effectAllowed = 'move'
+      e.dataTransfer.setData('text/plain', item.kind === 'task' ? item.task.title : item.project.workItem)
+    },
+    onDragEnd: () => { dragItem.current = null; setDropDay(null) },
+  })
+
   const itemChip = (item: DueItem, compact: boolean, shownOn: string) => {
     const overdue = item.date < today
     // Due on a weekend but shown on Friday — say so
     const weekendTag = item.date !== shownOn
       ? <span className="shrink-0 text-[10px] font-medium text-muted-foreground mr-1">{parseLocalDate(item.date).toLocaleDateString(undefined, { weekday: 'short' })}</span>
       : null
-    const base = 'w-full text-left rounded px-1.5 py-0.5 text-xs truncate transition-colors'
+    const base = `w-full text-left rounded px-1.5 py-0.5 text-xs truncate transition-colors cursor-grab active:cursor-grabbing ${compact ? 'h-5 shrink-0 leading-4' : ''}`
     if (item.kind === 'project') {
       return (
-        <button key={`p-${item.project.id}`} type="button" onClick={() => openItem(item)}
-          title={`Project due: ${item.project.workItem}`}
+        <button key={`p-${item.project.id}`} type="button" onClick={() => openItem(item)} {...dragSource(item)}
+          title={`Project due: ${item.project.workItem} — drag to another day to change the due date`}
           className={`${base} flex items-center gap-1 border border-primary/30 font-medium hover:bg-accent ${overdue ? 'text-red-700 dark:text-red-400' : ''}`}>
           <ENTITY_ICONS.project className="h-3 w-3 shrink-0" />
           {weekendTag}
@@ -254,10 +319,14 @@ export default function CalendarPage() {
     }
     const t = item.task
     return (
-      <button key={`t-${t.id}`} type="button" onClick={() => openItem(item)}
-        title={`${t.title}${item.projectName ? ` — ${item.projectName}` : ''}`}
+      <button key={`t-${t.id}`} type="button" onClick={() => openItem(item)} {...dragSource(item)}
+        title={`${t.title}${item.projectName ? ` — ${item.projectName}` : ''}${t.isRecurring ? ' (recurring)' : ''} — drag to another day to change the due date`}
         className={`${base} block bg-muted/60 hover:bg-accent ${overdue ? 'text-red-700 dark:text-red-400' : ''} ${t.status === 'in_progress' ? 'border-l-2 border-blue-500' : ''}`}>
-        <span className="truncate block">{weekendTag}{t.title}</span>
+        <span className="truncate flex items-center gap-1">
+          {weekendTag}
+          <span className="truncate">{t.title}</span>
+          {t.isRecurring && <RefreshCw className="h-2.5 w-2.5 shrink-0 opacity-60" aria-label="Recurring" />}
+        </span>
         {!compact && item.projectName && (
           <span className="truncate block text-[10px] text-muted-foreground">{item.projectName}</span>
         )}
@@ -265,7 +334,9 @@ export default function CalendarPage() {
     )
   }
 
-  const MONTH_LIMIT = 3
+  // How many items a month cell can show: all that fit, or one line fewer to make room for "+N more"
+  const fitsAll = Math.max(1, Math.floor((rowPx - CELL_CHROME_PX + 2) / CHIP_PX))
+  const fitsWithMore = Math.max(1, Math.floor((rowPx - CELL_CHROME_PX + 2 - MORE_PX) / CHIP_PX))
 
   // One day's cell. `month` is set in the month view: days outside the month at the
   // top of the scroll are dimmed, and the first shown day of each month is labelled.
@@ -275,10 +346,11 @@ export default function CalendarPage() {
       .sort((a, b) => (a.kind === 'project' ? 0 : 1) - (b.kind === 'project' ? 0 : 1))
     const level = rateDay(day, items.length, today, businessDays, baseline)
     const d = parseLocalDate(day)
-    const shown = month ? items.slice(0, MONTH_LIMIT) : items
+    const limit = !month ? items.length : items.length > fitsAll ? fitsWithMore : fitsAll
+    const shown = items.slice(0, limit)
     return (
-      <div key={day}
-        className={`border-r border-b p-1.5 flex flex-col gap-1 min-w-0 transition-opacity ${LEVEL_STYLE[level].cell} ${month?.outside ? 'opacity-50' : ''}`}>
+      <div key={day} {...dropTarget(day)}
+        className={`border-r border-b p-1.5 flex flex-col gap-1 min-w-0 transition-opacity ${LEVEL_STYLE[level].cell} ${month?.outside ? 'opacity-50' : ''} ${dropDay === day ? 'ring-2 ring-inset ring-primary' : ''}`}>
         <div className="flex items-center justify-between gap-1">
           <button type="button"
             onClick={() => { setAnchor(day); switchView('week') }}
@@ -290,13 +362,15 @@ export default function CalendarPage() {
           </button>
           <LoadBadge level={level} count={items.length} />
         </div>
-        {shown.map(item => itemChip(item, !!month, day))}
-        {month && items.length > MONTH_LIMIT && (
-          <button type="button" onClick={() => { setAnchor(day); switchView('week') }}
-            className="text-[10px] text-muted-foreground hover:text-foreground text-left px-1.5">
-            +{items.length - MONTH_LIMIT} more
-          </button>
-        )}
+        <div className={`flex flex-col min-w-0 ${month ? 'gap-0.5' : 'gap-1'}`}>
+          {shown.map(item => itemChip(item, !!month, day))}
+          {items.length > limit && (
+            <button type="button" onClick={() => { setAnchor(day); switchView('week') }}
+              className="text-[10px] leading-[14px] text-muted-foreground hover:text-foreground text-left px-1.5">
+              +{items.length - limit} more
+            </button>
+          )}
+        </div>
       </div>
     )
   }

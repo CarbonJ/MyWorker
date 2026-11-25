@@ -10,6 +10,15 @@ import {
 
 const PRESETS = [25, 50, 100]
 
+// The image node is draggable, so pressing anywhere inside it and moving would
+// start dragging the whole image through the note — including when moving the
+// size slider. The browser drags the nearest draggable element, so the controls
+// are made draggable themselves and that drag is cancelled.
+const noNativeDrag = {
+  draggable: true,
+  onDragStart: (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation() },
+}
+
 /**
  * Editor node view for a pasted image. Renders the shared display component and,
  * when the node is selected, a toolbar (link/image toggle, size slider, exact
@@ -20,6 +29,9 @@ const PRESETS = [25, 50, 100]
  * width changes; the src is written once on release, so the note isn't re-saved
  * on every pixel and the selection (and toolbar) stays put. Delete removes the
  * node (the file is kept until an unused-image cleanup).
+ *
+ * In the editor the first click on an image selects it (showing the controls);
+ * clicking it again once selected opens the full-size view.
  */
 export function AssetImageView({ node, getPos, deleteNode, selected, editor }: NodeViewProps) {
   const src: string = node.attrs.src ?? ''
@@ -30,6 +42,8 @@ export function AssetImageView({ node, getPos, deleteNode, selected, editor }: N
   const [draft, setDraft] = useState<number | null>(null)
   // Text in the size box while it is being typed in
   const [typed, setTyped] = useState<string | null>(null)
+  // Whether the image was already selected when the current click began
+  const selectedAtDown = useRef(false)
 
   // Non-asset image (e.g. a pasted external URL) — render plainly, no controls.
   if (!parts) {
@@ -118,15 +132,18 @@ export function AssetImageView({ node, getPos, deleteNode, selected, editor }: N
   return (
     <NodeViewWrapper as="span" ref={wrapperRef} className="relative inline-block align-top max-w-full"
       style={display === 'image' ? { width: `${shownWidth}${unit}` } : undefined}>
-      <span className={showControls ? 'ring-2 ring-primary rounded block' : 'block'}>
+      <span className={showControls ? 'ring-2 ring-primary rounded block' : 'block'}
+        onMouseDownCapture={() => { selectedAtDown.current = selected }}>
         {/* The wrapper carries the width, so the image just fills it */}
-        <AssetImageDisplay filename={filename} width={display === 'image' ? 100 : shownWidth} display={display} />
+        <AssetImageDisplay filename={filename} width={display === 'image' ? 100 : shownWidth} display={display}
+          canZoom={() => !editable || selectedAtDown.current} />
       </span>
 
       {showControls && display === 'image' && (
         <span
           contentEditable={false}
           data-image-controls
+          {...noNativeDrag}
           onPointerDown={startHandleDrag}
           title="Drag to resize"
           className="absolute -right-1.5 -bottom-1.5 z-10 h-3.5 w-3.5 cursor-ew-resize rounded-sm border-2 border-background bg-primary shadow"
@@ -139,8 +156,9 @@ export function AssetImageView({ node, getPos, deleteNode, selected, editor }: N
           // The editor ignores events from here (see stopEvent in assetImage.ts); stopping
           // the default on non-inputs keeps focus, and so the selection, in place.
           data-image-controls
+          {...noNativeDrag}
           onMouseDown={e => { if (!(e.target instanceof HTMLInputElement)) e.preventDefault() }}
-          className="absolute left-1 top-1 z-10 flex items-center gap-1 whitespace-nowrap rounded-md border border-border bg-popover/95 px-1.5 py-1 shadow-md backdrop-blur"
+          className="absolute left-1 top-1 z-10 flex select-none items-center gap-1 whitespace-nowrap rounded-md border border-border bg-popover/95 px-1.5 py-1 shadow-md backdrop-blur"
         >
           <button
             type="button"
@@ -177,7 +195,7 @@ export function AssetImageView({ node, getPos, deleteNode, selected, editor }: N
                   if (e.key === 'Escape') { e.stopPropagation(); setTyped(null) }
                 }}
                 title={`Exact width in ${unit === '%' ? 'percent of the note width' : 'pixels'}`}
-                className="h-6 w-14 rounded border border-input bg-background px-1 text-right text-xs tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                className="h-6 w-14 select-text rounded border border-input bg-background px-1 text-right text-xs tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
               />
               <span className="flex items-center rounded border border-input">
                 {(['%', 'px'] as const).map(u => (

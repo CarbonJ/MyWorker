@@ -87,7 +87,7 @@ export function CommandPalette({ open, onClose, onNewTask, onNewProject }: Props
                 <SCREEN_ICONS.notebook className="text-muted-foreground" /> Notebook
               </CommandItem>
               <CommandItem value="data health cleanup broken links duplicates tidy" onSelect={() => go('/health')}>
-                <SCREEN_ICONS.health className="text-muted-foreground" /> Data health
+                <SCREEN_ICONS.health className="text-muted-foreground" /> Data Health
               </CommandItem>
               <CommandItem value="settings" onSelect={() => go('/settings')}>
                 <SCREEN_ICONS.settings className="text-muted-foreground" /> Settings
