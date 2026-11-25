@@ -65,13 +65,13 @@ export async function renameWikiLinks(oldName: string, newName: string): Promise
 export async function getMentions(name: string): Promise<TagRef[]> {
   const target = name.trim()
   if (!target) return []
-  // LIKE narrows the scan in SQL; the regex check below is the real test.
-  const like = `%${target.replace(/[\\%_]/g, '\\$&')}%`
+  // LIKE narrows the scan to text with a link in it; indexOfWikiLink is the real
+  // test (stored text may differ from the name by escapes, spacing or case).
   const refs: TagRef[] = []
   for (const src of SOURCES) {
     if (src.type === 'note') continue
-    const where = src.textColumns.map(c => `${c} LIKE ?1 ESCAPE '\\'`).join(' OR ')
-    const rows = await query(`SELECT * FROM (${src.select}) WHERE ${where}`, [like])
+    const where = src.textColumns.map(c => `${c} LIKE '%[%'`).join(' OR ')
+    const rows = await query(`SELECT * FROM (${src.select}) WHERE ${where}`)
     for (const row of rows) {
       for (const col of src.textColumns) {
         const text = (row[col] as string | null) ?? ''

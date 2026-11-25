@@ -25,6 +25,9 @@ import * as SQLite from '@/vendor/wa-sqlite/sqlite-api.js'
 import { IDBBatchAtomicVFS } from '@/vendor/wa-sqlite/examples/IDBBatchAtomicVFS.js'
 import { runMigrations } from './migrations'
 import { BACKUP_TABLES, DERIVED_TABLES, EXPORT_FORMAT_VERSION } from './backupSchema'
+import { assessDrop, countRecords, type DataDrop, type RecordCounts } from '@/lib/dataGuard'
+import { snapshotsToPrune } from '@/lib/snapshotRetention'
+import { withTimeout } from '@/lib/withTimeout'
 
 const DB_NAME = 'myworker.db'
 const IDB_NAME = 'myworker-sqlite'
@@ -40,6 +43,15 @@ async function deleteIdb(): Promise<void> {
       resolve() // proceed anyway
     }
   })
+}
+
+/**
+ * Delete this browser's working copy of the database. Only for recovery when it
+ * cannot be opened: the app then starts empty and offers to load the folder file.
+ * Takes effect once this page's own connection closes (callers reload).
+ */
+export async function deleteWorkingCopy(): Promise<void> {
+  await deleteIdb()
 }
 
 export interface DbHandle {
@@ -408,11 +420,15 @@ function timestampForFilename(): string {
 // within seconds, so retry before telling the user the folder copy is stale.
 const TRANSIENT_FILE_ERRORS = new Set(['InvalidStateError', 'NoModificationAllowedError', 'NotReadableError', 'InvalidModificationError'])
 const RETRY_DELAYS_MS = [500, 2000, 5000]
+// A file call that never settles (seen after a OneDrive client problem) would
+// otherwise hang startup, or every later save queued behind it. Generous enough
+// for OneDrive to download a file that is only stored online.
+const FILE_TIMEOUT_MS = 20000
 
-async function withFileRetry<T>(fn: () => Promise<T>): Promise<T> {
+async function withFileRetry<T>(fn: () => Promise<T>, label = 'Accessing the data file'): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     try {
-      return await fn()
+      return await withTimeout(fn(), FILE_TIMEOUT_MS, label)
     } catch (err) {
       const transient = err instanceof DOMException && TRANSIENT_FILE_ERRORS.has(err.name)
       if (!transient || attempt >= RETRY_DELAYS_MS.length) throw err
@@ -441,7 +457,7 @@ async function readFolderFile(fileHandle: FileSystemFileHandle): Promise<{ text:
   return withFileRetry(async () => {
     const file = await fileHandle.getFile()
     return { text: await file.text(), lastModified: file.lastModified }
-  })
+  }, `Reading ${fileHandle.name}`)
 }
 
 /**
@@ -457,7 +473,7 @@ async function isOwnFolderFile(fileData: Record<string, unknown>): Promise<boole
 
 async function getDataFileHandle(dir: FileSystemDirectoryHandle): Promise<FileSystemFileHandle | null> {
   try {
-    return await dir.getFileHandle(DATA_FILE)
+    return await withTimeout(dir.getFileHandle(DATA_FILE), FILE_TIMEOUT_MS, `Finding ${DATA_FILE} in the storage folder`)
   } catch (err) {
     if (err instanceof DOMException && err.name === 'NotFoundError') return null
     throw err
@@ -477,16 +493,20 @@ export async function checkFolderSync(): Promise<FolderConflict | null> {
     return null
   }
 
-  const file = await withFileRetry(() => fileHandle.getFile())
+  const file = await withFileRetry(() => fileHandle.getFile(), `Opening ${DATA_FILE}`)
   if (await getMeta(FOLDER_MTIME_KEY) === String(file.lastModified)) {
+    console.info('[MyWorker] folder file unchanged since this browser last saved it')
     folderSyncState = 'ok'
     return null
   }
 
+  console.info('[MyWorker] reading folder file')
   const { text, lastModified } = await readFolderFile(fileHandle)
   let fileData: Record<string, unknown>
   try {
     fileData = JSON.parse(text)
+    const c = countsOf(fileData)
+    console.info(`[MyWorker] parsed folder file: ${c.projects} projects, ${c.tasks} tasks, ${c.workLogEntries} log entries, ${c.notebookPages} notes`)
   } catch {
     // Unreadable file — keep a copy of it, then let this browser's data replace it
     await writeJsonFile(dir, `myworker-conflict-unreadable-${timestampForFilename()}.json`, text)
@@ -568,11 +588,12 @@ function setFolderSave(next: FolderSaveStatus): void {
 
 // ── Daily snapshots ───────────────────────────────────────────────────────────
 // Once per day the first successful folder save also writes a dated copy to a
-// subfolder, and copies older than SNAPSHOT_DAYS are removed. A second safety
-// net that doesn't depend on OneDrive's version history.
+// subfolder. Every copy from the last SNAPSHOT_DAYS days is kept, plus the first
+// copy of each month for SNAPSHOT_MONTHS months (see lib/snapshotRetention.ts).
+// A second safety net that doesn't depend on OneDrive's version history.
 
 export const SNAPSHOT_FOLDER = 'MyWorkerSnapshots'
-export const SNAPSHOT_DAYS = 30
+export { DAILY_DAYS as SNAPSHOT_DAYS, MONTHLY_MONTHS as SNAPSHOT_MONTHS } from '@/lib/snapshotRetention'
 /** app_metadata key: local date (YYYY-MM-DD) of the last snapshot written. */
 const SNAPSHOT_DATE_KEY = 'last_snapshot_date'
 const SNAPSHOT_NAME_RE = /^myworker-(\d{4}-\d{2}-\d{2})\.json$/
@@ -589,15 +610,12 @@ async function writeDailySnapshot(dir: FileSystemDirectoryHandle, data: unknown)
     await writeJsonFile(snapDir, `myworker-${today}.json`, data)
     await setMeta(SNAPSHOT_DATE_KEY, today)
 
-    const cutoff = new Date()
-    cutoff.setDate(cutoff.getDate() - SNAPSHOT_DAYS)
-    const oldest = localDate(cutoff)
-    const expired: string[] = []
+    const dates: string[] = []
     for await (const entry of snapDir.values()) {
       const m = entry.kind === 'file' ? SNAPSHOT_NAME_RE.exec(entry.name) : null
-      if (m && m[1] < oldest) expired.push(entry.name)
+      if (m) dates.push(m[1])
     }
-    for (const name of expired) await snapDir.removeEntry(name)
+    for (const date of snapshotsToPrune(dates, today)) await snapDir.removeEntry(`myworker-${date}.json`)
   } catch (err) {
     // A missed snapshot is not worth interrupting the user for — the main save succeeded.
     console.warn('[db] Daily snapshot failed', err)
@@ -619,6 +637,141 @@ export async function listSnapshots(): Promise<string[]> {
   } catch {
     return []
   }
+}
+
+// ── Mass-loss guard ───────────────────────────────────────────────────────────
+// persistNow() compares the records it is about to write with those the last
+// save wrote (FOLDER_COUNTS_KEY). A large drop that the Trash doesn't explain
+// pauses folder saving and fires DATA_DROP_EVENT; the app asks the user to
+// either keep the change (acceptDataDrop) or bring back the folder copy
+// (restoreFolderCopy). Deliberate bulk removals — restoring a backup, emptying
+// the Trash, the Trash's 30-day expiry — call allowNextDataDrop() first.
+
+/** app_metadata key: record counts (RecordCounts JSON) of the last folder file this browser wrote. */
+const FOLDER_COUNTS_KEY = 'folder_file_counts'
+/** Window event fired while a large drop is holding up folder saves (see getPendingDataDrop). */
+export const DATA_DROP_EVENT = 'myworker:data-drop'
+/** File name prefix, in SNAPSHOT_FOLDER, of the folder file replaced by an accepted drop. */
+export const BEFORE_DROP_PREFIX = 'myworker-before-drop-'
+
+let pendingDrop: DataDrop | null = null
+let allowDataDrop = false
+
+/** The drop currently holding up folder saves, or null. */
+export function getPendingDataDrop(): DataDrop | null {
+  return pendingDrop
+}
+
+/** Let the next folder save go through even if it removes many records (a deliberate bulk change). */
+export function allowNextDataDrop(): void {
+  allowDataDrop = true
+}
+
+/** The user confirmed the drop: save now (the replaced file is kept in the snapshots folder). */
+export async function acceptDataDrop(): Promise<void> {
+  allowDataDrop = true
+  await persistToUserFolder()
+}
+
+/** The user rejected the drop: load the folder copy (still the last good save) into this browser. */
+export async function restoreFolderCopy(): Promise<void> {
+  const dir = instance?.dirHandle
+  const fileHandle = dir ? await getDataFileHandle(dir) : null
+  if (!fileHandle) throw new Error('There is no data file in the storage folder.')
+  const { text } = await readFolderFile(fileHandle)
+  // Dynamic import avoids a static circular dependency (importExport imports from this module)
+  const { restoreFromData } = await import('./importExport')
+  await restoreFromData(JSON.parse(text))
+  pendingDrop = null
+}
+
+/** Counts of the last folder save — from metadata, or (first run with the guard) from the file itself. */
+async function lastSavedCounts(existing: FileSystemFileHandle | null): Promise<RecordCounts | null> {
+  const saved = await getMeta(FOLDER_COUNTS_KEY)
+  if (saved) {
+    try { return JSON.parse(saved) as RecordCounts } catch { /* fall through */ }
+  }
+  if (!existing) return null
+  try {
+    return countRecords(JSON.parse((await readFolderFile(existing)).text))
+  } catch {
+    return null
+  }
+}
+
+async function keepCopyBeforeDrop(dir: FileSystemDirectoryHandle, existing: FileSystemFileHandle): Promise<void> {
+  const { text } = await readFolderFile(existing)
+  const snapDir = await dir.getDirectoryHandle(SNAPSHOT_FOLDER, { create: true })
+  await writeJsonFile(snapDir, `${BEFORE_DROP_PREFIX}${timestampForFilename()}.json`, text)
+}
+
+// ── Leftover files ────────────────────────────────────────────────────────────
+// Conflict and salvage copies are written next to the data file and never
+// removed automatically. Data health lists them and can tidy them into a
+// subfolder of the snapshots folder (moved, never deleted).
+
+const LEFTOVER_RE = /^myworker-(conflict|salvage)-.+\.json$/
+export const LEFTOVER_FOLDER = 'Old conflict files'
+
+export interface FolderLeftover {
+  name: string
+  kind: 'conflict' | 'salvage'
+  /** File modified time (ms epoch). */
+  modified: number
+  size: number
+}
+
+/** Conflict and salvage files sitting next to the data file, newest first. */
+export async function listFolderLeftovers(): Promise<FolderLeftover[]> {
+  const dir = instance?.dirHandle
+  if (!dir) return []
+  const out: FolderLeftover[] = []
+  for await (const entry of dir.values()) {
+    const m = entry.kind === 'file' ? LEFTOVER_RE.exec(entry.name) : null
+    if (!m) continue
+    const file = await (entry as FileSystemFileHandle).getFile()
+    out.push({ name: entry.name, kind: m[1] as FolderLeftover['kind'], modified: file.lastModified, size: file.size })
+  }
+  return out.sort((a, b) => b.modified - a.modified)
+}
+
+/** Move leftover files into MyWorkerSnapshots/Old conflict files (copied, then removed from the main folder). */
+export async function tidyFolderLeftovers(names: string[]): Promise<number> {
+  const dir = instance?.dirHandle
+  if (!dir) return 0
+  const snapDir = await dir.getDirectoryHandle(SNAPSHOT_FOLDER, { create: true })
+  const target = await snapDir.getDirectoryHandle(LEFTOVER_FOLDER, { create: true })
+  let moved = 0
+  for (const name of names) {
+    if (!LEFTOVER_RE.test(name)) continue
+    const { text } = await readFolderFile(await dir.getFileHandle(name))
+    await writeJsonFile(target, name, text)
+    await dir.removeEntry(name)
+    moved++
+  }
+  return moved
+}
+
+// ── Persistent browser storage ────────────────────────────────────────────────
+// Without this the browser may clear IndexedDB (the working copy) under disk
+// pressure. Chrome/Edge usually grant it to an installed or frequently used site.
+
+let storagePersisted: boolean | null = null
+
+/** Ask the browser not to evict this site's storage. Returns whether it is protected. */
+export async function requestPersistentStorage(): Promise<boolean | null> {
+  if (!navigator.storage?.persist) return null
+  try {
+    storagePersisted = await navigator.storage.persisted() || await navigator.storage.persist()
+  } catch {
+    storagePersisted = null
+  }
+  return storagePersisted
+}
+
+/** Result of the last requestPersistentStorage(): true, false, or null when unknown/unsupported. */
+export function isStoragePersisted(): boolean | null {
+  return storagePersisted
 }
 
 // Persists run one at a time so two writes can't interleave on the same file.
@@ -647,7 +800,7 @@ async function persistNow(): Promise<void> {
     const existing = await getDataFileHandle(dir)
     const marker = await getMeta(FOLDER_MTIME_KEY)
     if (existing && marker !== null) {
-      const current = await withFileRetry(() => existing.getFile())
+      const current = await withFileRetry(() => existing.getFile(), `Opening ${DATA_FILE}`)
       if (String(current.lastModified) !== marker) {
         let theirs: Record<string, unknown> | null = null
         // Read failures that outlast the retries propagate as a save error rather
@@ -663,13 +816,30 @@ async function persistNow(): Promise<void> {
       }
     }
 
+    // Mass-loss guard: don't replace the folder copy with far fewer records than
+    // the last save wrote unless the user says so (see lib/dataGuard.ts)
+    const counts = countRecords(snapshot)
+    const before = await lastSavedCounts(existing)
+    const drop = before ? assessDrop(before, counts) : null
+    if (drop && !allowDataDrop) {
+      if (!pendingDrop) console.warn('[db] Large drop in records — folder save paused', drop)
+      pendingDrop = drop
+      window.dispatchEvent(new Event(DATA_DROP_EVENT))
+      return
+    }
+    pendingDrop = null
+    allowDataDrop = false
+    // Keep the file being replaced, so even an accepted drop can be undone
+    if (drop && existing) await keepCopyBeforeDrop(dir, existing)
+
     await setMeta(FOLDER_ATTEMPT_KEY, data.savedAt)
     const lastModified = await withFileRetry(async () => {
       const fileHandle = await writeJsonFile(dir, DATA_FILE, data)
       return (await fileHandle.getFile()).lastModified
-    })
+    }, `Saving ${DATA_FILE}`)
     await setMeta(FOLDER_MTIME_KEY, String(lastModified))
     await setMeta(FOLDER_SAVED_AT_KEY, data.savedAt)
+    await setMeta(FOLDER_COUNTS_KEY, JSON.stringify(counts))
     setFolderSave({ lastSavedAt: Date.now(), error: null })
     await writeDailySnapshot(dir, data)
   } catch (err) {

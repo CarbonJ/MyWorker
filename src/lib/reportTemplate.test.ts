@@ -9,7 +9,7 @@ function makeProject(over: Partial<Project> & { id: number; workItem: string }):
   return {
     workDescription: '', ragStatus: 'Green', priorityId: null, latestStatus: '',
     productAreaId: null, statusId: null, stakeholders: [], tags: [], dueDate: null,
-    isArchived: false, createdAt: '2026-01-01 00:00:00', updatedAt: '2026-01-01 00:00:00',
+    isArchived: false, archivedAt: null, createdAt: '2026-01-01 00:00:00', updatedAt: '2026-01-01 00:00:00',
     ...over,
   }
 }
@@ -24,11 +24,11 @@ function makeTask(over: Partial<Task> & { id: number; title: string; projectId: 
 }
 
 const areas: DropdownOption[] = [
-  { id: 10, type: 'product_area', label: 'Ops', sortOrder: 0, color: '' },
-  { id: 11, type: 'product_area', label: 'Tech', sortOrder: 1, color: '' },
+  { id: 10, type: 'product_area', label: 'Ops', sortOrder: 0, color: '', isDone: false },
+  { id: 11, type: 'product_area', label: 'Tech', sortOrder: 1, color: '', isDone: false },
 ]
 const priorities: DropdownOption[] = [
-  { id: 20, type: 'priority', label: 'High', sortOrder: 0, color: '' },
+  { id: 20, type: 'priority', label: 'High', sortOrder: 0, color: '', isDone: false },
 ]
 
 const TEMPLATE = `# Report {{date}}

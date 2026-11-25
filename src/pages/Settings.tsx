@@ -6,8 +6,8 @@ import { toast } from 'sonner'
 import { exportToJson, importFromJson } from '@/db/importExport'
 import { getAssetsFolderName, setAssetsFolderName, DEFAULT_ASSETS_FOLDER, findUnusedAssets, deleteAssetImage, type UnusedAsset } from '@/db/assets'
 import { Input } from '@/components/ui/input'
-import { setUserFolderHandle, query, checkFolderSync, persistToUserFolder, getFolderSaveStatus, FOLDER_SAVE_EVENT, listSnapshots, SNAPSHOT_FOLDER, SNAPSHOT_DAYS } from '@/db'
-import { useNavigate } from 'react-router-dom'
+import { setUserFolderHandle, query, checkFolderSync, persistToUserFolder, getFolderSaveStatus, FOLDER_SAVE_EVENT, listSnapshots, SNAPSHOT_FOLDER, SNAPSHOT_DAYS, SNAPSHOT_MONTHS, isStoragePersisted, requestPersistentStorage } from '@/db'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { TRASH_DAYS } from '@/db/trash'
 import { getAllNotebookPages } from '@/db/notebook'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -39,7 +39,10 @@ export default function Settings() {
   const [dataStats, setDataStats] = useState<DataStats | null>(null)
   const [folderSave, setFolderSave] = useState(getFolderSaveStatus)
   const [snapshots, setSnapshots] = useState<string[] | null>(null)
+  const [storagePersisted, setStoragePersisted] = useState<boolean | null>(isStoragePersisted)
   const navigate = useNavigate()
+  // ?tab=data opens a tab directly (e.g. from Data health)
+  const [searchParams] = useSearchParams()
   useEffect(() => { listSnapshots().then(setSnapshots).catch(() => setSnapshots([])) }, [folderSave.lastSavedAt])
   useEffect(() => {
     const handler = () => setFolderSave(getFolderSaveStatus())
@@ -275,7 +278,7 @@ export default function Settings() {
       <h1 className="text-2xl font-semibold">Settings</h1>
       <p className="text-sm text-muted-foreground mb-6">v{__APP_VERSION__}</p>
 
-      <Tabs defaultValue="customization">
+      <Tabs defaultValue={searchParams.get('tab') ?? 'customization'}>
         <TabsList>
           <TabsTrigger value="customization">Customization</TabsTrigger>
           <TabsTrigger value="data">Data</TabsTrigger>
@@ -776,11 +779,41 @@ export default function Settings() {
             <div className="text-sm text-muted-foreground space-y-1 max-w-2xl">
               <p>
                 <span className="font-medium text-foreground">Daily snapshots:</span> once a day a dated copy is saved in
-                the <span className="font-mono">{SNAPSHOT_FOLDER}</span> folder next to your data file; copies older than {SNAPSHOT_DAYS} days
-                are removed. {snapshots === null ? '' : snapshots.length === 0
+                the <span className="font-mono">{SNAPSHOT_FOLDER}</span> folder next to your data file. Every copy from the
+                last {SNAPSHOT_DAYS} days is kept, plus the first copy of each month for {SNAPSHOT_MONTHS} months. {snapshots === null ? '' : snapshots.length === 0
                   ? 'No snapshots yet.'
                   : `${snapshots.length} snapshot${snapshots.length === 1 ? '' : 's'}, newest ${new Date(snapshots[0] + 'T12:00:00').toLocaleDateString()}.`}
                 {' '}To roll back to one, use Import below and pick that file.
+              </p>
+              <p>
+                <span className="font-medium text-foreground">Large-loss guard:</span> if a change would remove many
+                records at once (not counting items moved to the Trash), saving to the folder pauses and you are asked
+                whether to keep the change. If you keep it, the file it replaces is kept in{' '}
+                <span className="font-mono">{SNAPSHOT_FOLDER}</span> as <span className="font-mono">myworker-before-drop-…json</span>.
+              </p>
+              <p>
+                <span className="font-medium text-foreground">Browser storage:</span>{' '}
+                {storagePersisted === true
+                  ? 'protected — the browser won’t clear this app’s working copy when disk space runs low.'
+                  : storagePersisted === false
+                    ? 'not protected — the browser may clear this app’s working copy if disk space runs low (your folder copy is unaffected). The browser decides; bookmarking the app or using it regularly usually earns protection.'
+                    : 'protection status unknown in this browser.'}
+                {storagePersisted === false && (
+                  <>
+                    {' '}
+                    <button type="button" className="text-blue-600 dark:text-blue-400 hover:underline"
+                      onClick={async () => setStoragePersisted(await requestPersistentStorage())}>
+                      Ask again
+                    </button>
+                  </>
+                )}
+              </p>
+              <p>
+                <span className="font-medium text-foreground">Data health:</span> find broken links, leftover items and
+                other clutter.{' '}
+                <button type="button" onClick={() => navigate('/health')} className="text-blue-600 dark:text-blue-400 hover:underline">
+                  Open Data health
+                </button>
               </p>
               <p>
                 <span className="font-medium text-foreground">Trash:</span> deleted projects, tasks, log entries, notes and

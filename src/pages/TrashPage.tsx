@@ -5,7 +5,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
-import { Trash2, RotateCcw, FolderKanban, CheckSquare, ScrollText, BookOpen, UserRound } from 'lucide-react'
+import { Trash2, RotateCcw } from 'lucide-react'
+import { ENTITY_ICONS } from '@/lib/icons'
 import {
   getTrashItems, restoreFromTrash, deleteFromTrash, emptyTrash,
   TRASH_DAYS, TRASH_CHANGED_EVENT, type TrashItem, type TrashItemType,
@@ -13,11 +14,11 @@ import {
 import { Button } from '@/components/ui/button'
 
 const TYPE_INFO: Record<TrashItemType, { label: string; icon: typeof Trash2 }> = {
-  project: { label: 'Project', icon: FolderKanban },
-  task: { label: 'Task', icon: CheckSquare },
-  worklog: { label: 'Work log entry', icon: ScrollText },
-  note: { label: 'Note', icon: BookOpen },
-  contact: { label: 'Contact', icon: UserRound },
+  project: { label: 'Project', icon: ENTITY_ICONS.project },
+  task: { label: 'Task', icon: ENTITY_ICONS.task },
+  worklog: { label: 'Work log entry', icon: ENTITY_ICONS.worklog },
+  note: { label: 'Note', icon: ENTITY_ICONS.note },
+  contact: { label: 'Contact', icon: ENTITY_ICONS.contact },
 }
 
 function parseUtc(ts: string): Date {

@@ -19,6 +19,29 @@
 import type { DbHandle } from './index'
 import { exec } from './index'
 
+/**
+ * Best estimate of when already-archived projects were archived: their latest
+ * work log entry (closing a project writes the closing note), else their last
+ * edit. Also run after restoring a backup made before archived_at existed.
+ */
+/**
+ * Until a status is chosen, the one named "Done" is the done status (lowest id
+ * if there are several). Also run after restoring a backup made before is_done existed.
+ */
+export const DONE_STATUS_BACKFILL = `
+  UPDATE dropdown_options SET is_done = 1
+    WHERE id = (SELECT MIN(id) FROM dropdown_options WHERE type = 'project_status' AND lower(trim(label)) = 'done')
+      AND NOT EXISTS (SELECT 1 FROM dropdown_options WHERE type = 'project_status' AND is_done = 1);
+`
+
+export const ARCHIVED_AT_BACKFILL = `
+  UPDATE projects
+    SET archived_at = COALESCE(
+      (SELECT MAX(w.created_at) FROM work_log_entries w WHERE w.project_id = projects.id),
+      updated_at)
+    WHERE is_archived = 1 AND archived_at IS NULL;
+`
+
 interface Migration {
   version: number
   up: string
@@ -701,6 +724,33 @@ const migrations: Migration[] = [
       -- The notebook page shown in the Daily Digest's Home panel (at most one is set).
       -- Not in the updated_at trigger's column list, so choosing it doesn't mark the page edited.
       ALTER TABLE notebook_pages ADD COLUMN is_home INTEGER NOT NULL DEFAULT 0;
+    `,
+  },
+  {
+    version: 28,
+    up: `
+      -- When a project was archived (the Archive groups by it). Set and cleared by
+      -- the trigger below, so every way of archiving or reopening keeps it right.
+      -- Not in the updated_at trigger's column list, so it never marks the project edited.
+      ALTER TABLE projects ADD COLUMN archived_at TEXT;
+      ${ARCHIVED_AT_BACKFILL}
+      CREATE TRIGGER projects_archived_at
+      AFTER UPDATE OF is_archived ON projects
+      WHEN NEW.is_archived IS NOT OLD.is_archived
+      BEGIN
+        UPDATE projects
+          SET archived_at = CASE WHEN NEW.is_archived = 1 THEN datetime('now') END
+          WHERE id = NEW.id;
+      END;
+    `,
+  },
+  {
+    version: 29,
+    up: `
+      -- Which project status Mark Complete sets, chosen in Settings, so renaming
+      -- it ("Done" → "Complete") keeps working. At most one row has it set.
+      ALTER TABLE dropdown_options ADD COLUMN is_done INTEGER NOT NULL DEFAULT 0;
+      ${DONE_STATUS_BACKFILL}
     `,
   },
 ]

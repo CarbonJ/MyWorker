@@ -2,11 +2,14 @@
  * Database context + provider
  *
  * On first load: prompts the user to pick their OneDrive folder (if the
- * File System Access API is available). Falls back to OPFS-only mode in
+ * File System Access API is available). Falls back to browser-only storage in
  * unsupported browsers so the app still works.
  *
- * Stores the folder handle in IndexedDB so it only needs to be picked once
- * per browser session.
+ * Stores the folder handle in IndexedDB so it only needs to be picked once.
+ *
+ * Every startup step is logged ("[MyWorker] …") and time-limited: browser
+ * storage can hang without ever erroring (seen after a OneDrive client problem),
+ * so a stuck step becomes a recovery screen naming the step, not an endless spinner.
  */
 
 import {
@@ -17,12 +20,21 @@ import {
   useCallback,
   type ReactNode,
 } from 'react'
-import { initDb, setUserFolderHandle, checkFolderSync, resolveFolderConflict, type FolderConflict, type DataCounts } from '@/db'
+import { initDb, setUserFolderHandle, checkFolderSync, resolveFolderConflict, requestPersistentStorage, deleteWorkingCopy, type FolderConflict, type DataCounts } from '@/db'
 import { rebuildAllLinks } from '@/db/notebook'
 import { importLegacyJournal } from '@/db/journal'
 import { purgeExpiredTrash } from '@/db/trash'
+import { withTimeout, StepTimeoutError, DEFAULT_TIMEOUT_MS } from '@/lib/withTimeout'
 
-type DbStatus = 'loading' | 'needs-folder' | 'folder-conflict' | 'ready' | 'error' | 'unsupported'
+type DbStatus = 'loading' | 'needs-folder' | 'needs-permission' | 'folder-conflict' | 'ready' | 'error' | 'unsupported'
+
+/** What failed during startup, for the recovery screen. */
+interface StartupError {
+  step: string
+  message: string
+  /** DOMException / error name, e.g. NotFoundError, NotAllowedError, TimeoutError. */
+  name: string
+}
 
 interface DbContextValue {
   status: DbStatus
@@ -36,6 +48,14 @@ const IDB_DB_NAME = 'myworker-meta'
 const IDB_STORE = 'handles'
 const IDB_KEY = 'folderHandle'
 
+// Steps that read the whole database or data file get longer than the default
+const OPEN_DB_TIMEOUT_MS = 30000
+const FOLDER_CHECK_TIMEOUT_MS = 45000
+const STARTUP_TASKS_TIMEOUT_MS = 20000
+
+/** Steps whose failure means this browser's working copy itself can't be opened. */
+const DATABASE_STEP = 'Opening the database'
+
 /**
  * True if the File System Access API (showDirectoryPicker) is available.
  * Supported: Chrome 86+, Edge 86+
@@ -43,79 +63,141 @@ const IDB_KEY = 'folderHandle'
  */
 const hasFSA = typeof window !== 'undefined' && 'showDirectoryPicker' in window
 
-/** Persist a FileSystemDirectoryHandle in IndexedDB so we can restore it next session */
-async function saveHandle(handle: FileSystemDirectoryHandle): Promise<void> {
+function log(message: string) {
+  console.info(`[MyWorker] ${message}`)
+}
+
+/** Run one startup step: logged, time-limited, and labelled if it fails. */
+async function step<T>(label: string, fn: () => Promise<T>, ms = DEFAULT_TIMEOUT_MS): Promise<T> {
+  log(`${label}…`)
+  try {
+    return await withTimeout(fn(), ms, label)
+  } catch (err) {
+    console.error(`[MyWorker] failed: ${label}`, err)
+    throw Object.assign(err instanceof Error ? err : new Error(String(err)), { step: label })
+  }
+}
+
+function toStartupError(err: unknown, fallbackStep: string): StartupError {
+  const e = err instanceof Error ? err : new Error(String(err))
+  const step = err instanceof StepTimeoutError ? err.step : (e as Error & { step?: string }).step ?? fallbackStep
+  return { step, message: e.message, name: e.name }
+}
+
+/** Open the small IndexedDB store that holds the folder handle. Never waits forever. */
+function openHandleStore(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(IDB_DB_NAME, 1)
     req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE)
     req.onsuccess = () => {
-      const tx = req.result.transaction(IDB_STORE, 'readwrite')
+      const db = req.result
+      // Never hold up an upgrade started by another MyWorker tab
+      db.onversionchange = () => db.close()
+      resolve(db)
+    }
+    req.onerror = () => reject(req.error ?? new Error('Could not open the saved-folder store'))
+    req.onblocked = () => reject(new Error('Blocked by another MyWorker window — close other MyWorker tabs and retry'))
+  })
+}
+
+/** Persist a FileSystemDirectoryHandle in IndexedDB so we can restore it next session */
+async function saveHandle(handle: FileSystemDirectoryHandle): Promise<void> {
+  const db = await withTimeout(openHandleStore(), DEFAULT_TIMEOUT_MS, 'Opening the saved-folder store')
+  try {
+    await withTimeout(new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite')
       tx.objectStore(IDB_STORE).put(handle, IDB_KEY)
       tx.oncomplete = () => resolve()
       tx.onerror = () => reject(tx.error)
-    }
-    req.onerror = () => reject(req.error)
-  })
+      tx.onabort = () => reject(tx.error ?? new Error('Saving the folder was aborted'))
+    }), DEFAULT_TIMEOUT_MS, 'Remembering the storage folder')
+  } finally {
+    db.close()
+  }
 }
 
 /** Retrieve a previously saved FileSystemDirectoryHandle from IndexedDB */
 async function loadHandle(): Promise<FileSystemDirectoryHandle | null> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(IDB_DB_NAME, 1)
-    req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE)
-    req.onsuccess = () => {
-      const tx = req.result.transaction(IDB_STORE, 'readonly')
-      const getReq = tx.objectStore(IDB_STORE).get(IDB_KEY)
-      getReq.onsuccess = () => resolve((getReq.result as FileSystemDirectoryHandle) ?? null)
+  const db = await openHandleStore()
+  try {
+    return await new Promise((resolve, reject) => {
+      const getReq = db.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).get(IDB_KEY)
+      getReq.onsuccess = () => resolve((getReq.result as FileSystemDirectoryHandle | undefined) ?? null)
       getReq.onerror = () => reject(getReq.error)
-    }
-    req.onerror = () => reject(req.error)
-  })
+    })
+  } finally {
+    db.close()
+  }
 }
 
-/** Check if we still have permission to the stored handle */
-async function verifyPermission(handle: FileSystemDirectoryHandle): Promise<boolean> {
-  const opts = { mode: 'readwrite' } as const
-  if ((await handle.queryPermission(opts)) === 'granted') return true
-  if ((await handle.requestPermission(opts)) === 'granted') return true
-  return false
+/** Forget the saved folder (only the handle — never the database or any file). */
+async function forgetHandle(): Promise<void> {
+  const db = await withTimeout(openHandleStore(), DEFAULT_TIMEOUT_MS, 'Opening the saved-folder store')
+  try {
+    await withTimeout(new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite')
+      tx.objectStore(IDB_STORE).delete(IDB_KEY)
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error)
+    }), DEFAULT_TIMEOUT_MS, 'Forgetting the storage folder')
+  } finally {
+    db.close()
+  }
 }
 
 export function DbProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<DbStatus>('loading')
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<StartupError | null>(null)
   const [conflict, setConflict] = useState<FolderConflict | null>(null)
   const [resolving, setResolving] = useState(false)
+  const [currentStep, setCurrentStep] = useState('Starting')
+  // A saved folder waiting for the user to re-grant access (needs a click)
+  const [pendingHandle, setPendingHandle] = useState<FileSystemDirectoryHandle | null>(null)
+
+  const fail = useCallback((err: unknown, fallbackStep: string) => {
+    setError(toStartupError(err, fallbackStep))
+    setStatus('error')
+  }, [])
+
+  const run = useCallback(<T,>(label: string, fn: () => Promise<T>, ms?: number) => {
+    setCurrentStep(label)
+    return step(label, fn, ms)
+  }, [])
 
   const finishStartup = useCallback(async () => {
     // Move journal text older versions kept in localStorage into the database
     await importLegacyJournal().catch(err => console.warn('[db] importLegacyJournal:', err))
     // Drop trash items past their restore window
-    await purgeExpiredTrash().catch(err => console.warn('[db] purgeExpiredTrash:', err))
+    await run('Tidying the Trash', () => purgeExpiredTrash(), STARTUP_TASKS_TIMEOUT_MS)
+      .catch(err => console.warn('[db] purgeExpiredTrash:', err))
     // Re-index notebook backlinks on every startup — fast and idempotent,
     // ensures stale link data from earlier bugs is corrected before any page renders.
     rebuildAllLinks().catch(err => console.warn('[db] rebuildAllLinks:', err))
+    // Ask the browser not to clear this site's storage (the working copy) when disk space runs low
+    requestPersistentStorage().catch(() => {})
+    log('ready')
     setStatus('ready')
-  }, [])
+  }, [run])
 
   const initialise = useCallback(async (handle: FileSystemDirectoryHandle | null) => {
     try {
       setStatus('loading')
-      await initDb(handle)
-      if (handle) await saveHandle(handle)
+      await run(DATABASE_STEP, () => initDb(handle), OPEN_DB_TIMEOUT_MS)
+      log('database open')
+      if (handle) await run('Remembering the storage folder', () => saveHandle(handle))
       // Before anything is written to the folder: is its file newer than this browser's data?
-      const found = await checkFolderSync()
+      const found = await run('Checking the data file in your storage folder', () => checkFolderSync(), FOLDER_CHECK_TIMEOUT_MS)
       if (found) {
+        log('folder file differs from this browser — asking which to keep')
         setConflict(found)
         setStatus('folder-conflict')
         return
       }
       await finishStartup()
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-      setStatus('error')
+      fail(e, DATABASE_STEP)
     }
-  }, [finishStartup])
+  }, [finishStartup, fail, run])
 
   const resolveConflict = useCallback(async (choice: 'folder' | 'local') => {
     setResolving(true)
@@ -124,37 +206,45 @@ export function DbProvider({ children }: { children: ReactNode }) {
       setConflict(null)
       await finishStartup()
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-      setStatus('error')
+      fail(e, choice === 'folder' ? 'Loading the folder file' : 'Saving this browser\'s data to the folder')
     } finally {
       setResolving(false)
     }
-  }, [finishStartup])
+  }, [finishStartup, fail])
 
-  // On mount: restore saved handle or decide what state to show
-  useEffect(() => {
-    async function restore() {
-      try {
-        if (hasFSA) {
-          // Try to restore a saved folder handle
-          const handle = await loadHandle()
-          if (handle && (await verifyPermission(handle))) {
-            await initialise(handle)
-          } else {
-            setStatus('needs-folder')
-          }
-        } else {
-          // File System Access API not available — run in OPFS-only mode
-          // Data lives in browser storage only (no OneDrive sync)
-          await initialise(null)
-        }
-      } catch (err) {
-        console.error('[db] Failed to restore saved folder handle', err)
-        setStatus('needs-folder')
+  // Restore the saved folder handle, or decide what to show. Only queries
+  // permission: a request needs a click, so a lapsed grant shows a button.
+  const restore = useCallback(async () => {
+    setStatus('loading')
+    setError(null)
+    try {
+      if (!hasFSA) {
+        // File System Access API not available — data lives in browser storage only
+        log('no folder access in this browser — using browser storage only')
+        await initialise(null)
+        return
       }
+      const handle = await run('Opening the saved-folder store', () => loadHandle())
+      if (!handle) {
+        log('no saved folder')
+        setStatus('needs-folder')
+        return
+      }
+      log(`saved folder found: ${handle.name}`)
+      const permission = await run('Checking folder permission', () => handle.queryPermission({ mode: 'readwrite' }))
+      log(`permission: ${permission}`)
+      if (permission === 'granted') {
+        await initialise(handle)
+      } else {
+        setPendingHandle(handle)
+        setStatus('needs-permission')
+      }
+    } catch (err) {
+      fail(err, 'Opening the saved-folder store')
     }
-    restore()
-  }, [initialise])
+  }, [initialise, fail, run])
+
+  useEffect(() => { restore() }, [restore])
 
   const pickFolder = useCallback(async () => {
     if (!hasFSA) return
@@ -162,27 +252,74 @@ export function DbProvider({ children }: { children: ReactNode }) {
       const handle = await window.showDirectoryPicker({ mode: 'readwrite' })
       await initialise(handle)
     } catch (e) {
-      // User cancelled — stay on needs-folder screen
-      if (e instanceof Error && e.name !== 'AbortError') {
-        setError(e.message)
-        setStatus('error')
-      }
+      // User cancelled — stay where they were
+      if (e instanceof Error && e.name !== 'AbortError') fail(e, 'Choosing the storage folder')
     }
-  }, [initialise])
+  }, [initialise, fail])
+
+  // Click handler: re-grant access to the saved folder, or pick it again
+  const reconnect = useCallback(async () => {
+    const handle = pendingHandle
+    if (!handle) { await pickFolder(); return }
+    try {
+      const permission = await handle.requestPermission({ mode: 'readwrite' })
+      log(`permission after asking: ${permission}`)
+      if (permission === 'granted') {
+        setPendingHandle(null)
+        await initialise(handle)
+        return
+      }
+    } catch (err) {
+      console.warn('[MyWorker] requestPermission failed — falling back to the folder picker', err)
+    }
+    await pickFolder()
+  }, [pendingHandle, initialise, pickFolder])
+
+  const resetSavedFolder = useCallback(async () => {
+    try {
+      await forgetHandle()
+    } catch (err) {
+      // The store itself is stuck: delete it outright (it holds only the folder handle)
+      console.warn('[MyWorker] could not clear the saved folder; deleting its store', err)
+      indexedDB.deleteDatabase(IDB_DB_NAME)
+    }
+    window.location.reload()
+  }, [])
+
+  const rebuildFromFolder = useCallback(async () => {
+    if (!confirm(
+      "Delete this browser's copy of your data and load it again from the data file in your storage folder?\n\n" +
+      'Only do this if the database will not open. Changes made in this browser since its last successful save to the folder will be lost. ' +
+      'The data file itself is not touched — after reloading you choose the storage folder and confirm loading its file.',
+    )) return
+    await withTimeout(deleteWorkingCopy(), DEFAULT_TIMEOUT_MS, 'Deleting the working copy').catch(err =>
+      console.warn('[MyWorker] working copy delete is pending until reload', err))
+    window.location.reload()
+  }, [])
 
   return (
-    <DbContext.Provider value={{ status, error, pickFolder }}>
+    <DbContext.Provider value={{ status, error: error?.message ?? null, pickFolder }}>
       {status === 'needs-folder' && (
         <FolderPickerScreen onPick={pickFolder} />
       )}
+      {status === 'needs-permission' && (
+        <ReconnectScreen folderName={pendingHandle?.name ?? ''} onReconnect={reconnect} onPickOther={pickFolder} />
+      )}
       {status === 'loading' && (
-        <LoadingScreen />
+        <LoadingScreen key={currentStep} step={currentStep} />
       )}
       {status === 'folder-conflict' && conflict && (
         <FolderConflictScreen conflict={conflict} busy={resolving} onResolve={resolveConflict} />
       )}
       {status === 'error' && (
-        <ErrorScreen error={error} onRetry={() => setStatus('needs-folder')} />
+        <ErrorScreen
+          error={error}
+          canPickFolder={hasFSA}
+          onRetry={restore}
+          onPickFolder={pickFolder}
+          onResetSavedFolder={resetSavedFolder}
+          onRebuild={error?.step === DATABASE_STEP ? rebuildFromFolder : undefined}
+        />
       )}
       {status === 'ready' && children}
     </DbContext.Provider>
@@ -287,29 +424,106 @@ function FolderConflictScreen({ conflict, busy, onResolve }: {
   )
 }
 
-function LoadingScreen() {
+function LoadingScreen({ step }: { step: string }) {
+  // After a few seconds, say what it's waiting on (each step gives up on its own if stuck).
+  // Keyed by step, so it starts over for each one.
+  const [slow, setSlow] = useState(false)
+  useEffect(() => {
+    const t = setTimeout(() => setSlow(true), 4000)
+    return () => clearTimeout(t)
+  }, [])
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="text-center space-y-3">
         <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
         <p className="text-muted-foreground text-sm">Opening database…</p>
+        {slow && <p className="text-xs text-muted-foreground">Still working: {step}</p>}
       </div>
     </div>
   )
 }
 
-function ErrorScreen({ error, onRetry }: { error: string | null; onRetry: () => void }) {
+function ReconnectScreen({ folderName, onReconnect, onPickOther }: {
+  folderName: string
+  onReconnect: () => void
+  onPickOther: () => void
+}) {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="max-w-md w-full p-8 text-center space-y-4">
-        <h1 className="text-xl font-semibold text-destructive">Failed to open database</h1>
-        {error && <p className="text-sm text-muted-foreground font-mono">{error}</p>}
-        <button
-          onClick={onRetry}
-          className="bg-primary text-primary-foreground rounded-md px-4 py-2 font-medium hover:bg-primary/90 transition-colors"
-        >
-          Try again
+      <div className="max-w-md w-full p-8 text-center space-y-5">
+        <div className="space-y-2">
+          <h1 className="text-xl font-semibold">Reconnect your storage folder</h1>
+          <p className="text-sm text-muted-foreground">
+            The browser needs your OK to use the folder{folderName && <> <span className="font-mono">{folderName}</span></>} again.
+            Your data is safe — this only restores access.
+          </p>
+        </div>
+        <button onClick={onReconnect}
+          className="w-full bg-primary text-primary-foreground rounded-md px-4 py-3 font-medium hover:bg-primary/90 transition-colors">
+          Reconnect storage folder
         </button>
+        <button onClick={onPickOther} className="text-sm text-muted-foreground hover:text-foreground underline">
+          Choose a different folder
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** Plain-language hint for the usual error names. */
+function explain(error: StartupError): string {
+  switch (error.name) {
+    case 'TimeoutError': return 'It stopped responding. This can happen when OneDrive has a problem with the file or folder — check OneDrive is running and the file is downloaded, then retry.'
+    case 'NotFoundError': return 'The folder or data file could not be found — it may have been moved, renamed, or OneDrive re-linked to a different location. Choose the folder again.'
+    case 'NotAllowedError': return 'The browser refused access to the folder. Choose the folder again to grant access.'
+    case 'SecurityError': return 'The browser blocked access for security reasons. Choose the folder again from a click.'
+    case 'InvalidStateError': return 'The file changed while it was being read (often OneDrive syncing). Retry in a moment.'
+    default: return 'Retry, or choose the storage folder again.'
+  }
+}
+
+function ErrorScreen({ error, canPickFolder, onRetry, onPickFolder, onResetSavedFolder, onRebuild }: {
+  error: StartupError | null
+  canPickFolder: boolean
+  onRetry: () => void
+  onPickFolder: () => void
+  onResetSavedFolder: () => void
+  onRebuild?: () => void
+}) {
+  const btn = 'w-full rounded-md px-4 py-2 font-medium transition-colors'
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="max-w-lg w-full p-8 space-y-5">
+        <div className="space-y-2 text-center">
+          <h1 className="text-xl font-semibold text-destructive">MyWorker couldn't start</h1>
+          {error && (
+            <>
+              <p className="text-sm">Stopped at: <span className="font-medium">{error.step}</span></p>
+              <p className="text-sm text-muted-foreground">{explain(error)}</p>
+              <p className="text-xs text-muted-foreground font-mono break-words">{error.name}: {error.message}</p>
+            </>
+          )}
+        </div>
+        <div className="space-y-2">
+          <button onClick={onRetry} className={`${btn} bg-primary text-primary-foreground hover:bg-primary/90`}>Retry</button>
+          {canPickFolder && (
+            <button onClick={onPickFolder} className={`${btn} border hover:bg-accent`}>Choose storage folder</button>
+          )}
+          {canPickFolder && (
+            <button onClick={onResetSavedFolder} className={`${btn} border hover:bg-accent`}
+              title="Forgets which folder was chosen and reloads. Your data and the data file are not touched.">
+              Forget saved folder and reload
+            </button>
+          )}
+          {onRebuild && (
+            <button onClick={onRebuild} className={`${btn} border border-destructive/40 text-destructive hover:bg-destructive/10`}>
+              Rebuild this browser's copy from the folder file…
+            </button>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground text-center">
+          None of these change the data file in your storage folder. The browser console shows each startup step as “[MyWorker] …”.
+        </p>
       </div>
     </div>
   )

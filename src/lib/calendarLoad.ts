@@ -109,6 +109,28 @@ export function monthGridDays(year: number, month: number, businessDays: boolean
 }
 
 /**
+ * Whole weeks running from the week holding the first of `from` to the week
+ * holding the last day of `to` (months as 'YYYY-MM'), one array of days per
+ * week — the rows of the continuously scrolling month view.
+ */
+export function weeksBetweenMonths(from: string, to: string, businessDays: boolean): string[][] {
+  const [ty, tm] = to.split('-').map(Number)
+  const last = toLocalDateString(new Date(ty, tm, 0, 12))
+  const weeks: string[][] = []
+  for (let start = weekStart(`${from}-01`); start <= last; start = addDays(start, 7)) {
+    weeks.push(weekDays(start, businessDays))
+  }
+  return weeks
+}
+
+/** 'YYYY-MM' of a date, shifted by `n` months. */
+export function addMonths(iso: string, n: number): string {
+  const d = parseLocalDate(iso)
+  const shifted = new Date(d.getFullYear(), d.getMonth() + n, 1, 12)
+  return `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, '0')}`
+}
+
+/**
  * Normal daily load. `countByDay` is keyed by display date (weekend items
  * already moved to Friday in business mode).
  */

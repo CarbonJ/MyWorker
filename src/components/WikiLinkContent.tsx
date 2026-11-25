@@ -7,6 +7,7 @@ import { useWikiEntities } from '@/hooks/useWikiEntities'
 import { parseAssetSrc } from '@/db/assets'
 import { findHashtags } from '@/lib/tags'
 import { entityRoute } from '@/lib/wikiRoutes'
+import { findWikiEntity, findWikiLinks } from '@/lib/wikiLinks'
 import { AssetImageDisplay } from '@/components/AssetImageDisplay'
 import type { WikiEntity } from '@/types'
 
@@ -22,13 +23,15 @@ export function WikiLinkContent({ children, className, wikiEntities: propEntitie
   const wikiEntities = propEntities ?? loadedEntities
 
   const processed = useMemo(() => {
-    // tiptap-markdown escapes [ as \[ — normalize before scanning for wiki links
-    const normalized = children.replace(/\\\[/g, '[').replace(/\\\]/g, ']')
-    let out = normalized.replace(/\[\[([^\]]+)\]\]/g, (_, name: string) => {
-      const entity = wikiEntities.find(e => e.name.toLowerCase() === name.trim().toLowerCase())
-      if (entity) return `[${name}](${entityRoute(entity)})`
-      return `**[[${name}]]**`
-    })
+    // Links are matched the same way the editor colours them (findWikiEntity), and
+    // both [[Name]] and the serializer's escaped \[\[Name\]\] are recognised.
+    let out = children
+    for (const link of findWikiLinks(children).reverse()) {
+      const entity = findWikiEntity(wikiEntities, link.name)
+      // The name stays as written (escapes and all) so markdown renders it as typed
+      const md = entity ? `[${link.name}](${entityRoute(entity)})` : `**\\[\\[${link.name}\\]\\]**`
+      out = out.slice(0, link.index) + md + out.slice(link.index + link.length)
+    }
     // #tags become links to the Tags screen (rendered as chips by the `a` override below).
     // Replaced back-to-front so earlier offsets stay valid.
     for (const tag of findHashtags(out).reverse()) {
@@ -49,7 +52,7 @@ export function WikiLinkContent({ children, className, wikiEntities: propEntitie
           img({ src, alt }) {
             const parts = parseAssetSrc(typeof src === 'string' ? src : '')
             if (parts) {
-              return <AssetImageDisplay filename={parts.filename} width={parts.width} display={parts.display} />
+              return <AssetImageDisplay filename={parts.filename} width={parts.width} unit={parts.unit} display={parts.display} />
             }
             return <img src={typeof src === 'string' ? src : undefined} alt={alt ?? ''} className="inline-block max-w-full rounded border border-border align-top" />
           },

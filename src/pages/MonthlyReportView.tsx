@@ -5,7 +5,8 @@ import { getLinkedNotebookEntriesByDateRange, type LinkedNotebookEntry } from '@
 import { WikiLinkContent } from '@/components/WikiLinkContent'
 import { RagBadge } from '@/components/RagBadge'
 import type { RagStatus } from '@/types'
-import { ChevronLeft, ChevronRight, Copy, Check, FileText, BookOpen } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Copy, Check, FileText } from 'lucide-react'
+import { ENTITY_ICONS } from '@/lib/icons'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { useSearch } from '@/contexts/SearchContext'
@@ -319,7 +320,7 @@ export default function MonthlyReportView() {
               {group.notebooks.map(nb => (
                 <div key={`nb-${nb.pageId}`} className="px-4 py-3 bg-muted/30">
                   <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-                    <BookOpen className="h-3 w-3" />
+                    <ENTITY_ICONS.note className="h-3 w-3" />
                     {formatEntryDate(nb.updatedAt)} · {formatEntryTime(nb.updatedAt)}
                   </p>
                   <button

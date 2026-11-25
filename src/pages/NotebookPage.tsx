@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { BookOpen, Plus, Trash2, Search, X, FileDown, Star, PanelRight } from 'lucide-react'
+import { Plus, Trash2, Search, X, FileDown, Star, PanelRight } from 'lucide-react'
+import { ENTITY_ICONS } from '@/lib/icons'
 import { usePinnedView } from '@/contexts/PinnedViewContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,10 +15,8 @@ import {
   updateNotebookPage, deleteNotebookPage, rebuildLinks,
   setNotebookPageStarred,
 } from '@/db/notebook'
-import { getAllProjects } from '@/db/projects'
-import { getAllContacts } from '@/db/contacts'
-import { getDropdownOptions } from '@/db/dropdownOptions'
-import type { NotebookPage, WikiEntity, DropdownOption } from '@/types'
+import { useWikiEntities } from '@/hooks/useWikiEntities'
+import type { NotebookPage } from '@/types'
 
 function relativeTime(dateStr: string): string {
   const d = new Date(dateStr.replace(' ', 'T').replace(/([^Z])$/, '$1Z'))
@@ -43,7 +42,9 @@ export default function NotebookPage() {
   const [starred, setStarred] = useState(false)
   const [listSearch, setListSearch] = useState('')
   const [starredOnly, setStarredOnly] = useState(false)
-  const [wikiEntities, setWikiEntities] = useState<WikiEntity[]>([])
+  // The same list every other editor uses (archived projects included), reloaded
+  // whenever a page, project, contact or area is created, renamed or deleted.
+  const wikiEntities = useWikiEntities()
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
   const [isNew, setIsNew] = useState(false)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -55,23 +56,8 @@ export default function NotebookPage() {
     return p
   }, [])
 
-  const loadEntities = useCallback(async (freshPages: NotebookPage[]) => {
-    const [projects, contacts, areas] = await Promise.all([
-      getAllProjects(),
-      getAllContacts(),
-      getDropdownOptions('product_area'),
-    ])
-    const entities: WikiEntity[] = [
-      ...freshPages.map(p => ({ type: 'page' as const, id: p.id, name: p.title || 'Untitled' })),
-      ...projects.map(p => ({ type: 'project' as const, id: p.id, name: p.workItem })),
-      ...contacts.map(c => ({ type: 'contact' as const, id: c.id, name: c.name })),
-      ...(areas as DropdownOption[]).map(a => ({ type: 'area' as const, id: a.id, name: a.label })),
-    ]
-    setWikiEntities(entities)
-  }, [])
-
   useEffect(() => {
-    loadPages().then(p => loadEntities(p))
+    loadPages()
     // ?new=1 from CommandPalette "New Note" action
     if (searchParams.get('new') === '1') {
       handleNewPage()
@@ -144,14 +130,13 @@ export default function NotebookPage() {
         await updateNotebookPage(pageId, newTitle || 'Untitled', newBody)
         await rebuildLinks(pageId, newBody)
       }
-      const freshPages = await loadPages()
-      await loadEntities(freshPages)
+      await loadPages()
       setSaveStatus('saved')
     } catch (err) {
       toast.error(`Failed to save: ${err instanceof Error ? err.message : String(err)}`)
       setSaveStatus('unsaved')
     }
-  }, [loadPages, loadEntities, setSearchParams])
+  }, [loadPages, setSearchParams])
 
   // Use a ref so the timer always calls the latest doSave (avoids stale closure)
   const doSaveRef = useRef(doSave)
@@ -233,8 +218,7 @@ export default function NotebookPage() {
         setBody('')
         setIsNew(false)
       }
-      const freshPages = await loadPages()
-      await loadEntities(freshPages)
+      await loadPages()
     } catch (err) {
       toast.error(`Failed to delete: ${err instanceof Error ? err.message : String(err)}`)
     }
@@ -262,7 +246,7 @@ export default function NotebookPage() {
       {/* Left sidebar */}
       <div className="w-80 shrink-0 border-r flex flex-col">
         <div className="px-3 py-3 border-b flex items-center gap-2 shrink-0">
-          <BookOpen className="h-4 w-4 text-muted-foreground shrink-0" />
+          <ENTITY_ICONS.note className="h-4 w-4 text-muted-foreground shrink-0" />
           <span className="text-sm font-semibold flex-1">Notebook</span>
           <Button
             size="sm" variant="ghost" className="h-7 w-7 p-0"
@@ -442,7 +426,7 @@ export default function NotebookPage() {
           </>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-3">
-            <BookOpen className="h-12 w-12 opacity-20" />
+            <ENTITY_ICONS.note className="h-12 w-12 opacity-20" />
             <p className="text-sm">Select a page or create a new one.</p>
             <Button size="sm" onClick={handleNewPage}>
               <Plus className="h-4 w-4 mr-1" />New Page

@@ -10,7 +10,7 @@ import { getAllNotebookPages } from '@/db/notebook'
 import { getAllContacts } from '@/db/contacts'
 import { defaultFilter } from 'cmdk'
 import type { Project, NotebookPage, Contact } from '@/types'
-import { LayoutDashboard, BarChart2, Archive, Settings, BookOpen, FolderOpen, Plus, ClipboardList, FileText, UserRound, NotebookPen, Hash, Trash2, CalendarDays } from 'lucide-react'
+import { ENTITY_ICONS, SCREEN_ICONS, NEW_ICONS } from '@/lib/icons'
 
 interface Props {
   open: boolean
@@ -54,40 +54,43 @@ export function CommandPalette({ open, onClose, onNewTask, onNewProject }: Props
 
             <CommandGroup heading="Navigate">
               <CommandItem value="projects dashboard" onSelect={() => go('/')}>
-                <LayoutDashboard className="text-muted-foreground" /> Projects
+                <SCREEN_ICONS.projects className="text-muted-foreground" /> Projects
               </CommandItem>
               <CommandItem value="daily digest journal" onSelect={() => go('/digest')}>
-                <BookOpen className="text-muted-foreground" /> Daily Digest
+                <SCREEN_ICONS.digest className="text-muted-foreground" /> Daily Digest
               </CommandItem>
               <CommandItem value="weekly report status" onSelect={() => go('/weekly')}>
-                <FileText className="text-muted-foreground" /> Weekly Report
+                <SCREEN_ICONS.reports className="text-muted-foreground" /> Weekly Report
               </CommandItem>
               <CommandItem value="monthly report status" onSelect={() => go('/monthly')}>
-                <FileText className="text-muted-foreground" /> Monthly Report
+                <SCREEN_ICONS.reports className="text-muted-foreground" /> Monthly Report
               </CommandItem>
-              <CommandItem value="reporting" onSelect={() => go('/reporting')}>
-                <BarChart2 className="text-muted-foreground" /> Reporting
+              <CommandItem value="dashboard reporting meeting table" onSelect={() => go('/reporting')}>
+                <SCREEN_ICONS.dashboard className="text-muted-foreground" /> Dashboard
               </CommandItem>
               <CommandItem value="archive" onSelect={() => go('/archive')}>
-                <Archive className="text-muted-foreground" /> Archive
+                <SCREEN_ICONS.archive className="text-muted-foreground" /> Archive
               </CommandItem>
               <CommandItem value="contacts people" onSelect={() => go('/contacts')}>
-                <UserRound className="text-muted-foreground" /> Contacts
+                <SCREEN_ICONS.contacts className="text-muted-foreground" /> Contacts
               </CommandItem>
               <CommandItem value="calendar due dates schedule week month" onSelect={() => go('/calendar')}>
-                <CalendarDays className="text-muted-foreground" /> Calendar
+                <SCREEN_ICONS.calendar className="text-muted-foreground" /> Calendar
               </CommandItem>
               <CommandItem value="trash deleted restore recycle bin" onSelect={() => go('/trash')}>
-                <Trash2 className="text-muted-foreground" /> Trash
+                <SCREEN_ICONS.trash className="text-muted-foreground" /> Trash
               </CommandItem>
               <CommandItem value="tags hashtags labels" onSelect={() => go('/tags')}>
-                <Hash className="text-muted-foreground" /> Tags
+                <SCREEN_ICONS.tags className="text-muted-foreground" /> Tags
               </CommandItem>
               <CommandItem value="notebook notes pages" onSelect={() => go('/notebook')}>
-                <BookOpen className="text-muted-foreground" /> Notebook
+                <SCREEN_ICONS.notebook className="text-muted-foreground" /> Notebook
+              </CommandItem>
+              <CommandItem value="data health cleanup broken links duplicates tidy" onSelect={() => go('/health')}>
+                <SCREEN_ICONS.health className="text-muted-foreground" /> Data health
               </CommandItem>
               <CommandItem value="settings" onSelect={() => go('/settings')}>
-                <Settings className="text-muted-foreground" /> Settings
+                <SCREEN_ICONS.settings className="text-muted-foreground" /> Settings
               </CommandItem>
             </CommandGroup>
 
@@ -95,13 +98,13 @@ export function CommandPalette({ open, onClose, onNewTask, onNewProject }: Props
 
             <CommandGroup heading="Actions">
               <CommandItem value="new project create" onSelect={() => { onNewProject(); onClose() }}>
-                <Plus className="text-muted-foreground" /> New Project
+                <NEW_ICONS.project className="text-muted-foreground" /> New Project
               </CommandItem>
               <CommandItem value="new task create" onSelect={() => { onNewTask(); onClose() }}>
-                <ClipboardList className="text-muted-foreground" /> New Task
+                <NEW_ICONS.task className="text-muted-foreground" /> New Task
               </CommandItem>
               <CommandItem value="new note notebook page create" onSelect={() => { go('/notebook?new=1') }}>
-                <NotebookPen className="text-muted-foreground" /> New Note
+                <NEW_ICONS.note className="text-muted-foreground" /> New Note
               </CommandItem>
             </CommandGroup>
 
@@ -115,7 +118,7 @@ export function CommandPalette({ open, onClose, onNewTask, onNewProject }: Props
                       value={p.workItem}
                       onSelect={() => go(`/projects/${p.id}`)}
                     >
-                      <FolderOpen className="text-muted-foreground" />
+                      <ENTITY_ICONS.project className="text-muted-foreground" />
                       <span className="flex-1 truncate">{p.workItem}</span>
                     </CommandItem>
                   ))}
@@ -133,7 +136,7 @@ export function CommandPalette({ open, onClose, onNewTask, onNewProject }: Props
                       value={`note ${n.id} ${n.title}`}
                       onSelect={() => go(`/notebook?page=${n.id}`)}
                     >
-                      <BookOpen className="text-muted-foreground" />
+                      <ENTITY_ICONS.note className="text-muted-foreground" />
                       <span className="flex-1 truncate">{n.title || 'Untitled'}</span>
                     </CommandItem>
                   ))}
@@ -151,7 +154,7 @@ export function CommandPalette({ open, onClose, onNewTask, onNewProject }: Props
                       value={`contact ${c.id} ${c.name}`}
                       onSelect={() => go(`/contacts?q=${encodeURIComponent(c.name)}`)}
                     >
-                      <UserRound className="text-muted-foreground" />
+                      <ENTITY_ICONS.contact className="text-muted-foreground" />
                       <span className="flex-1 truncate">{c.name}</span>
                     </CommandItem>
                   ))}

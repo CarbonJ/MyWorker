@@ -12,7 +12,7 @@
  * The trash table is user data and part of every backup.
  */
 
-import { exec, getDb, persistToUserFolder, query, type SQLiteCompatibleType } from './index'
+import { allowNextDataDrop, exec, getDb, persistToUserFolder, query, type SQLiteCompatibleType } from './index'
 
 export const TRASH_DAYS = 30
 
@@ -197,6 +197,8 @@ export async function restoreFromTrash(trashId: number): Promise<string | null> 
 export async function deleteFromTrash(trashId: number): Promise<void> {
   const { sqlite, db } = getDb()
   await exec(sqlite, db, `DELETE FROM trash WHERE id = ?`, [trashId])
+  // Deliberate permanent removal — don't let the mass-loss guard stop it
+  allowNextDataDrop()
   await persistToUserFolder()
   window.dispatchEvent(new Event(TRASH_CHANGED_EVENT))
 }
@@ -205,6 +207,8 @@ export async function deleteFromTrash(trashId: number): Promise<void> {
 export async function emptyTrash(): Promise<void> {
   const { sqlite, db } = getDb()
   await exec(sqlite, db, `DELETE FROM trash`)
+  // Deliberate permanent removal — don't let the mass-loss guard stop it
+  allowNextDataDrop()
   await persistToUserFolder()
   window.dispatchEvent(new Event(TRASH_CHANGED_EVENT))
 }
@@ -216,5 +220,7 @@ export async function purgeExpiredTrash(): Promise<void> {
     `SELECT COUNT(*) AS n FROM trash WHERE deleted_at < datetime('now', ?)`, [`-${TRASH_DAYS} days`])
   if (Number(expired[0]?.n ?? 0) === 0) return
   await exec(sqlite, db, `DELETE FROM trash WHERE deleted_at < datetime('now', ?)`, [`-${TRASH_DAYS} days`])
+  // Deliberate permanent removal — don't let the mass-loss guard stop it
+  allowNextDataDrop()
   await persistToUserFolder()
 }

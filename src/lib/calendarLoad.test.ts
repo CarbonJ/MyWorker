@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { toLocalDateString } from './utils'
 import {
-  computeBaseline, rateDay, levelFor, levelRanges, monthGridDays, weekStart, weekDays,
+  computeBaseline, rateDay, levelFor, levelRanges, monthGridDays, weekStart, weekDays, weeksBetweenMonths, addMonths,
   isWorkingDay, displayDate,
 } from './calendarLoad'
 
@@ -86,5 +86,27 @@ describe('load levels', () => {
     expect(rateDay('2026-11-13', 9, today, true, b)).toBe('unrated')
     expect(rateDay('2026-11-21', 9, today, true, b)).toBe('unrated')
     expect(rateDay('2026-11-21', 9, today, false, b)).toBe('overloaded')
+  })
+})
+
+describe('weeksBetweenMonths', () => {
+  it('covers whole weeks from the first month to the last, without gaps', () => {
+    const weeks = weeksBetweenMonths('2026-11', '2026-12', false)
+    expect(weeks[0][0]).toBe('2026-10-26') // Monday before Sun 1 Nov
+    expect(weeks.at(-1)!.at(-1)).toBe('2027-01-03') // Sunday after Thu 31 Dec
+    for (let i = 1; i < weeks.length; i++) expect(weeks[i][0] > weeks[i - 1].at(-1)!).toBe(true)
+    expect(weeks.every(w => w.length === 7)).toBe(true)
+  })
+
+  it('has Mon–Fri rows in business mode', () => {
+    expect(weeksBetweenMonths('2026-11', '2026-11', true).every(w => w.length === 5)).toBe(true)
+  })
+})
+
+describe('addMonths', () => {
+  it('shifts across year ends from any day of the month', () => {
+    expect(addMonths('2026-11-30', 1)).toBe('2026-12')
+    expect(addMonths('2026-12-31', 2)).toBe('2027-02')
+    expect(addMonths('2026-01-15', -1)).toBe('2025-12')
   })
 })

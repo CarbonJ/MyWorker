@@ -16,7 +16,8 @@ import { updateWorkLogEntry, deleteWorkLogEntry } from '@/db/workLog'
 import { WorkLogEntryForm } from '@/components/WorkLogEntry'
 import { WikiLinkContent } from '@/components/WikiLinkContent'
 import { MarkdownField } from '@/components/MarkdownField'
-import { Pencil, Trash2, Filter, Search, X, BookOpen, Link2 } from 'lucide-react'
+import { Pencil, Trash2, Filter, Search, X, Link2 } from 'lucide-react'
+import { ENTITY_ICONS } from '@/lib/icons'
 import type { TagRef } from '@/db/tags'
 import { recordRoute } from '@/lib/refRoutes'
 import { loadGuiSettings, altRowStyle } from '@/lib/guiSettings'
@@ -199,7 +200,7 @@ export function WorkLogPane({ projectId, projectName, workLog, notebookRefs = []
             return (
               <div key={`note-${ref.pageId}`} className="px-3 py-2" style={altRowStyle(rowColor, rowOpacity, index)}>
                 <div className="flex items-center gap-1.5 mb-1">
-                  <BookOpen className="h-3 w-3 text-muted-foreground shrink-0" />
+                  <ENTITY_ICONS.note className="h-3 w-3 text-muted-foreground shrink-0" />
                   <p className="text-xs text-muted-foreground">{dateStr}</p>
                 </div>
                 <button

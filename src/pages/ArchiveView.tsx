@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { Fragment, useEffect, useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSearch } from '@/contexts/SearchContext'
 import { toast } from 'sonner'
@@ -11,7 +11,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { MultiSelectFilter } from '@/components/ui/MultiSelectFilter'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Bookmark, X as XIcon } from 'lucide-react'
+import { Bookmark, X as XIcon, ChevronDown, ChevronRight } from 'lucide-react'
+import { quarterOf, type Quarter, type QuarterKind } from '@/lib/quarters'
+import { utcTimestampToLocalDate } from '@/lib/utils'
 import { pillClass, pillClassActive, dotClass, dotOnPillClass, RAG_ORDER, RAG_OPTIONS, PILL_DIMMED_CLASS } from '@/lib/colors'
 
 type SortKey = 'workItem' | 'area' | 'rag' | 'priority' | 'status' | 'statusComment' | 'archived'
@@ -27,6 +29,18 @@ interface SavedView {
 }
 
 const LS = 'myworker:archive'
+
+type GroupBy = 'none' | QuarterKind
+const GROUP_OPTIONS: { value: GroupBy; label: string; title: string }[] = [
+  { value: 'none', label: 'None', title: 'One list' },
+  { value: 'calendar', label: 'Calendar quarter', title: 'Group by calendar quarter (Q1 = Jan–Mar)' },
+  { value: 'performance', label: 'Performance year', title: 'Group by performance-year quarter (the year starts 1 Oct; Q1 = Oct–Dec)' },
+]
+
+/** When a project was archived — its local date (older rows without archived_at fall back to the last edit). */
+function archivedDate(p: Project): string {
+  return utcTimestampToLocalDate(p.archivedAt ?? p.updatedAt) ?? ''
+}
 
 function loadArr(key: string): string[] {
   try { return JSON.parse(localStorage.getItem(key) ?? 'null') ?? [] }
@@ -55,6 +69,18 @@ export default function ArchiveView() {
   const [savedViews,      setSavedViews]      = useState<SavedView[]>([])
   const [saveViewName,    setSaveViewName]    = useState('')
   const [saveViewOpen,    setSaveViewOpen]    = useState(false)
+
+  const [groupBy, setGroupBy] = useState<GroupBy>(() => {
+    const v = localStorage.getItem(`${LS}-group`)
+    return v === 'calendar' || v === 'performance' ? v : 'none'
+  })
+  // Collapsed quarter groups, by quarter key
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const toggleGroup = (key: string) => setCollapsed(prev => {
+    const next = new Set(prev)
+    if (next.has(key)) next.delete(key); else next.add(key)
+    return next
+  })
 
   const [sorts, setSorts] = useState<SortEntry[]>(() =>
     loadSorted<SortEntry>(`${LS}-sorts`, [{ key: 'archived', dir: 'desc' }])
@@ -103,6 +129,7 @@ export default function ArchiveView() {
   useEffect(() => { localStorage.setItem(`${LS}-area`,     JSON.stringify(areaFilters))     }, [areaFilters])
   useEffect(() => { localStorage.setItem(`${LS}-tags`,     JSON.stringify(tagFilters))      }, [tagFilters])
   useEffect(() => { localStorage.setItem(`${LS}-sorts`,    JSON.stringify(sorts))           }, [sorts])
+  useEffect(() => { localStorage.setItem(`${LS}-group`,    groupBy)                         }, [groupBy])
 
   const allProjectTags = useMemo(() => {
     const s = new Set<string>()
@@ -143,7 +170,7 @@ export default function ArchiveView() {
             av = projectStatuses.find(o => o.id === a.statusId)?.sortOrder ?? 999
             bv = projectStatuses.find(o => o.id === b.statusId)?.sortOrder ?? 999; break
           case 'statusComment': av = a.latestStatus.toLowerCase(); bv = b.latestStatus.toLowerCase(); break
-          case 'archived':      av = a.updatedAt;                  bv = b.updatedAt;                  break
+          case 'archived':      av = a.archivedAt ?? a.updatedAt;  bv = b.archivedAt ?? b.updatedAt;  break
         }
         if (av < bv) return dir === 'asc' ? -1 : 1
         if (av > bv) return dir === 'asc' ? 1 : -1
@@ -153,6 +180,19 @@ export default function ArchiveView() {
 
     return list
   }, [projects, query, ragFilters, priorityFilters, areaFilters, statusFilters, tagFilters, sorts, priorities, productAreas, projectStatuses])
+
+  // Quarter groups, newest first; the table's sort applies within each group
+  const groups = useMemo((): { quarter: Quarter; projects: Project[] }[] | null => {
+    if (groupBy === 'none') return null
+    const byKey = new Map<string, { quarter: Quarter; projects: Project[] }>()
+    for (const p of filteredProjects) {
+      const quarter = quarterOf(archivedDate(p), groupBy)
+      const g = byKey.get(quarter.key) ?? { quarter, projects: [] }
+      g.projects.push(p)
+      byKey.set(quarter.key, g)
+    }
+    return [...byKey.values()].sort((a, b) => b.quarter.key.localeCompare(a.quarter.key))
+  }, [filteredProjects, groupBy])
 
   const handleSort = (col: SortKey) => {
     setSorts(prev => {
@@ -200,6 +240,41 @@ export default function ArchiveView() {
     )
   }
 
+  const projectRow = (p: Project) => {
+    const priorityOpt  = priorities.find(o => o.id === p.priorityId)
+    const statusOpt    = projectStatuses.find(o => o.id === p.statusId)
+    return (
+      <tr key={p.id} onClick={() => navigate(`/projects/${p.id}`)}
+        className="hover:bg-accent cursor-pointer transition-colors opacity-75 hover:opacity-100">
+        <td className="px-4 py-3 font-medium text-muted-foreground">{p.workItem}</td>
+        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+          {productAreas.find(o => o.id === p.productAreaId)?.label ?? '—'}
+        </td>
+        <td className="px-4 py-3">
+          {priorityOpt ? (
+            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${pillClass(priorityOpt.color)}`}>
+              {priorityOpt.color && <span className={`w-1.5 h-1.5 rounded-full ${dotOnPillClass(priorityOpt.color)}`} />}
+              {priorityOpt.label}
+            </span>
+          ) : <span className="text-muted-foreground">—</span>}
+        </td>
+        <td className="px-4 py-3"><RagBadge status={p.ragStatus as RagStatus} /></td>
+        <td className="px-4 py-3">
+          {statusOpt ? (
+            <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full border ${pillClass(statusOpt.color)}`}>
+              {statusOpt.color && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotOnPillClass(statusOpt.color)}`} />}
+              {statusOpt.label}
+            </span>
+          ) : <span className="text-muted-foreground">—</span>}
+        </td>
+        <td className="px-4 py-3 max-w-xs truncate text-muted-foreground">{p.latestStatus || '—'}</td>
+        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+          {new Date(`${(p.archivedAt ?? p.updatedAt).replace(' ', 'T')}Z`).toLocaleDateString()}
+        </td>
+      </tr>
+    )
+  }
+
   const thBase = 'border-b bg-background text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider select-none cursor-pointer hover:text-foreground transition-colors px-4 py-2 whitespace-nowrap'
 
   return (
@@ -242,7 +317,18 @@ export default function ArchiveView() {
           </PopoverContent>
         </Popover>
 
-        <span className="text-sm text-muted-foreground ml-auto">{filteredProjects.length} archived project{filteredProjects.length !== 1 ? 's' : ''}</span>
+        <div className="ml-auto flex items-center gap-2">
+          <span className="text-xs text-muted-foreground font-medium">Group:</span>
+          <div className="flex items-center rounded-md border overflow-hidden">
+            {GROUP_OPTIONS.map(o => (
+              <button key={o.value} type="button" onClick={() => setGroupBy(o.value)} title={o.title}
+                className={`h-7 px-2.5 text-xs font-medium border-r last:border-r-0 transition-colors ${groupBy === o.value ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'}`}>
+                {o.label}
+              </button>
+            ))}
+          </div>
+          <span className="text-sm text-muted-foreground">{filteredProjects.length} archived project{filteredProjects.length !== 1 ? 's' : ''}</span>
+        </div>
       </div>
 
       {/* ── Toolbar row 2 — Area filter ── */}
@@ -318,40 +404,28 @@ export default function ArchiveView() {
                 </td>
               </tr>
             )}
-            {filteredProjects.map(p => {
-              const priorityOpt  = priorities.find(o => o.id === p.priorityId)
-              const statusOpt    = projectStatuses.find(o => o.id === p.statusId)
-              return (
-                <tr key={p.id} onClick={() => navigate(`/projects/${p.id}`)}
-                  className="hover:bg-accent cursor-pointer transition-colors opacity-75 hover:opacity-100">
-                  <td className="px-4 py-3 font-medium text-muted-foreground">{p.workItem}</td>
-                  <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                    {productAreas.find(o => o.id === p.productAreaId)?.label ?? '—'}
-                  </td>
-                  <td className="px-4 py-3">
-                    {priorityOpt ? (
-                      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${pillClass(priorityOpt.color)}`}>
-                        {priorityOpt.color && <span className={`w-1.5 h-1.5 rounded-full ${dotOnPillClass(priorityOpt.color)}`} />}
-                        {priorityOpt.label}
-                      </span>
-                    ) : <span className="text-muted-foreground">—</span>}
-                  </td>
-                  <td className="px-4 py-3"><RagBadge status={p.ragStatus as RagStatus} /></td>
-                  <td className="px-4 py-3">
-                    {statusOpt ? (
-                      <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full border ${pillClass(statusOpt.color)}`}>
-                        {statusOpt.color && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotOnPillClass(statusOpt.color)}`} />}
-                        {statusOpt.label}
-                      </span>
-                    ) : <span className="text-muted-foreground">—</span>}
-                  </td>
-                  <td className="px-4 py-3 max-w-xs truncate text-muted-foreground">{p.latestStatus || '—'}</td>
-                  <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                    {new Date(p.updatedAt + 'Z').toLocaleDateString()}
-                  </td>
-                </tr>
-              )
-            })}
+            {groups
+              ? groups.map(({ quarter, projects: inQuarter }) => {
+                  const isCollapsed = collapsed.has(quarter.key)
+                  return (
+                    <Fragment key={quarter.key}>
+                      <tr onClick={() => toggleGroup(quarter.key)} className="cursor-pointer bg-muted/40 hover:bg-muted/70 transition-colors">
+                        <td colSpan={7} className="px-4 py-2 border-b">
+                          <span className="inline-flex items-center gap-1.5 text-sm font-semibold">
+                            {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                            {quarter.label}
+                            <span className="font-normal text-muted-foreground">· {quarter.range}</span>
+                            <span className="font-normal text-muted-foreground">
+                              · {inQuarter.length} project{inQuarter.length !== 1 ? 's' : ''}
+                            </span>
+                          </span>
+                        </td>
+                      </tr>
+                      {!isCollapsed && inQuarter.map(projectRow)}
+                    </Fragment>
+                  )
+                })
+              : filteredProjects.map(projectRow)}
           </tbody>
         </table>
       </div>

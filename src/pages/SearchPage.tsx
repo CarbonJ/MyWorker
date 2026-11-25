@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Search, FolderKanban, CheckSquare, ScrollText, BookOpen, ChevronDown, ChevronRight, UserRound, CalendarDays } from 'lucide-react'
+import { Search, ChevronDown, ChevronRight } from 'lucide-react'
+import { ENTITY_ICONS } from '@/lib/icons'
 import { Input } from '@/components/ui/input'
 import { MultiSelectFilter } from '@/components/ui/MultiSelectFilter'
 import { searchEnriched } from '@/db/search'
@@ -134,7 +135,7 @@ export default function SearchPage() {
   const simpleGroup = (
     key: 'contact' | 'journal',
     label: string,
-    Icon: typeof BookOpen,
+    Icon: typeof ENTITY_ICONS.note,
     items: EnrichedSearchResult[],
     titleOf: (r: EnrichedSearchResult) => string,
     open: (r: EnrichedSearchResult) => void,
@@ -263,7 +264,7 @@ export default function SearchPage() {
                   className="w-full flex items-center gap-2 px-6 py-2 bg-muted/40 hover:bg-muted/60 transition-colors"
                 >
                   {collapsed.projects ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
-                  <FolderKanban className="h-3.5 w-3.5 text-muted-foreground" />
+                  <ENTITY_ICONS.project className="h-3.5 w-3.5 text-muted-foreground" />
                   <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Projects</span>
                   <span className="text-xs text-muted-foreground ml-1">({projects.length})</span>
                 </button>
@@ -308,7 +309,7 @@ export default function SearchPage() {
                   className="w-full flex items-center gap-2 px-6 py-2 bg-muted/40 hover:bg-muted/60 transition-colors"
                 >
                   {collapsed.task ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
-                  <CheckSquare className="h-3.5 w-3.5 text-muted-foreground" />
+                  <ENTITY_ICONS.task className="h-3.5 w-3.5 text-muted-foreground" />
                   <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Tasks</span>
                   <span className="text-xs text-muted-foreground ml-1">({tasks.length})</span>
                 </button>
@@ -320,7 +321,7 @@ export default function SearchPage() {
                         to={r.projectId ? `/projects/${r.projectId}?task=${r.sourceId}` : `/?task=${r.sourceId}`}
                         className="flex items-start gap-3 px-6 py-3 hover:bg-accent/50 transition-colors group"
                       >
-                        <CheckSquare className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                        <ENTITY_ICONS.task className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                         <div className="min-w-0 flex-1 space-y-0.5">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-sm font-medium group-hover:text-primary transition-colors">{r.title}</span>
@@ -351,7 +352,7 @@ export default function SearchPage() {
                   className="w-full flex items-center gap-2 px-6 py-2 bg-muted/40 hover:bg-muted/60 transition-colors"
                 >
                   {collapsed.work_log ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
-                  <ScrollText className="h-3.5 w-3.5 text-muted-foreground" />
+                  <ENTITY_ICONS.worklog className="h-3.5 w-3.5 text-muted-foreground" />
                   <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Work Log</span>
                   <span className="text-xs text-muted-foreground ml-1">({workLog.length})</span>
                 </button>
@@ -363,7 +364,7 @@ export default function SearchPage() {
                         to={`/projects/${r.projectId}`}
                         className="flex items-start gap-3 px-6 py-3 hover:bg-accent/50 transition-colors group"
                       >
-                        <ScrollText className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                        <ENTITY_ICONS.worklog className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                         <div className="min-w-0 flex-1 space-y-0.5">
                           <div className="flex items-center gap-2 flex-wrap">
                             {r.projectName && (
@@ -391,7 +392,7 @@ export default function SearchPage() {
                   className="w-full flex items-center gap-2 px-6 py-2 bg-muted/40 hover:bg-muted/60 transition-colors"
                 >
                   {collapsed.notebook ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
-                  <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
+                  <ENTITY_ICONS.note className="h-3.5 w-3.5 text-muted-foreground" />
                   <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Notebook</span>
                   <span className="text-xs text-muted-foreground ml-1">({notebooks.length})</span>
                 </button>
@@ -404,7 +405,7 @@ export default function SearchPage() {
                         onClick={() => navigate(`/notebook?page=${r.sourceId}`)}
                         className="w-full flex items-start gap-3 px-6 py-3 hover:bg-accent/50 transition-colors group text-left"
                       >
-                        <BookOpen className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                        <ENTITY_ICONS.note className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                         <div className="min-w-0 flex-1 space-y-0.5">
                           <span className="text-sm font-medium group-hover:text-primary transition-colors block">{r.title || 'Untitled'}</span>
                           <Snippet text={r.snippet} />
@@ -416,10 +417,10 @@ export default function SearchPage() {
               </div>
             )}
 
-            {simpleGroup('contact', 'Contacts', UserRound, contacts,
+            {simpleGroup('contact', 'Contacts', ENTITY_ICONS.contact, contacts,
               r => r.title, r => navigate(`/contacts?q=${encodeURIComponent(r.title)}`))}
 
-            {simpleGroup('journal', 'Journal', CalendarDays, journal,
+            {simpleGroup('journal', 'Journal', ENTITY_ICONS.journal, journal,
               r => r.title ? new Date(r.title + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : 'Journal',
               r => navigate(`/digest?date=${r.title}`))}
           </div>

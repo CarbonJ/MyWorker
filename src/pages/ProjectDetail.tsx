@@ -151,7 +151,8 @@ export default function ProjectDetail() {
     }
   }, [project, load])
 
-  const doneOpt = projectStatuses.find(s => s.label.toLowerCase() === 'done')
+  // The status chosen as "done" in Settings (it keeps working if renamed)
+  const doneOpt = projectStatuses.find(s => s.isDone)
   const isArchived = project?.isArchived ?? false
 
   const markComplete = () => {

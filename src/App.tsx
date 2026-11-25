@@ -3,13 +3,15 @@ import { BrowserRouter, NavLink, useNavigate, useLocation } from 'react-router-d
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 import { DbProvider } from '@/hooks/useDb'
+import { SCREEN_ICONS } from '@/lib/icons'
+import { DataDropDialog } from '@/components/DataDropDialog'
 import { consumeRecoveryNotice, FOLDER_CONFLICT_EVENT, FOLDER_SAVE_EVENT, getFolderSaveStatus, persistToUserFolder } from '@/db'
 import { TaskModal } from '@/components/TaskModal'
 import { ProjectModal } from '@/components/ProjectModal'
 import { SearchProvider, useSearch } from '@/contexts/SearchContext'
 import { PinnedViewProvider, usePinnedView } from '@/contexts/PinnedViewContext'
 import { Input } from '@/components/ui/input'
-import { X, Moon, Sun, Search as SearchIcon, BookOpen, PanelRight } from 'lucide-react'
+import { X, Moon, Sun, PanelRight } from 'lucide-react'
 
 import { loadGuiSettings, buttonStyle } from '@/lib/guiSettings'
 import { AppRoutes } from '@/components/AppRoutes'
@@ -17,6 +19,19 @@ import { PinnedPane } from '@/components/PinnedPane'
 import { SPLIT_MIN_PCT, SPLIT_MAX_PCT } from '@/lib/constants'
 import { CommandPalette } from '@/components/CommandPalette'
 
+
+const NAV_ITEMS = [
+  { to: '/', label: 'Projects', icon: SCREEN_ICONS.projects },
+  { to: '/digest', label: 'Digest', icon: SCREEN_ICONS.digest },
+  { to: '/notebook', label: 'Notebook', icon: SCREEN_ICONS.notebook },
+  { to: '/contacts', label: 'Contacts', icon: SCREEN_ICONS.contacts },
+  { to: '/tags', label: 'Tags', icon: SCREEN_ICONS.tags },
+  { to: '/calendar', label: 'Calendar', icon: SCREEN_ICONS.calendar },
+  { to: '/reporting', label: 'Dashboard', icon: SCREEN_ICONS.dashboard },
+  { to: '/search', label: 'Search', icon: SCREEN_ICONS.search },
+  { to: '/archive', label: 'Archive', icon: SCREEN_ICONS.archive },
+  { to: '/settings', label: 'Settings', icon: SCREEN_ICONS.settings },
+]
 
 function NavBar({ isDark, onToggleDark }: { isDark: boolean; onToggleDark: () => void }) {
   const { query, setQuery } = useSearch()
@@ -62,20 +77,11 @@ function NavBar({ isDark, onToggleDark }: { isDark: boolean; onToggleDark: () =>
   return (
     <nav className="border-b bg-background px-6 py-3 flex items-center gap-2">
       <img src="/myworker.png" alt="MyWorker" className="w-7 h-7 rounded-md mr-4" />
-      <NavLink to="/" end className={linkClass} style={navStyle}>Projects</NavLink>
-      <NavLink to="/digest" className={linkClass} style={navStyle}>Digest</NavLink>
-      <NavLink to="/notebook" className={linkClass} style={navStyle}>
-        <span className="flex items-center gap-1.5"><BookOpen className="h-3.5 w-3.5" />Notebook</span>
-      </NavLink>
-      <NavLink to="/contacts" className={linkClass} style={navStyle}>Contacts</NavLink>
-      <NavLink to="/tags" className={linkClass} style={navStyle}>Tags</NavLink>
-      <NavLink to="/calendar" className={linkClass} style={navStyle}>Calendar</NavLink>
-      <NavLink to="/reporting" className={linkClass} style={navStyle}>Dashboard</NavLink>
-      <NavLink to="/search" className={linkClass} style={navStyle}>
-        <span className="flex items-center gap-1.5"><SearchIcon className="h-3.5 w-3.5" />Search</span>
-      </NavLink>
-      <NavLink to="/archive" className={linkClass} style={navStyle}>Archive</NavLink>
-      <NavLink to="/settings" className={linkClass} style={navStyle}>Settings</NavLink>
+      {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
+        <NavLink key={to} to={to} end={to === '/'} className={linkClass} style={navStyle}>
+          <span className="flex items-center gap-1.5"><Icon className="h-3.5 w-3.5" />{label}</span>
+        </NavLink>
+      ))}
       {/* Global search — top right */}
       <div className="ml-auto relative flex items-center">
         <Input
@@ -297,6 +303,7 @@ function AppInner() {
           window.dispatchEvent(new Event('myworker:task-saved'))
         }}
       />
+      <DataDropDialog />
       <Toaster richColors position="bottom-right" />
     </div>
     </SearchProvider>

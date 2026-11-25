@@ -13,6 +13,7 @@ import NotebookPage from '@/pages/NotebookPage'
 import TagsPage from '@/pages/TagsPage'
 import TrashPage from '@/pages/TrashPage'
 import CalendarPage from '@/pages/CalendarPage'
+import DataHealthPage from '@/pages/DataHealthPage'
 
 /**
  * The app's route table. Rendered both by the main content area (under the outer
@@ -25,6 +26,7 @@ export function AppRoutes() {
       <Route path="/" element={<Prime />} />
       <Route path="/projects/:id" element={<ProjectDetail />} />
       <Route path="/reporting" element={<ReportingView />} />
+      <Route path="/health" element={<DataHealthPage />} />
       <Route path="/digest" element={<DailyDigestView />} />
       <Route path="/weekly" element={<WeeklyReportView />} />
       <Route path="/monthly" element={<MonthlyReportView />} />

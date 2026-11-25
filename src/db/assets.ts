@@ -5,6 +5,7 @@ import { getDb } from './index'
 // myworker-data.json (default "MyWorkerAssets", configurable in Settings → Data).
 // The reference lives INLINE in the note markdown as a custom image src:
 //   ![alt](asset://<filename>?w=25)      inline image at 25% of note width
+//   ![alt](asset://<filename>?px=480)    inline image 480 pixels wide (never wider than the note)
 //   ![alt](asset://<filename>?d=link)    shown as a compact link/chip
 // Because the reference travels with the note text, no DB table/migration is
 // needed — only the image bytes are external. This feature requires the File
@@ -167,35 +168,52 @@ export function revokeAssetUrl(filename: string): void {
 // ── Markdown src parsing/building ────────────────────────────────────────────
 
 export type AssetDisplay = 'image' | 'link'
+export type AssetWidthUnit = '%' | 'px'
 export interface AssetSrcParts {
   filename: string
-  width: number      // percent of note width (image mode)
+  width: number      // in `unit`: percent of note width, or pixels (image mode)
+  unit: AssetWidthUnit
   display: AssetDisplay
 }
 
 export const DEFAULT_ASSET_WIDTH = 25
+/** Allowed width range for each unit. */
+export const ASSET_WIDTH_LIMITS: Record<AssetWidthUnit, { min: number; max: number }> = {
+  '%': { min: 5, max: 100 },
+  px: { min: 24, max: 4000 },
+}
 
-/** Parse an `asset://name?w=..&d=..` src into its parts, or null if not an asset src. */
+export function clampAssetWidth(width: number, unit: AssetWidthUnit): number {
+  const { min, max } = ASSET_WIDTH_LIMITS[unit]
+  return Math.min(max, Math.max(min, Math.round(width)))
+}
+
+/** Parse an `asset://name?w=..|px=..&d=..` src into its parts, or null if not an asset src. */
 export function parseAssetSrc(src: string | undefined | null): AssetSrcParts | null {
   if (!src || !src.startsWith('asset://')) return null
   const rest = src.slice('asset://'.length)
   const qIdx = rest.indexOf('?')
   const filename = decodeURIComponent(qIdx === -1 ? rest : rest.slice(0, qIdx))
   const params = new URLSearchParams(qIdx === -1 ? '' : rest.slice(qIdx + 1))
-  const w = Number(params.get('w'))
-  const width = Number.isFinite(w) && w >= 10 && w <= 100 ? w : DEFAULT_ASSET_WIDTH
   const display: AssetDisplay = params.get('d') === 'link' ? 'link' : 'image'
-  return { filename, width, display }
+  const px = Number(params.get('px'))
+  if (params.has('px') && Number.isFinite(px) && px > 0) {
+    return { filename, width: clampAssetWidth(px, 'px'), unit: 'px', display }
+  }
+  const w = Number(params.get('w'))
+  const width = params.has('w') && Number.isFinite(w) && w > 0 ? clampAssetWidth(w, '%') : DEFAULT_ASSET_WIDTH
+  return { filename, width, unit: '%', display }
 }
 
-/** Build an `asset://` src from its parts (omits defaults to keep markdown clean). */
-export function buildAssetSrc(filename: string, width: number, display: AssetDisplay): string {
+/**
+ * Build an `asset://` src from its parts (omits defaults to keep markdown clean).
+ * The width is kept in link mode too, so switching back restores the size.
+ */
+export function buildAssetSrc(filename: string, width: number, display: AssetDisplay, unit: AssetWidthUnit = '%'): string {
   const params: string[] = []
-  if (display === 'link') {
-    params.push('d=link')
-  } else if (width !== DEFAULT_ASSET_WIDTH) {
-    params.push(`w=${Math.round(width)}`)
-  }
+  if (unit === 'px') params.push(`px=${clampAssetWidth(width, 'px')}`)
+  else if (Math.round(width) !== DEFAULT_ASSET_WIDTH) params.push(`w=${clampAssetWidth(width, '%')}`)
+  if (display === 'link') params.push('d=link')
   const query = params.length ? `?${params.join('&')}` : ''
   return `asset://${filename}${query}`
 }

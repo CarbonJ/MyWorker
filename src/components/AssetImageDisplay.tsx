@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { ImageOff, Paperclip } from 'lucide-react'
-import { getAssetUrl, type AssetDisplay } from '@/db/assets'
+import { getAssetUrl, type AssetDisplay, type AssetWidthUnit } from '@/db/assets'
 
 interface Props {
   filename: string
   width: number
+  /** Unit of `width`: percent of the note's width (default) or pixels. */
+  unit?: AssetWidthUnit
   display: AssetDisplay
   /** Extra classes for the rendered image (e.g. selection ring in the editor). */
   imgClassName?: string
@@ -13,11 +15,11 @@ interface Props {
 /**
  * Shared read/display rendering for a pasted image asset. Resolves the file
  * from the assets folder to an object URL, then renders either an inline image
- * (scaled to `width`% of the container) or a compact link chip. Clicking opens
+ * (`width`% of the container, or `width` pixels capped at the container) or a compact link chip. Clicking opens
  * a full-size lightbox overlay. Editing controls live in the editor node view,
  * not here.
  */
-export function AssetImageDisplay({ filename, width, display, imgClassName }: Props) {
+export function AssetImageDisplay({ filename, width, unit = '%', display, imgClassName }: Props) {
   const [url, setUrl] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
   const [lightbox, setLightbox] = useState(false)
@@ -65,13 +67,13 @@ export function AssetImageDisplay({ filename, width, display, imgClassName }: Pr
           src={url}
           alt={filename}
           onClick={() => setLightbox(true)}
-          style={{ width: `${width}%` }}
+          style={{ width: `${width}${unit}` }}
           className={`inline-block max-w-full cursor-zoom-in rounded border border-border align-top ${imgClassName ?? ''}`}
         />
       ) : (
         <span
           className="inline-block rounded border border-border bg-muted/40 animate-pulse align-top"
-          style={{ width: `${width}%`, aspectRatio: '4 / 3' }}
+          style={{ width: `${width}${unit}`, maxWidth: '100%', aspectRatio: '4 / 3' }}
         />
       )}
       {lightbox && url && <Lightbox url={url} onClose={() => setLightbox(false)} />}

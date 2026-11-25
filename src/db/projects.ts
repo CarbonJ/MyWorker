@@ -35,6 +35,7 @@ function rowToProject(row: Record<string, unknown>): Project {
     tags: parseTags(row.tags as string),
     dueDate: (row.due_date as string | null) ?? null,
     isArchived: !!(row.is_archived as number),
+    archivedAt: (row.archived_at as string | null) ?? null,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   }
@@ -54,7 +55,7 @@ export async function getAllProjectsIncludingArchived(): Promise<Project[]> {
 
 /** Returns all archived projects, newest first */
 export async function getArchivedProjects(): Promise<Project[]> {
-  const rows = await query(`SELECT * FROM projects WHERE is_archived = 1 ORDER BY updated_at DESC`)
+  const rows = await query(`SELECT * FROM projects WHERE is_archived = 1 ORDER BY COALESCE(archived_at, updated_at) DESC`)
   return rows.map(rowToProject)
 }
 

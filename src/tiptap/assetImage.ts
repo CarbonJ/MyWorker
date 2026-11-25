@@ -13,6 +13,15 @@ import { AssetImageView } from './AssetImageView'
  */
 export const AssetImage = Image.extend({
   addNodeView() {
-    return ReactNodeViewRenderer(AssetImageView)
+    return ReactNodeViewRenderer(AssetImageView, {
+      // The editor ignores events from the image's own controls (toolbar, resize
+      // handle) so using them never moves the selection off the image.
+      stopEvent: ({ event }) => {
+        const target = event.target as HTMLElement | null
+        if (!target?.closest) return false
+        if (target.closest('[data-image-controls]')) return true
+        return ['INPUT', 'BUTTON', 'SELECT', 'TEXTAREA'].includes(target.tagName) && !event.type.startsWith('drag') && event.type !== 'drop'
+      },
+    })
   },
 }).configure({ inline: true, allowBase64: false })

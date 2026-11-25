@@ -36,6 +36,8 @@ export interface Project {
   tags: string[]
   dueDate: string | null
   isArchived: boolean
+  /** When the project was archived (UTC 'YYYY-MM-DD HH:MM:SS'); null when active. */
+  archivedAt: string | null
   createdAt: string
   updatedAt: string
 }
@@ -77,6 +79,8 @@ export interface DropdownOption {
   label: string
   sortOrder: number
   color: string
+  /** Project status only: the status Mark Complete sets (at most one). */
+  isDone: boolean
 }
 
 export interface NotebookPage {
@@ -92,6 +96,8 @@ export interface WikiEntity {
   type: 'page' | 'project' | 'contact' | 'area'
   id: number
   name: string
+  /** Archived projects still resolve links but are offered last in suggestions. */
+  archived?: boolean
 }
 
 export interface NotebookBacklink {

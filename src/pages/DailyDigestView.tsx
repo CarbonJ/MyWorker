@@ -9,7 +9,10 @@ import { WikiLinkContent } from '@/components/WikiLinkContent'
 import { MarkdownField } from '@/components/MarkdownField'
 import { DigestHomeNote } from '@/components/DigestHomeNote'
 import { useWikiEntities } from '@/hooks/useWikiEntities'
-import { ChevronLeft, ChevronRight, CalendarDays, BookOpen } from 'lucide-react'
+import { findWikiEntity } from '@/lib/wikiLinks'
+import { entityRoute } from '@/lib/wikiRoutes'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ENTITY_ICONS, SCREEN_ICONS } from '@/lib/icons'
 import { Button } from '@/components/ui/button'
 import { ReportRangeTabs } from '@/components/ReportRangeTabs'
 import { toLocalDateString } from '@/lib/utils'
@@ -128,14 +131,18 @@ export default function DailyDigestView() {
     journalTimer.current = setTimeout(flushJournal, 600)
   }
 
+  // A link to anything that exists opens it; a link to nothing creates that note.
   const handleWikiLinkClick = useCallback(async (name: string) => {
-    let page = await getNotebookPageByTitle(name)
+    const entity = findWikiEntity(wikiEntities, name)
+    if (entity) { navigate(entityRoute(entity)); return }
+    const title = name.trim()
+    let page = await getNotebookPageByTitle(title)
     if (!page) {
-      const id = await createNotebookPage(name, '')
-      page = { id, title: name, body: '', starred: false, createdAt: '', updatedAt: '' }
+      const id = await createNotebookPage(title, '')
+      page = { id, title, body: '', starred: false, createdAt: '', updatedAt: '' }
     }
     navigate(`/notebook?page=${page.id}`)
-  }, [navigate])
+  }, [navigate, wikiEntities])
 
   useEffect(() => {
     const handler = () => {
@@ -170,7 +177,7 @@ export default function DailyDigestView() {
     <div className="flex flex-col h-[calc(100vh-57px)] overflow-hidden">
       {/* Header */}
       <div className="shrink-0 border-b bg-background px-6 py-4 flex items-center gap-3">
-        <CalendarDays className="h-5 w-5 text-muted-foreground shrink-0" />
+        <SCREEN_ICONS.digest className="h-5 w-5 text-muted-foreground shrink-0" />
         <h1 className="text-lg font-semibold">Daily Digest</h1>
         <ReportRangeTabs />
         <div className="flex items-center gap-1 ml-4">
@@ -221,7 +228,7 @@ export default function DailyDigestView() {
 
         {!loading && !hasActivity && (
           <div className="flex flex-col items-center justify-center h-48 text-muted-foreground gap-2">
-            <CalendarDays className="h-8 w-8 opacity-30" />
+            <SCREEN_ICONS.digest className="h-8 w-8 opacity-30" />
             <p className="text-sm">No entries for this day.</p>
           </div>
         )}
@@ -249,7 +256,7 @@ export default function DailyDigestView() {
               {group.notebooks.map(nb => (
                 <div key={`nb-${nb.pageId}`} className="px-4 py-3 bg-muted/30">
                   <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-                    <BookOpen className="h-3 w-3" />
+                    <ENTITY_ICONS.note className="h-3 w-3" />
                     {formatTime(nb.updatedAt)}
                   </p>
                   <button

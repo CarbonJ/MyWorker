@@ -26,6 +26,7 @@ import { AssetImage } from '@/tiptap/assetImage'
 import { assetsSupported, saveAssetImage, buildAssetSrc, DEFAULT_ASSET_WIDTH } from '@/db/assets'
 import { findHashtags, tagKey } from '@/lib/tags'
 import { entityRoute } from '@/lib/wikiRoutes'
+import { findWikiEntity } from '@/lib/wikiLinks'
 import { useTagNames } from '@/hooks/useTagNames'
 
 // Extend Highlight with tiptap-markdown serializer so ==text== roundtrips correctly.
@@ -44,6 +45,8 @@ const HighlightMarkdown = Highlight.extend({
   },
 })
 
+const ENTITY_LABEL: Record<WikiEntity['type'], string> = { page: 'Note', project: 'Project', contact: 'Contact', area: 'Area' }
+
 // ProseMirror decoration plugin: highlights [[Name]] as blue (live) or muted (dead),
 // and #tags as chips. Takes a ref so it always reads the latest entity list without
 // needing to be recreated.
@@ -60,6 +63,33 @@ function createWikiLinkDecorationExtension(entitiesRef: React.MutableRefObject<W
               const entities = entitiesRef.current
               const pattern = /\[\[([^\]]+)\]\]/g
               state.doc.descendants((node, pos, parent) => {
+                // [[links]] are found per paragraph, not per text node, so a link stays
+                // whole when part of it is bold, highlighted, etc. Inline leaves (images,
+                // hard breaks) count as one character, matching their document size.
+                if (node.isTextblock && parent?.type.name !== 'codeBlock' && node.type.name !== 'codeBlock') {
+                  const text = node.textBetween(0, node.content.size, undefined, '￼')
+                  pattern.lastIndex = 0
+                  let match: RegExpExecArray | null
+                  while ((match = pattern.exec(text)) !== null) {
+                    const name = match[1]
+                    const target = findWikiEntity(entities, name)
+                    decorations.push(
+                      Decoration.inline(
+                        pos + 1 + match.index,
+                        pos + 1 + match.index + match[0].length,
+                        {
+                          class: `wiki-link ${target ? 'wiki-link-live' : 'wiki-link-dead'}`,
+                          'data-wiki-name': name,
+                          title: target
+                            ? `Go to ${ENTITY_LABEL[target.type].toLowerCase()}${target.archived ? ' (archived)' : ''}: ${target.name}`
+                            : `Nothing is named "${name.trim()}" — no note, project, contact or area matches`,
+                          spellcheck: 'false',
+                        }
+                      )
+                    )
+                  }
+                  return true
+                }
                 if (!node.isText || !node.text) return
                 // #tags — not inside inline code or code blocks
                 if (!node.marks.some(m => m.type.name === 'code') &&
@@ -74,19 +104,6 @@ function createWikiLinkDecorationExtension(entitiesRef: React.MutableRefObject<W
                       })
                     )
                   }
-                }
-                pattern.lastIndex = 0
-                let match: RegExpExecArray | null
-                while ((match = pattern.exec(node.text)) !== null) {
-                  const name = match[1]
-                  const isLive = entities.some(e => e.name.toLowerCase() === name.trim().toLowerCase())
-                  decorations.push(
-                    Decoration.inline(
-                      pos + match.index,
-                      pos + match.index + match[0].length,
-                      { class: `wiki-link ${isLive ? 'wiki-link-live' : 'wiki-link-dead'}`, title: `Go to: ${name}`, spellcheck: 'false' }
-                    )
-                  )
                 }
               })
               return DecorationSet.create(state.doc, decorations)
@@ -251,7 +268,7 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
 
   // Wiki-link suggestion state + refs (refs keep handleKeyDown inside useEditor free of stale closures)
   // The same palette serves [[wiki links]] and #tags; `kind` says which one is open.
-  type SuggestItem = { type: WikiEntity['type'] | 'tag'; id: number | string; name: string }
+  type SuggestItem = { type: WikiEntity['type'] | 'tag'; id: number | string; name: string; archived?: boolean }
   type WikiSuggestState = { active: boolean; kind: 'wiki' | 'tag'; partial: string; coords: { left: number; top: number; caretTop: number } }
   const [wikiSuggest, setWikiSuggest] = useState<WikiSuggestState>({ active: false, kind: 'wiki', partial: '', coords: { left: 0, top: 0, caretTop: 0 } })
   const tagNames = useTagNames(enableWikiLinks)
@@ -295,14 +312,14 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
       : (target.closest?.('.wiki-link') as HTMLElement | null)
     if (!wikiEl) return
     e.preventDefault()
-    const name = wikiEl.getAttribute('title')?.replace('Go to: ', '') ?? ''
+    const name = wikiEl.dataset.wikiName ?? ''
     if (!name) return
     // Delegate to caller if provided (e.g. auto-create note on Digest page)
     if (onWikiLinkClickRef.current) {
       onWikiLinkClickRef.current(name)
       return
     }
-    const entity = wikiEntitiesRef.current.find(en => en.name.toLowerCase() === name.toLowerCase())
+    const entity = findWikiEntity(wikiEntitiesRef.current, name)
     if (!entity) return
     navigateRef.current(entityRoute(entity))
   }
@@ -554,13 +571,13 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
     if (!wikiEntities.length) return []
     const partial = wikiSuggest.partial.toLowerCase()
     // Palette type order: Areas, then Contacts, then Projects, then everything
-    // else (stable within each type).
+    // else, with archived projects last (stable within each group).
     const typeOrder: Record<string, number> = { area: 0, contact: 1, project: 2 }
-    const typeRank = (t: WikiEntity['type']) => typeOrder[t] ?? 3
+    const typeRank = (e: WikiEntity) => e.archived ? 4 : typeOrder[e.type] ?? 3
     return wikiEntities
       .filter(e => !partial || e.name.toLowerCase().includes(partial))
       .map((e, i) => ({ e, i }))
-      .sort((a, b) => typeRank(a.e.type) - typeRank(b.e.type) || a.i - b.i)
+      .sort((a, b) => typeRank(a.e) - typeRank(b.e) || a.i - b.i)
       .map(({ e }) => e)
       .slice(0, 12)
   }, [wikiSuggest.active, wikiSuggest.kind, wikiSuggest.partial, wikiEntities, tagNames])
@@ -588,10 +605,12 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
     if (!match) return
     const partial = match[1]
     const pos = $from.pos
-    // Delete the partial text the user has typed so far, then insert the full entity name + ]]
+    // Delete the partial text the user has typed so far, then insert the full entity name + ]].
+    // Inserted as a text node, not a string: a string is parsed as HTML, which collapses
+    // repeated spaces and swallows <…>, so the link would no longer match the name.
     editor.chain()
       .deleteRange({ from: pos - partial.length, to: pos })
-      .insertContent(entity.name + ']]')
+      .insertContent({ type: 'text', text: entity.name + ']]' })
       .run()
     setWikiSuggest(s => ({ ...s, active: false }))
   }, [editor])
@@ -770,9 +789,10 @@ export function MarkdownField({ id, label, headerLabel, value, onChange, placeho
           }`}
         >
           <span className="text-[10px] text-muted-foreground w-14 shrink-0 uppercase tracking-wide pt-0.5">
-            {entity.type === 'page' ? 'Note' : entity.type === 'project' ? 'Project' : entity.type === 'contact' ? 'Contact' : entity.type === 'tag' ? 'Tag' : 'Area'}
+            {entity.type === 'tag' ? 'Tag' : ENTITY_LABEL[entity.type]}
           </span>
           <span className="min-w-0 break-words line-clamp-2">{entity.type === 'tag' ? `#${entity.name}` : entity.name}</span>
+          {entity.archived && <span className="ml-auto shrink-0 text-[10px] text-muted-foreground pt-0.5">Archived</span>}
         </button>
       ))}
     </div>,

@@ -29,11 +29,12 @@
  * partially replaced.
  */
 
-import { exec, getDb, persistToUserFolder, snapshotUserData } from './index'
+import { allowNextDataDrop, exec, getDb, persistToUserFolder, snapshotUserData } from './index'
 import { rebuildAllLinks } from './notebook'
 import { importLegacyJournal } from './journal'
 import { validateBackupData } from './backupValidation'
 import { localToday } from '@/lib/utils'
+import { ARCHIVED_AT_BACKFILL, DONE_STATUS_BACKFILL } from './migrations'
 
 export async function exportToJson(): Promise<void> {
   const data = {
@@ -86,18 +87,20 @@ export async function restoreFromData(raw: unknown): Promise<void> {
     // Restore dropdown options first (projects reference them)
     for (const opt of data.dropdownOptions ?? []) {
       await exec(sqlite, db,
-        `INSERT INTO dropdown_options (id, type, label, sort_order, color) VALUES (?, ?, ?, ?, ?)`,
-        [opt.id as number, opt.type as string, opt.label as string, opt.sort_order as number, (opt.color as string) ?? ''],
+        `INSERT INTO dropdown_options (id, type, label, sort_order, color, is_done) VALUES (?, ?, ?, ?, ?, ?)`,
+        [opt.id as number, opt.type as string, opt.label as string, opt.sort_order as number, (opt.color as string) ?? '', (opt.is_done as number | undefined) ?? 0],
       )
     }
+    // Backups made before the done status could be chosen: use the one named "Done", as migration v29 did
+    await exec(sqlite, db, DONE_STATUS_BACKFILL)
 
     // Restore projects
     for (const p of data.projects) {
       await exec(sqlite, db,
         `INSERT INTO projects
            (id, work_item, work_desc, rag_status, priority_id, latest_status,
-            product_area_id, status_id, due_date, is_archived, stakeholders, linked_jiras, tags, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            product_area_id, status_id, due_date, is_archived, archived_at, stakeholders, linked_jiras, tags, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           p.id as number, p.work_item as string, p.work_desc as string,
           p.rag_status as string, p.priority_id as number | null,
@@ -105,6 +108,7 @@ export async function restoreFromData(raw: unknown): Promise<void> {
           (p.status_id as number | null) ?? null,
           (p.due_date as string | null) ?? null,
           (p.is_archived as number) ?? 0,
+          (p.archived_at as string | null | undefined) ?? null,
           p.stakeholders as string, (p.linked_jiras as string | undefined) ?? '',
           (p.tags as string | undefined) ?? '',
           p.created_at as string, p.updated_at as string,
@@ -129,6 +133,9 @@ export async function restoreFromData(raw: unknown): Promise<void> {
       await exec(sqlite, db,
         `UPDATE work_log_entries SET is_system = 1 WHERE note LIKE '✓ Completed%'`)
     }
+
+    // Backups made before archived_at existed: estimate it as migration v28 did
+    await exec(sqlite, db, ARCHIVED_AT_BACKFILL)
 
     // Restore tasks
     for (const t of data.tasks ?? []) {
@@ -290,5 +297,7 @@ export async function restoreFromData(raw: unknown): Promise<void> {
 
   // Regenerate notebook_links from the (possibly restored) note bodies.
   await rebuildAllLinks()
+  // A restore replaces everything on purpose — a smaller backup must not trip the mass-loss guard
+  allowNextDataDrop()
   await persistToUserFolder()
 }

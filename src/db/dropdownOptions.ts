@@ -9,6 +9,7 @@ function rowToOption(row: Record<string, unknown>): DropdownOption {
     label: row.label as string,
     sortOrder: row.sort_order as number,
     color: (row.color as string) ?? '',
+    isDone: !!(row.is_done as number),
   }
 }
 
@@ -67,6 +68,14 @@ export async function updateDropdownOption(
     await renameWikiLinks(before[0].label as string, label)
     notifyLinksChanged()
   }
+}
+
+/** Make this project status the one Mark Complete sets (clearing it from any other). */
+export async function setDoneStatus(id: number): Promise<void> {
+  await run(
+    `UPDATE dropdown_options SET is_done = (id = ?) WHERE type = 'project_status' AND (is_done = 1 OR id = ?)`,
+    [id, id],
+  )
 }
 
 export async function deleteDropdownOption(id: number): Promise<void> {

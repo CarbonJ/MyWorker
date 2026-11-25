@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { BookOpen, FolderOpen, ChevronRight, Link2 } from 'lucide-react'
+import { ChevronRight, Link2 } from 'lucide-react'
+import { ENTITY_ICONS } from '@/lib/icons'
 import { getBacklinks } from '@/db/notebook'
 import { getMentions } from '@/db/links'
 import type { TagRef } from '@/db/tags'
@@ -67,7 +68,7 @@ export function BacklinksPanel({ targetType, targetId, entityName }: Props) {
             ) : (
               <ChevronRight className="h-3 w-3 transition-transform" />
             )}
-            <BookOpen className="h-3 w-3" />
+            <ENTITY_ICONS.note className="h-3 w-3" />
             Notebook ({notes.length})
           </button>
         )}
@@ -84,7 +85,7 @@ export function BacklinksPanel({ targetType, targetId, entityName }: Props) {
             ) : (
               <ChevronRight className="h-3 w-3 transition-transform" />
             )}
-            <FolderOpen className="h-3 w-3" />
+            <ENTITY_ICONS.project className="h-3 w-3" />
             Projects ({projects.length})
           </button>
         )}
