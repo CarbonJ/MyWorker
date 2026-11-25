@@ -2,6 +2,10 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
+import { startMarkdownMirror } from '@/db/markdownMirror'
+
+// The daily markdown copy follows the first folder save each day
+startMarkdownMirror()
 
 // Apply persisted markdown display settings on startup (before first render)
 ;(function applyMarkdownSettings() {

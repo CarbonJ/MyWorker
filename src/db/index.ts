@@ -586,6 +586,23 @@ function setFolderSave(next: FolderSaveStatus): void {
   if (changed || next.error === null) window.dispatchEvent(new Event(FOLDER_SAVE_EVENT))
 }
 
+// ── After-save hooks ──────────────────────────────────────────────────────────
+// Modules that keep extra copies of the data in the folder (the markdown mirror)
+// register here instead of being imported, which would make import cycles.
+
+type AfterFolderSave = (dir: FileSystemDirectoryHandle, data: Record<string, unknown>) => void
+const afterFolderSaveHooks: AfterFolderSave[] = []
+
+/** Run `hook` after every successful folder save. It must not throw or block. */
+export function onAfterFolderSave(hook: AfterFolderSave): void {
+  if (!afterFolderSaveHooks.includes(hook)) afterFolderSaveHooks.push(hook)
+}
+
+/** The storage folder, or null when there is none (no File System Access, or not chosen). */
+export function getStorageFolder(): FileSystemDirectoryHandle | null {
+  return instance?.dirHandle ?? null
+}
+
 // ── Daily snapshots ───────────────────────────────────────────────────────────
 // Once per day the first successful folder save also writes a dated copy to a
 // subfolder. Every copy from the last SNAPSHOT_DAYS days is kept, plus the first
@@ -842,6 +859,10 @@ async function persistNow(): Promise<void> {
     await setMeta(FOLDER_COUNTS_KEY, JSON.stringify(counts))
     setFolderSave({ lastSavedAt: Date.now(), error: null })
     await writeDailySnapshot(dir, data)
+    // Not awaited: extra copies (e.g. the markdown mirror) never hold up the save queue
+    for (const hook of afterFolderSaveHooks) {
+      try { hook(dir, data) } catch (err) { console.warn('[db] After-save hook failed', err) }
+    }
   } catch (err) {
     // Non-fatal — data is still safe in IndexedDB — but the user must know the
     // folder copy (their backup, and what other devices read) has stopped updating.

@@ -15,6 +15,7 @@ import { exportAllNotes, exportAllNotesZip, type NoteExportFormat } from '@/lib/
 import { MarkdownContent } from '@/components/MarkdownContent'
 import { Button } from '@/components/ui/button'
 import { SCREEN_ICONS } from '@/lib/icons'
+import { getLastMirrorResult, updateMarkdownMirrorNow, MIRROR_EVENT, MIRROR_FOLDER, type MirrorResult } from '@/db/markdownMirror'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -45,6 +46,24 @@ export default function Settings() {
   // ?tab=data opens a tab directly (e.g. from Data Health)
   const [searchParams] = useSearchParams()
   useEffect(() => { listSnapshots().then(setSnapshots).catch(() => setSnapshots([])) }, [folderSave.lastSavedAt])
+  const [mirror, setMirror] = useState<MirrorResult | null>(() => getLastMirrorResult())
+  const [mirrorBusy, setMirrorBusy] = useState(false)
+  useEffect(() => {
+    const refresh = () => setMirror(getLastMirrorResult())
+    window.addEventListener(MIRROR_EVENT, refresh)
+    return () => window.removeEventListener(MIRROR_EVENT, refresh)
+  }, [])
+  const updateMirror = async () => {
+    setMirrorBusy(true)
+    try {
+      const result = await updateMarkdownMirrorNow()
+      if (result) toast.success(`Markdown copy updated (${result.written} of ${result.files} files changed)`)
+    } catch (err) {
+      toast.error(`Couldn't update the markdown copy: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setMirrorBusy(false)
+    }
+  }
   useEffect(() => {
     const handler = () => setFolderSave(getFolderSaveStatus())
     window.addEventListener(FOLDER_SAVE_EVENT, handler)
@@ -799,6 +818,19 @@ export default function Settings() {
                   : `${snapshots.length} snapshot${snapshots.length === 1 ? '' : 's'}, newest ${new Date(snapshots[0] + 'T12:00:00').toLocaleDateString()}.`}
                 {' '}To roll back to one, use Import below and pick that file.
               </p>
+              {'showDirectoryPicker' in window ? (
+                <p>
+                  <span className="font-medium text-foreground">Markdown copy:</span> once a day everything is also written
+                  as readable .md files in the <span className="font-mono">{MIRROR_FOLDER}</span> folder — projects with their
+                  tasks and work log, notes, contacts and journal — so your data can be read without the app (it opens as an
+                  Obsidian vault). It's overwritten each day, so edit in MyWorker, not there.{' '}
+                  {mirror ? `Last updated ${new Date(`${mirror.date}T12:00:00`).toLocaleDateString()}, ${mirror.files} files.` : 'Not written yet.'}{' '}
+                  <button type="button" disabled={mirrorBusy} onClick={updateMirror}
+                    className="text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50">
+                    {mirrorBusy ? 'Updating…' : 'Update now'}
+                  </button>
+                </p>
+              ) : null}
               <p>
                 <span className="font-medium text-foreground">Large-loss guard:</span> if a change would remove many
                 records at once (not counting items moved to the Trash), saving to the folder pauses and you are asked
